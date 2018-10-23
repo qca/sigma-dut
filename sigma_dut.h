@@ -1180,6 +1180,8 @@ int random_get_bytes(char *buf, size_t len);
 int get_enable_disable(const char *val);
 int wcn_driver_cmd(const char *ifname, char *buf);
 
+int get_phy80211_name(struct sigma_dut *dut, const char *intf);
+
 /* uapsd_stream.c */
 void receive_uapsd(struct sigma_stream *s);
 void send_uapsd_console(struct sigma_stream *s);

@@ -4850,6 +4850,24 @@ static void wcn_sta_set_noack(struct sigma_dut *dut, const char *intf,
 
 #endif /* NL80211_SUPPORT */
 
+static void mac80211_sta_set_rts(struct sigma_dut *dut, const char *intf,
+				 const char *rts_thr)
+{
+	char buf[256];
+	int phy;
+
+	phy = get_phy80211_name(dut, intf);
+	if (phy < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"iw set rts error: no phy for %s", intf);
+		return;
+	}
+
+	snprintf(buf, sizeof(buf), "iw phy phy%d set rts %s", phy, rts_thr);
+	if (system(buf) != 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "iw set rts error: command failure");
+	}
+}
 
 static enum sigma_cmd_result
 cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
@@ -4954,7 +4972,7 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 			ath_sta_set_rts(dut, intf, val);
 			break;
 		case DRIVER_MAC80211:
-			sigma_dut_print(dut, DUT_MSG_ERROR, "Not supported");
+			mac80211_sta_set_rts(dut, intf, val);
 			break;
 		default:
 #if 0
@@ -5919,7 +5937,8 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 	if (val) {
 		switch (get_driver_type(dut)) {
 		case DRIVER_MAC80211:
-			sigma_dut_print(dut, DUT_MSG_ERROR, "Not supported");
+			/* set low threshold (80211 header size) to force RTS */
+			mac80211_sta_set_rts(dut, intf, "64");
 			break;
 		default:
 			novap_reset(dut, intf, 1);
