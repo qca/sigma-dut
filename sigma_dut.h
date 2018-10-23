@@ -934,6 +934,40 @@ struct sigma_dut {
 
 	int sta_nss;
 
+#ifndef BIT
+#define BIT(x) (1U << (x))
+#endif
+
+#define mod_cap_bit(dut, bit, val) \
+        do { \
+		dut->sta_vhtcaps_mask |= bit; \
+		if (val) \
+			dut->sta_vhtcaps |= bit; \
+		else \
+			dut->sta_vhtcaps &= ~bit; \
+        } while (0)
+
+#define VHT_CAP_RXLDPC                              ((u32) BIT(4))
+#define VHT_CAP_SHORT_GI_80                         ((u32) BIT(5))
+#define VHT_CAP_SU_BEAMFORMEE_CAPABLE               ((u32) BIT(12))
+#define VHT_CAP_BEAMFORMEE_STS_MAX                  ((u32) BIT(13) | BIT(14) | BIT(15))
+#define VHT_CAP_BEAMFORMEE_STS_MAX_SHIFT            13
+#define VHT_CAP_BEAMFORMEE_STS_OFFSET               13
+#define VHT_CAP_MU_BEAMFORMEE_CAPABLE               ((u32) BIT(20))
+
+	u32 sta_vhtcaps;
+	u32 sta_vhtcaps_mask;
+
+#define RX_SS_ID	0
+#define TX_SS_ID	1
+
+#define IEEE80211_VHT_MCS_0_7	0
+#define IEEE80211_VHT_MCS_0_8	1
+#define IEEE80211_VHT_MCS_0_9	2
+#define IEEE80211_VHT_MCS_NA	3
+
+	int sta_vht_mcs_nss[2][4];
+
 #ifdef ANDROID
 	int nanservicediscoveryinprogress;
 #endif /* ANDROID */

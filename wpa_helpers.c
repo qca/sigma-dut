@@ -627,6 +627,12 @@ int set_network(const char *ifname, int id, const char *field,
 	return wpa_command(ifname, buf);
 }
 
+int set_network_num(const char *ifname, int id, const char *field, int value)
+{
+	char buf[200];
+	snprintf(buf, sizeof(buf), "SET_NETWORK %d %s %d", id, field, value);
+	return wpa_command(ifname, buf);
+}
 
 int set_network_quoted(const char *ifname, int id, const char *field,
 		       const char *value)

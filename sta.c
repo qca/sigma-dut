@@ -3449,6 +3449,7 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 	const char *network_mode = get_param(cmd, "network_mode");
 	const char *ifname = get_station_ifname(dut);
 	int wps = 0;
+	int i;
 	char buf[1000], extra[50];
 	int e;
 	enum sigma_cmd_result ret = SUCCESS_SEND_STATUS;
@@ -3532,6 +3533,45 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "ErrorCode,Profile not found");
 			return 0;
+		}
+
+		if (get_driver_type(dut) == DRIVER_MAC80211) {
+			if (dut->sta_vhtcaps && dut->sta_vhtcaps_mask) {
+				if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+						    "vht_capa", dut->sta_vhtcaps) < 0) {
+					send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+						  "Invalid vht_capa argument");
+					return 0;
+				}
+
+				if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+						    "vht_capa_mask", dut->sta_vhtcaps_mask) < 0) {
+					send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+						  "Invalid vht_capa_mask argument");
+					return 0;
+				}
+			}
+
+			for (i = 0; i < 4; i++) {
+				if (dut->sta_vht_mcs_nss[RX_SS_ID][i] >= 0) {
+					snprintf(extra, sizeof(extra), "vht_rx_mcs_nss_%u", i + 1);
+					if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+								extra, dut->sta_vht_mcs_nss[RX_SS_ID][i]) < 0) {
+						send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+								"Invalid vht_rx_mcs_nss argument");
+						return 0;
+					}
+				}
+				if (dut->sta_vht_mcs_nss[TX_SS_ID][i] >= 0) {
+					snprintf(extra, sizeof(extra), "vht_tx_mcs_nss_%u", i + 1);
+					if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+								extra, dut->sta_vht_mcs_nss[TX_SS_ID][i]) < 0) {
+						send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+								"Invalid vht_tx_mcs_nss argument");
+						return 0;
+					}
+				}
+			}
 		}
 
 		if (bssid &&
@@ -7830,6 +7870,19 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 static void sta_reset_default_mac80211(struct sigma_dut *dut, const char *intf,
 				       const char *type)
 {
+	int i;
+
+	if (dut->program == PROGRAM_VHT) {
+		mod_cap_bit(dut, VHT_CAP_SU_BEAMFORMEE_CAPABLE, 1);
+		mod_cap_bit(dut, VHT_CAP_MU_BEAMFORMEE_CAPABLE, 0);
+		mod_cap_bit(dut, VHT_CAP_SHORT_GI_80, 1);
+		mod_cap_bit(dut, VHT_CAP_RXLDPC, 1);
+
+		for (i = 0; i < 4; i++) {
+			dut->sta_vht_mcs_nss[RX_SS_ID][i] = IEEE80211_VHT_MCS_0_9;
+			dut->sta_vht_mcs_nss[TX_SS_ID][i] = IEEE80211_VHT_MCS_0_9;
+		}
+	}
 }
 
 static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,

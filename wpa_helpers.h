@@ -45,6 +45,7 @@ int get_wpa_cli_events(struct sigma_dut *dut, struct wpa_ctrl *mon,
 int add_network(const char *ifname);
 int set_network(const char *ifname, int id, const char *field,
 		const char *value);
+int set_network_num(const char *ifname, int id, const char *field, int value);
 int set_network_quoted(const char *ifname, int id, const char *field,
 		       const char *value);
 int add_cred(const char *ifname);
