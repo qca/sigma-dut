@@ -7925,10 +7925,11 @@ static void sta_reset_default_mac80211(struct sigma_dut *dut, const char *intf,
 	int i;
 
 	if (dut->program == PROGRAM_VHT) {
-		mod_cap_bit(dut, VHT_CAP_SU_BEAMFORMEE_CAPABLE, 1);
-		mod_cap_bit(dut, VHT_CAP_MU_BEAMFORMEE_CAPABLE, 0);
-		mod_cap_bit(dut, VHT_CAP_SHORT_GI_80, 1);
-		mod_cap_bit(dut, VHT_CAP_RXLDPC, 1);
+		mod_vht_cap_bit(dut, VHT_CAP_SU_BEAMFORMEE_CAPABLE, 1);
+		mod_vht_cap_bit(dut, VHT_CAP_MU_BEAMFORMEE_CAPABLE, 0);
+		mod_vht_cap_bit(dut, VHT_CAP_SHORT_GI_80, 1);
+		mod_vht_cap_bit(dut, VHT_CAP_RXLDPC, 1);
+
 
 		for (i = 0; i < 4; i++) {
 			dut->sta_vht_mcs_nss[RX_SS_ID][i] = IEEE80211_VHT_MCS_0_9;
@@ -8735,7 +8736,7 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 
 		switch (get_driver_type(dut)) {
 		case DRIVER_MAC80211:
-			sigma_dut_print(dut, DUT_MSG_ERROR, "Not supported");
+			mod_vht_cap_bit(dut, VHT_CAP_SHORT_GI_80, sgi80);
 			break;
 		default:
 			run_iwpriv(dut, intf, "shortgi %d", sgi80);
@@ -8744,29 +8745,37 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 	}
 
 	val = get_param(cmd, "TxBF");
-	if (val && (strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0)) {
+	if (val) {
+		int txbf = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
+
 		switch (get_driver_type(dut)) {
 		case DRIVER_WCN:
-			if (sta_set_tx_beamformee(dut, intf, 1)) {
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "ErrorCode,Failed to set TX beamformee enable");
-				return 0;
+			if (txbf) {
+				if (sta_set_tx_beamformee(dut, intf, 1)) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "ErrorCode,Failed to set TX beamformee enable");
+					return 0;
+				}
 			}
+
 			break;
 		case DRIVER_ATHEROS:
-			if (run_iwpriv(dut, intf, "vhtsubfee 1") < 0) {
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "ErrorCode,Setting vhtsubfee failed");
-				return 0;
+			if (txbf) {
+				if (run_iwpriv(dut, intf, "vhtsubfee 1") < 0) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "ErrorCode,Setting vhtsubfee failed");
+					return 0;
+				}
+				if (run_iwpriv(dut, intf, "vhtsubfer 1") < 0) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "ErrorCode,Setting vhtsubfer failed");
+					return 0;
+				}
 			}
-			if (run_iwpriv(dut, intf, "vhtsubfer 1") < 0) {
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "ErrorCode,Setting vhtsubfer failed");
-				return 0;
-			}
+
 			break;
 		case DRIVER_MAC80211:
-			sigma_dut_print(dut, DUT_MSG_ERROR, "Not supported");
+			mod_vht_cap_bit(dut, VHT_CAP_SU_BEAMFORMEE_CAPABLE, txbf);
 			break;
 		default:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -8776,23 +8785,29 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 	}
 
 	val = get_param(cmd, "MU_TxBF");
-	if (val && (strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0)) {
+	if (val) {
+		int mu_txbf = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
+
 		switch (get_driver_type(dut)) {
 		case DRIVER_ATHEROS:
-			ath_sta_set_txsp_stream(dut, intf, "1SS");
-			ath_sta_set_rxsp_stream(dut, intf, "1SS");
-			run_iwpriv(dut, intf, "vhtmubfee 1");
-			run_iwpriv(dut, intf, "vhtmubfer 1");
-			break;
+			if (mu_txbf) {
+				ath_sta_set_txsp_stream(dut, intf, "1SS");
+				ath_sta_set_rxsp_stream(dut, intf, "1SS");
+				run_iwpriv(dut, intf, "vhtmubfee 1");
+				run_iwpriv(dut, intf, "vhtmubfer 1");
+				break;
+			}
 		case DRIVER_WCN:
-			if (wcn_sta_set_sp_stream(dut, intf, "1SS") < 0) {
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "ErrorCode,Failed to set RX/TXSP_STREAM");
-				return 0;
+			if (mu_txbf) {
+				if (wcn_sta_set_sp_stream(dut, intf, "1SS") < 0) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "ErrorCode,Failed to set RX/TXSP_STREAM");
+					return 0;
+				}
 			}
 			break;
 		case DRIVER_MAC80211:
-			sigma_dut_print(dut, DUT_MSG_ERROR, "Not supported");
+			mod_vht_cap_bit(dut, VHT_CAP_MU_BEAMFORMEE_CAPABLE, mu_txbf);
 			break;
 		default:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -8807,7 +8822,7 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 
 		switch (get_driver_type(dut)) {
 		case DRIVER_MAC80211:
-			sigma_dut_print(dut, DUT_MSG_ERROR, "Not supported");
+			mod_vht_cap_bit(dut, VHT_CAP_RXLDPC, ldpc);
 			break;
 		default:
 			run_iwpriv(dut, intf, "ldpc %d", ldpc);

@@ -938,7 +938,7 @@ struct sigma_dut {
 #define BIT(x) (1U << (x))
 #endif
 
-#define mod_cap_bit(dut, bit, val) \
+#define mod_vht_cap_bit(dut, bit, val) \
         do { \
 		dut->sta_vhtcaps_mask |= bit; \
 		if (val) \
