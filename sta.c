@@ -5554,6 +5554,56 @@ static int nlvendor_config_send_addba(struct sigma_dut *dut, const char *intf,
 #endif /* NL80211_SUPPORT */
 }
 
+static void mac80211_sta_set_sp_stream(struct sigma_dut *dut, const char *intf,
+				       int d, const char *val, int mcs)
+{
+	/* sanitize mcs */
+	switch (mcs) {
+	case IEEE80211_VHT_MCS_0_7:
+	case IEEE80211_VHT_MCS_0_8:
+	case IEEE80211_VHT_MCS_0_9:
+		break;
+	case IEEE80211_VHT_MCS_NA:
+	default:
+		/* default to max mcs by default */
+		mcs = IEEE80211_VHT_MCS_0_9;
+		break;
+	}
+
+	/* sanitize direction */
+	switch (d) {
+	case RX_SS_ID:
+	case TX_SS_ID:
+		break;
+	default:
+		/* default to RX */
+		d = RX_SS_ID;
+		break;
+	}
+
+	if (strcasecmp(val, "1") == 0 || strcasecmp(val, "1SS") == 0) {
+		dut->sta_vht_mcs_nss[d][0] = mcs;
+		dut->sta_vht_mcs_nss[d][1] = IEEE80211_VHT_MCS_NA;
+		dut->sta_vht_mcs_nss[d][2] = IEEE80211_VHT_MCS_NA;
+		dut->sta_vht_mcs_nss[d][3] = IEEE80211_VHT_MCS_NA;
+	} else if (strcasecmp(val, "2") == 0 || strcasecmp(val, "2SS") == 0) {
+		dut->sta_vht_mcs_nss[d][0] = mcs;
+		dut->sta_vht_mcs_nss[d][1] = mcs;
+		dut->sta_vht_mcs_nss[d][2] = IEEE80211_VHT_MCS_NA;
+		dut->sta_vht_mcs_nss[d][3] = IEEE80211_VHT_MCS_NA;
+	} else if (strcasecmp(val, "3") == 0 || strcasecmp(val, "3SS") == 0) {
+		dut->sta_vht_mcs_nss[d][0] = mcs;
+		dut->sta_vht_mcs_nss[d][1] = mcs;
+		dut->sta_vht_mcs_nss[d][2] = mcs;
+		dut->sta_vht_mcs_nss[d][3] = IEEE80211_VHT_MCS_NA;
+	} else {
+		/* default to 4SS */
+		dut->sta_vht_mcs_nss[d][0] = mcs;
+		dut->sta_vht_mcs_nss[d][1] = mcs;
+		dut->sta_vht_mcs_nss[d][2] = mcs;
+		dut->sta_vht_mcs_nss[d][3] = mcs;
+	}
+}
 
 #ifdef NL80211_SUPPORT
 static int nl80211_sta_set_rts(struct sigma_dut *dut, const char *intf, int val)
@@ -5788,7 +5838,8 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 			ath_sta_set_txsp_stream(dut, intf, val);
 			break;
 		case DRIVER_MAC80211:
-			sigma_dut_print(dut, DUT_MSG_ERROR, "Not supported");
+			mac80211_sta_set_sp_stream(dut, intf, TX_SS_ID, val,
+						   IEEE80211_VHT_MCS_0_9);
 			break;
 		default:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -5811,7 +5862,8 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 			ath_sta_set_rxsp_stream(dut, intf, val);
 			break;
 		case DRIVER_MAC80211:
-			sigma_dut_print(dut, DUT_MSG_ERROR, "Not supported");
+			mac80211_sta_set_sp_stream(dut, intf, RX_SS_ID, val,
+						   IEEE80211_VHT_MCS_0_9);
 			break;
 		default:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -8672,6 +8724,7 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 	const char *intf = get_param(cmd, "Interface");
 	const char *val;
 	const char *program;
+	char buf[60];
 	int tkip = -1;
 	int wep = -1;
 
@@ -9062,7 +9115,9 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 
 			switch (get_driver_type(dut)) {
 			case DRIVER_MAC80211:
-				sigma_dut_print(dut, DUT_MSG_ERROR, "Not supported");
+				snprintf(buf, sizeof(buf), "%dSS", nss);
+				mac80211_sta_set_sp_stream(dut, intf, RX_SS_ID, buf, mcs - 7);
+				mac80211_sta_set_sp_stream(dut, intf, TX_SS_ID, buf, mcs - 7);
 				break;
 			default:
 				run_iwpriv(dut, intf, "vhtmcs %d", mcs);
