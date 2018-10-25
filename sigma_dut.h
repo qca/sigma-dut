@@ -977,6 +977,8 @@ struct sigma_dut {
 	int ht40_intolerant;
 	int disable_ldpc;
 	int disable_sgi;
+	int rx_stbc;
+	int tx_stbc;
 
 #ifdef ANDROID
 	int nanservicediscoveryinprogress;

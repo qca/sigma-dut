@@ -3593,6 +3593,20 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 					  "Invalid disable_sgi argument");
 				return 0;
 			}
+
+			if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+					    "rx_stbc", dut->rx_stbc) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+					  "Invalid rx_stbc argument");
+				return 0;
+			}
+
+			if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+					    "tx_stbc", dut->tx_stbc) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+					  "Invalid tx_stbc argument");
+				return 0;
+			}
 		}
 
 		if (bssid &&
@@ -5829,12 +5843,33 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 
 	val = get_param(cmd, "STBC_RX");
 	if (val) {
+		int stbc = atoi(val);
+
 		switch (get_driver_type(dut)) {
+
 		case DRIVER_ATHEROS:
 			ath_sta_set_stbc(dut, intf, val);
 			break;
 		case DRIVER_WCN:
 			wcn_sta_set_stbc(dut, intf, val);
+			break;
+		case DRIVER_MAC80211:
+			mod_ht_cap(dut, rx_stbc, stbc);
+			break;
+		default:
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,STBC_RX not supported");
+			return 0;
+		}
+	}
+
+	val = get_param(cmd, "STBC_TX");
+	if (val) {
+		int stbc = atoi(val);
+
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			mod_ht_cap(dut, tx_stbc, stbc);
 			break;
 		default:
 			send_resp(dut, conn, SIGMA_ERROR,
@@ -7983,6 +8018,8 @@ static void sta_reset_default_mac80211(struct sigma_dut *dut, const char *intf,
 		mod_ht_cap(dut, ht40_intolerant, 0);
 		mod_ht_cap(dut, disable_ldpc, 0);
 		mod_ht_cap(dut, disable_sgi, 0);
+		mod_ht_cap(dut, rx_stbc, 1);
+		mod_ht_cap(dut, tx_stbc, 1);
 
 		for (i = 0; i < 4; i++) {
 			dut->sta_vht_mcs_nss[RX_SS_ID][i] = IEEE80211_VHT_MCS_0_9;
