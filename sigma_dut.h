@@ -969,6 +969,15 @@ struct sigma_dut {
 
 	int sta_vht_mcs_nss[2][4];
 
+#define mod_ht_cap(dut, cap, val) \
+	do { \
+		dut->cap = val; \
+	} while(0);
+
+	int ht40_intolerant;
+	int disable_ldpc;
+	int disable_sgi;
+
 #ifdef ANDROID
 	int nanservicediscoveryinprogress;
 #endif /* ANDROID */

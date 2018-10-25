@@ -3572,6 +3572,27 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 					}
 				}
 			}
+
+			if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+					    "ht40_intolerant", dut->ht40_intolerant) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+					  "Invalid ht40_intolerant argument");
+				return 0;
+			}
+
+			if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+					    "disable_ldpc", dut->disable_ldpc) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+					  "Invalid disable_ldpc argument");
+				return 0;
+			}
+
+			if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+					    "disable_sgi", dut->disable_sgi) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+					  "Invalid disable_sgi argument");
+				return 0;
+			}
 		}
 
 		if (bssid &&
@@ -5691,11 +5712,20 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 
 	val = get_param(cmd, "40_INTOLERANT");
 	if (val) {
-		if (strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0) {
-			/* TODO: iwpriv ht40intol through wpa_supplicant */
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,40_INTOLERANT not supported");
-			return 0;
+		int ht40_intolerant = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
+
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			mod_ht_cap(dut, ht40_intolerant, ht40_intolerant);
+			break;
+		default:
+			if (ht40_intolerant) {
+				/* TODO: iwpriv ht40intol through wpa_supplicant */
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,40_INTOLERANT not supported");
+				return 0;
+			}
+			break;
 		}
 	}
 
@@ -7943,13 +7973,16 @@ static void sta_reset_default_mac80211(struct sigma_dut *dut, const char *intf,
 {
 	int i;
 
-	if (dut->program == PROGRAM_VHT) {
+	if (dut->program == PROGRAM_VHT || dut->program == PROGRAM_HT) {
 		mod_vht_cap_bit(dut, VHT_CAP_SU_BEAMFORMEE_CAPABLE, 1);
 		mod_vht_cap_bit(dut, VHT_CAP_MU_BEAMFORMEE_CAPABLE, 0);
 		mod_vht_cap_bit(dut, VHT_CAP_SHORT_GI_160, 0);
 		mod_vht_cap_bit(dut, VHT_CAP_SHORT_GI_80, 1);
 		mod_vht_cap_bit(dut, VHT_CAP_RXLDPC, 1);
 
+		mod_ht_cap(dut, ht40_intolerant, 0);
+		mod_ht_cap(dut, disable_ldpc, 0);
+		mod_ht_cap(dut, disable_sgi, 0);
 
 		for (i = 0; i < 4; i++) {
 			dut->sta_vht_mcs_nss[RX_SS_ID][i] = IEEE80211_VHT_MCS_0_9;
@@ -8360,9 +8393,14 @@ static enum sigma_cmd_result cmd_sta_set_11n(struct sigma_dut *dut,
 
 	val = get_param(cmd, "SGI20");
 	if (val) {
+		int sgi20 = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
+
 		switch (get_driver_type(dut)) {
 		case DRIVER_ATHEROS:
 			ath_sta_set_sgi(dut, intf, val);
+			break;
+		case DRIVER_MAC80211:
+			mod_ht_cap(dut, disable_sgi, !sgi20);
 			break;
 		default:
 			send_resp(dut, conn, SIGMA_ERROR,
@@ -8843,6 +8881,7 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 		switch (get_driver_type(dut)) {
 		case DRIVER_MAC80211:
 			mod_vht_cap_bit(dut, VHT_CAP_RXLDPC, ldpc);
+			mod_ht_cap(dut, disable_ldpc, !ldpc);
 			break;
 		default:
 			run_iwpriv(dut, intf, "ldpc %d", ldpc);
