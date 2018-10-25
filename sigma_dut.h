@@ -949,6 +949,7 @@ struct sigma_dut {
 
 #define VHT_CAP_RXLDPC                              ((u32) BIT(4))
 #define VHT_CAP_SHORT_GI_80                         ((u32) BIT(5))
+#define VHT_CAP_SHORT_GI_160                        ((u32) BIT(6))
 #define VHT_CAP_SU_BEAMFORMEE_CAPABLE               ((u32) BIT(12))
 #define VHT_CAP_BEAMFORMEE_STS_MAX                  ((u32) BIT(13) | BIT(14) | BIT(15))
 #define VHT_CAP_BEAMFORMEE_STS_MAX_SHIFT            13

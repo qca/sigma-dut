@@ -7946,6 +7946,7 @@ static void sta_reset_default_mac80211(struct sigma_dut *dut, const char *intf,
 	if (dut->program == PROGRAM_VHT) {
 		mod_vht_cap_bit(dut, VHT_CAP_SU_BEAMFORMEE_CAPABLE, 1);
 		mod_vht_cap_bit(dut, VHT_CAP_MU_BEAMFORMEE_CAPABLE, 0);
+		mod_vht_cap_bit(dut, VHT_CAP_SHORT_GI_160, 0);
 		mod_vht_cap_bit(dut, VHT_CAP_SHORT_GI_80, 1);
 		mod_vht_cap_bit(dut, VHT_CAP_RXLDPC, 1);
 
