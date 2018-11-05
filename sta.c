@@ -4894,13 +4894,30 @@ static void mac80211_sta_set_rts(struct sigma_dut *dut, const char *intf,
 	phy = get_phy80211_name(dut, intf);
 	if (phy < 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
-				"iw set rts error: no phy for %s", intf);
+				"iw set rts: no phy for %s", intf);
 		return;
 	}
 
 	snprintf(buf, sizeof(buf), "iw phy phy%d set rts %s", phy, rts_thr);
 	if (system(buf) != 0) {
-		sigma_dut_print(dut, DUT_MSG_ERROR, "iw set rts error: command failure");
+		sigma_dut_print(dut, DUT_MSG_ERROR, "iw set rts: failure");
+	}
+}
+
+static void mac80211_sta_set_aggr(struct sigma_dut *dut, const char *intf,
+				  const char *type, const char *aggr)
+{
+	char buf[256];
+	int val;
+
+	val = strcmp(aggr, "1") == 0 || strcasecmp(aggr, "Enable") == 0 ||
+		strcasecmp(aggr, "on") == 0;
+
+	snprintf(buf, sizeof(buf), "iw dev %s set tidconf tids 0xff %s %s",
+		 intf, type, val ? "on" : "off");
+	if (system(buf) != 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "iw failure: %s",
+				type);
 	}
 }
 
@@ -5796,8 +5813,8 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 
 		switch (get_driver_type(dut)) {
 		case DRIVER_MAC80211:
-			sigma_dut_print(dut, DUT_MSG_ERROR,
-					"Setting AMPDU not supported");
+			mac80211_sta_set_aggr(dut, intf, "ampdu",
+					      ampdu ? "on" : "off");
 			break;
 		default:
 			snprintf(buf, sizeof(buf), "SET ampdu %d", ampdu);
@@ -5828,6 +5845,9 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 		case DRIVER_ATHEROS:
 		case DRIVER_WCN:
 			iwpriv_sta_set_amsdu(dut, intf, val);
+			break;
+		case DRIVER_MAC80211:
+			mac80211_sta_set_aggr(dut, intf, "amsdu", val);
 			break;
 		default:
 			if (strcmp(val, "1") == 0 ||
