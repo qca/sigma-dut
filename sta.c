@@ -4921,12 +4921,25 @@ static void mac80211_sta_set_aggr(struct sigma_dut *dut, const char *intf,
 	}
 }
 
+static void sta_reset_default_mac80211(struct sigma_dut *dut, const char *intf, const char *type);
+
 static enum sigma_cmd_result
 cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 			      struct sigma_cmd *cmd)
 {
 	const char *intf = get_param(cmd, "Interface");
+	const char *type = get_param(cmd, "type");
 	const char *val;
+
+	if (dut->program == PROGRAM_UNKNOWN) {
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			sta_reset_default_mac80211(dut, intf, type);
+			break;
+		default:
+			break;
+		}
+	}
 
 	val = get_param(cmd, "FT_DS");
 	if (val) {
@@ -8028,7 +8041,9 @@ static void sta_reset_default_mac80211(struct sigma_dut *dut, const char *intf,
 {
 	int i;
 
-	if (dut->program == PROGRAM_VHT || dut->program == PROGRAM_HT) {
+	if (dut->program == PROGRAM_VHT ||
+	    dut->program == PROGRAM_HT ||
+	    dut->program == PROGRAM_UNKNOWN) {
 		mod_vht_cap_bit(dut, VHT_CAP_SU_BEAMFORMEE_CAPABLE, 1);
 		mod_vht_cap_bit(dut, VHT_CAP_MU_BEAMFORMEE_CAPABLE, 0);
 		mod_vht_cap_bit(dut, VHT_CAP_SHORT_GI_160, 0);
