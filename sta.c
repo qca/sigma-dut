@@ -880,8 +880,22 @@ static void static_ip_file(int proto, const char *addr, const char *mask,
 static int send_neighbor_request(struct sigma_dut *dut, const char *intf,
 				 const char *ssid)
 {
-#ifdef __linux__
 	char buf[100];
+	int ret = 0;
+
+	/* Use wpa_supplicant to send neighbor report request */
+	snprintf(buf, sizeof(buf), "NEIGHBOR_REP_REQUEST ssid=\"%s\"",
+		 ssid);
+	ret = wpa_command(intf, buf);
+	if (ret == 0) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Neighbor report request sent through wpa_command");
+		return 0;
+	}
+
+#ifdef __linux__
+	sigma_dut_print(dut, DUT_MSG_INFO,
+			"wpa_command failed, ret:%d; fall back to iwpriv", ret);
 
 	snprintf(buf, sizeof(buf), "iwpriv %s neighbor %s",
 		 intf, ssid);
