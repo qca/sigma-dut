@@ -934,6 +934,52 @@ struct sigma_dut {
 
 	int sta_nss;
 
+#ifndef BIT
+#define BIT(x) (1U << (x))
+#endif
+
+#define mod_vht_cap_bit(dut, bit, val) \
+        do { \
+		dut->sta_vhtcaps_mask |= bit; \
+		if (val) \
+			dut->sta_vhtcaps |= bit; \
+		else \
+			dut->sta_vhtcaps &= ~bit; \
+        } while (0)
+
+#define VHT_CAP_RXLDPC                              ((u32) BIT(4))
+#define VHT_CAP_SHORT_GI_80                         ((u32) BIT(5))
+#define VHT_CAP_SHORT_GI_160                        ((u32) BIT(6))
+#define VHT_CAP_SU_BEAMFORMEE_CAPABLE               ((u32) BIT(12))
+#define VHT_CAP_BEAMFORMEE_STS_MAX                  ((u32) BIT(13) | BIT(14) | BIT(15))
+#define VHT_CAP_BEAMFORMEE_STS_MAX_SHIFT            13
+#define VHT_CAP_BEAMFORMEE_STS_OFFSET               13
+#define VHT_CAP_MU_BEAMFORMEE_CAPABLE               ((u32) BIT(20))
+
+	u32 sta_vhtcaps;
+	u32 sta_vhtcaps_mask;
+
+#define RX_SS_ID	0
+#define TX_SS_ID	1
+
+#define IEEE80211_VHT_MCS_0_7	0
+#define IEEE80211_VHT_MCS_0_8	1
+#define IEEE80211_VHT_MCS_0_9	2
+#define IEEE80211_VHT_MCS_NA	3
+
+	int sta_vht_mcs_nss[2][4];
+
+#define mod_ht_cap(dut, cap, val) \
+	do { \
+		dut->cap = val; \
+	} while(0);
+
+	int ht40_intolerant;
+	int disable_ldpc;
+	int disable_sgi;
+	int rx_stbc;
+	int tx_stbc;
+
 #ifdef ANDROID
 	int nanservicediscoveryinprogress;
 #endif /* ANDROID */
@@ -1146,6 +1192,8 @@ int base64_encode(const char *src, size_t len, char *out, size_t out_len);
 int random_get_bytes(char *buf, size_t len);
 int get_enable_disable(const char *val);
 int wcn_driver_cmd(const char *ifname, char *buf);
+
+int get_phy80211_name(struct sigma_dut *dut, const char *intf);
 
 /* uapsd_stream.c */
 void receive_uapsd(struct sigma_stream *s);

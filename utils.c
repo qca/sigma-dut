@@ -704,7 +704,6 @@ int random_get_bytes(char *buf, size_t len)
 	return rc != len ? -1 : 0;
 }
 
-
 int get_enable_disable(const char *val)
 {
 	if (strcasecmp(val, "enable") == 0 ||
@@ -742,7 +741,6 @@ int wcn_driver_cmd(const char *ifname, char *buf)
 	return res;
 }
 
-
 int set_ipv6_addr(struct sigma_dut *dut, const char *ip, const char *mask,
 		  const char *ifname)
 {
@@ -765,4 +763,32 @@ int set_ipv6_addr(struct sigma_dut *dut, const char *ip, const char *mask,
 		return -1;
 
 	return 0;
+}
+
+int get_phy80211_name(struct sigma_dut *dut, const char *intf)
+{
+	FILE *fp;
+	char name[256];
+	int idx;
+
+	snprintf(name, sizeof(name), "/sys/class/net/%s/phy80211/name", intf);
+	if (!file_exists(name)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "file %s does not exist", name);
+		return -1;
+	}
+
+	fp = fopen(name, "r");
+	if (!fp) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "can't open %s", name);
+		return -1;
+	}
+
+	if (fscanf(fp, "phy%d", &idx) != 1) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "can't parse %s", name);
+		fclose(fp);
+		return -1;
+	}
+
+	fclose(fp);
+	return idx;
 }

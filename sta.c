@@ -3454,6 +3454,7 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 	const char *network_mode = get_param(cmd, "network_mode");
 	const char *ifname = get_station_ifname(dut);
 	int wps = 0;
+	int i;
 	char buf[1000], extra[50];
 	int e;
 	enum sigma_cmd_result ret = SUCCESS_SEND_STATUS;
@@ -3537,6 +3538,80 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "ErrorCode,Profile not found");
 			return 0;
+		}
+
+		if (get_driver_type(dut) == DRIVER_MAC80211) {
+			if (dut->sta_vhtcaps && dut->sta_vhtcaps_mask) {
+				if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+						    "vht_capa", dut->sta_vhtcaps) < 0) {
+					send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+						  "Invalid vht_capa argument");
+					return 0;
+				}
+
+				if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+						    "vht_capa_mask", dut->sta_vhtcaps_mask) < 0) {
+					send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+						  "Invalid vht_capa_mask argument");
+					return 0;
+				}
+			}
+
+			for (i = 0; i < 4; i++) {
+				if (dut->sta_vht_mcs_nss[RX_SS_ID][i] >= 0) {
+					snprintf(extra, sizeof(extra), "vht_rx_mcs_nss_%u", i + 1);
+					if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+								extra, dut->sta_vht_mcs_nss[RX_SS_ID][i]) < 0) {
+						send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+								"Invalid vht_rx_mcs_nss argument");
+						return 0;
+					}
+				}
+				if (dut->sta_vht_mcs_nss[TX_SS_ID][i] >= 0) {
+					snprintf(extra, sizeof(extra), "vht_tx_mcs_nss_%u", i + 1);
+					if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+								extra, dut->sta_vht_mcs_nss[TX_SS_ID][i]) < 0) {
+						send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+								"Invalid vht_tx_mcs_nss argument");
+						return 0;
+					}
+				}
+			}
+
+			if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+					    "ht40_intolerant", dut->ht40_intolerant) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+					  "Invalid ht40_intolerant argument");
+				return 0;
+			}
+
+			if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+					    "disable_ldpc", dut->disable_ldpc) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+					  "Invalid disable_ldpc argument");
+				return 0;
+			}
+
+			if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+					    "disable_sgi", dut->disable_sgi) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+					  "Invalid disable_sgi argument");
+				return 0;
+			}
+
+			if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+					    "rx_stbc", dut->rx_stbc) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+					  "Invalid rx_stbc argument");
+				return 0;
+			}
+
+			if (set_network_num(get_station_ifname(dut), dut->infra_network_id,
+					    "tx_stbc", dut->tx_stbc) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
+					  "Invalid tx_stbc argument");
+				return 0;
+			}
 		}
 
 		if (bssid &&
@@ -4815,13 +4890,61 @@ static void wcn_sta_set_noack(struct sigma_dut *dut, const char *intf,
 
 #endif /* NL80211_SUPPORT */
 
+static void mac80211_sta_set_rts(struct sigma_dut *dut, const char *intf,
+				 const char *rts_thr)
+{
+	char buf[256];
+	int phy;
+
+	phy = get_phy80211_name(dut, intf);
+	if (phy < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"iw set rts: no phy for %s", intf);
+		return;
+	}
+
+	snprintf(buf, sizeof(buf), "iw phy phy%d set rts %s", phy, rts_thr);
+	if (system(buf) != 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "iw set rts: failure");
+	}
+}
+
+static void mac80211_sta_set_aggr(struct sigma_dut *dut, const char *intf,
+				  const char *type, const char *aggr)
+{
+	char buf[256];
+	int val;
+
+	val = strcmp(aggr, "1") == 0 || strcasecmp(aggr, "Enable") == 0 ||
+		strcasecmp(aggr, "on") == 0;
+
+	snprintf(buf, sizeof(buf), "iw dev %s set tidconf tids 0xff %s %s",
+		 intf, type, val ? "on" : "off");
+	if (system(buf) != 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "iw failure: %s",
+				type);
+	}
+}
+
+static void sta_reset_default_mac80211(struct sigma_dut *dut, const char *intf, const char *type);
 
 static enum sigma_cmd_result
 cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 			      struct sigma_cmd *cmd)
 {
 	const char *intf = get_param(cmd, "Interface");
+	const char *type = get_param(cmd, "type");
 	const char *val;
+
+	if (dut->program == PROGRAM_UNKNOWN) {
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			sta_reset_default_mac80211(dut, intf, type);
+			break;
+		default:
+			break;
+		}
+	}
 
 	val = get_param(cmd, "FT_DS");
 	if (val) {
@@ -4918,6 +5041,9 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 		switch (get_driver_type(dut)) {
 		case DRIVER_ATHEROS:
 			ath_sta_set_rts(dut, intf, val);
+			break;
+		case DRIVER_MAC80211:
+			mac80211_sta_set_rts(dut, intf, val);
 			break;
 		default:
 #if 0
@@ -5539,6 +5665,56 @@ static int nlvendor_config_send_addba(struct sigma_dut *dut, const char *intf,
 #endif /* NL80211_SUPPORT */
 }
 
+static void mac80211_sta_set_sp_stream(struct sigma_dut *dut, const char *intf,
+				       int d, const char *val, int mcs)
+{
+	/* sanitize mcs */
+	switch (mcs) {
+	case IEEE80211_VHT_MCS_0_7:
+	case IEEE80211_VHT_MCS_0_8:
+	case IEEE80211_VHT_MCS_0_9:
+		break;
+	case IEEE80211_VHT_MCS_NA:
+	default:
+		/* default to max mcs by default */
+		mcs = IEEE80211_VHT_MCS_0_9;
+		break;
+	}
+
+	/* sanitize direction */
+	switch (d) {
+	case RX_SS_ID:
+	case TX_SS_ID:
+		break;
+	default:
+		/* default to RX */
+		d = RX_SS_ID;
+		break;
+	}
+
+	if (strcasecmp(val, "1") == 0 || strcasecmp(val, "1SS") == 0) {
+		dut->sta_vht_mcs_nss[d][0] = mcs;
+		dut->sta_vht_mcs_nss[d][1] = IEEE80211_VHT_MCS_NA;
+		dut->sta_vht_mcs_nss[d][2] = IEEE80211_VHT_MCS_NA;
+		dut->sta_vht_mcs_nss[d][3] = IEEE80211_VHT_MCS_NA;
+	} else if (strcasecmp(val, "2") == 0 || strcasecmp(val, "2SS") == 0) {
+		dut->sta_vht_mcs_nss[d][0] = mcs;
+		dut->sta_vht_mcs_nss[d][1] = mcs;
+		dut->sta_vht_mcs_nss[d][2] = IEEE80211_VHT_MCS_NA;
+		dut->sta_vht_mcs_nss[d][3] = IEEE80211_VHT_MCS_NA;
+	} else if (strcasecmp(val, "3") == 0 || strcasecmp(val, "3SS") == 0) {
+		dut->sta_vht_mcs_nss[d][0] = mcs;
+		dut->sta_vht_mcs_nss[d][1] = mcs;
+		dut->sta_vht_mcs_nss[d][2] = mcs;
+		dut->sta_vht_mcs_nss[d][3] = IEEE80211_VHT_MCS_NA;
+	} else {
+		/* default to 4SS */
+		dut->sta_vht_mcs_nss[d][0] = mcs;
+		dut->sta_vht_mcs_nss[d][1] = mcs;
+		dut->sta_vht_mcs_nss[d][2] = mcs;
+		dut->sta_vht_mcs_nss[d][3] = mcs;
+	}
+}
 
 #ifdef NL80211_SUPPORT
 static int nl80211_sta_set_rts(struct sigma_dut *dut, const char *intf, int val)
@@ -5608,11 +5784,20 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 
 	val = get_param(cmd, "40_INTOLERANT");
 	if (val) {
-		if (strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0) {
-			/* TODO: iwpriv ht40intol through wpa_supplicant */
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,40_INTOLERANT not supported");
-			return 0;
+		int ht40_intolerant = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
+
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			mod_ht_cap(dut, ht40_intolerant, ht40_intolerant);
+			break;
+		default:
+			if (ht40_intolerant) {
+				/* TODO: iwpriv ht40intol through wpa_supplicant */
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,40_INTOLERANT not supported");
+				return 0;
+			}
+			break;
 		}
 	}
 
@@ -5666,22 +5851,32 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 
 		sigma_dut_print(dut, DUT_MSG_DEBUG, "%s A-MPDU aggregation",
 				ampdu ? "Enabling" : "Disabling");
-		snprintf(buf, sizeof(buf), "SET ampdu %d", ampdu);
-		if (wpa_command(intf, buf) < 0 &&
-		    iwpriv_sta_set_ampdu(dut, intf, ampdu) < 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,set aggr failed");
-			return 0;
-		}
 
-		if (ampdu == 0) {
-			/* Disable sending of addba using nl vendor command */
-			ret = nlvendor_config_send_addba(dut, intf, 0);
-			if (ret) {
-				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"Failed to disable addba, ret:%d",
-						ret);
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			mac80211_sta_set_aggr(dut, intf, "ampdu",
+					      ampdu ? "on" : "off");
+			break;
+		default:
+			snprintf(buf, sizeof(buf), "SET ampdu %d", ampdu);
+			if (wpa_command(intf, buf) < 0 &&
+			    iwpriv_sta_set_ampdu(dut, intf, ampdu) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,set aggr failed");
+				return 0;
 			}
+
+			if (ampdu == 0) {
+				/* Disable sending of addba using nl vendor command */
+				ret = nlvendor_config_send_addba(dut, intf, 0);
+				if (ret) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"Failed to disable addba, ret:%d",
+							ret);
+				}
+			}
+
+			break;
 		}
 	}
 
@@ -5691,6 +5886,9 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 		case DRIVER_ATHEROS:
 		case DRIVER_WCN:
 			iwpriv_sta_set_amsdu(dut, intf, val);
+			break;
+		case DRIVER_MAC80211:
+			mac80211_sta_set_aggr(dut, intf, "amsdu", val);
 			break;
 		default:
 			if (strcmp(val, "1") == 0 ||
@@ -5706,12 +5904,33 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 
 	val = get_param(cmd, "STBC_RX");
 	if (val) {
+		int stbc = atoi(val);
+
 		switch (get_driver_type(dut)) {
+
 		case DRIVER_ATHEROS:
 			ath_sta_set_stbc(dut, intf, val);
 			break;
 		case DRIVER_WCN:
 			wcn_sta_set_stbc(dut, intf, val);
+			break;
+		case DRIVER_MAC80211:
+			mod_ht_cap(dut, rx_stbc, stbc);
+			break;
+		default:
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,STBC_RX not supported");
+			return 0;
+		}
+	}
+
+	val = get_param(cmd, "STBC_TX");
+	if (val) {
+		int stbc = atoi(val);
+
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			mod_ht_cap(dut, tx_stbc, stbc);
 			break;
 		default:
 			send_resp(dut, conn, SIGMA_ERROR,
@@ -5762,6 +5981,10 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 		case DRIVER_ATHEROS:
 			ath_sta_set_txsp_stream(dut, intf, val);
 			break;
+		case DRIVER_MAC80211:
+			mac80211_sta_set_sp_stream(dut, intf, TX_SS_ID, val,
+						   IEEE80211_VHT_MCS_0_9);
+			break;
 		default:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
 					"Setting TXSP_STREAM not supported");
@@ -5781,6 +6004,10 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 			break;
 		case DRIVER_ATHEROS:
 			ath_sta_set_rxsp_stream(dut, intf, val);
+			break;
+		case DRIVER_MAC80211:
+			mac80211_sta_set_sp_stream(dut, intf, RX_SS_ID, val,
+						   IEEE80211_VHT_MCS_0_9);
 			break;
 		default:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -5834,28 +6061,37 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 
 	val = get_param(cmd, "RTS_FORCE");
 	if (val) {
-		novap_reset(dut, intf, 1);
-		if (strcasecmp(val, "Enable") == 0) {
-			if (sta_set_rts(dut, intf, 64) != 0) {
-				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"Failed to set RTS_FORCE 64");
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			/* set low threshold (80211 header size) to force RTS */
+			mac80211_sta_set_rts(dut, intf, "64");
+			break;
+		default:
+			novap_reset(dut, intf, 1);
+			if (strcasecmp(val, "Enable") == 0) {
+				if (sta_set_rts(dut, intf, 64) != 0) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"Failed to set RTS_FORCE 64");
+				}
+				res = snprintf(buf, sizeof(buf),
+					       "wifitool %s beeliner_fw_test 100 1",
+					       intf);
+				if (res < 0 || res >= sizeof(buf) || system(buf) != 0) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"wifitool beeliner_fw_test 100 1 failed");
+				}
+			} else if (strcasecmp(val, "Disable") == 0) {
+				if (sta_set_rts(dut, intf, 2347) != 0) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"Failed to set RTS_FORCE 2347");
+				}
+			} else {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,RTS_FORCE value not supported");
+				return 0;
 			}
-			res = snprintf(buf, sizeof(buf),
-				       "wifitool %s beeliner_fw_test 100 1",
-				       intf);
-			if (res < 0 || res >= sizeof(buf) || system(buf) != 0) {
-				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"wifitool beeliner_fw_test 100 1 failed");
-			}
-		} else if (strcasecmp(val, "Disable") == 0) {
-			if (sta_set_rts(dut, intf, 2347) != 0) {
-				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"Failed to set RTS_FORCE 2347");
-			}
-		} else {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,RTS_FORCE value not supported");
-			return 0;
+
+			break;
 		}
 	}
 
@@ -5881,14 +6117,23 @@ static int cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 
 	val = get_param(cmd, "BW_SGNL");
 	if (val) {
-		if (strcasecmp(val, "Enable") == 0) {
-			run_iwpriv(dut, intf, "cwmenable 1");
-		} else if (strcasecmp(val, "Disable") == 0) {
-			/* TODO: Disable */
-		} else {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,BW_SGNL value not supported");
-			return 0;
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Setting BW_SGNL not supported");
+			break;
+		default:
+			if (strcasecmp(val, "Enable") == 0) {
+				run_iwpriv(dut, intf, "cwmenable 1");
+			} else if (strcasecmp(val, "Disable") == 0) {
+				/* TODO: Disable */
+			} else {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,BW_SGNL value not supported");
+				return 0;
+			}
+
+			break;
 		}
 	}
 
@@ -7826,6 +8071,32 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 	}
 }
 
+static void sta_reset_default_mac80211(struct sigma_dut *dut, const char *intf,
+				       const char *type)
+{
+	int i;
+
+	if (dut->program == PROGRAM_VHT ||
+	    dut->program == PROGRAM_HT ||
+	    dut->program == PROGRAM_UNKNOWN) {
+		mod_vht_cap_bit(dut, VHT_CAP_SU_BEAMFORMEE_CAPABLE, 1);
+		mod_vht_cap_bit(dut, VHT_CAP_MU_BEAMFORMEE_CAPABLE, 0);
+		mod_vht_cap_bit(dut, VHT_CAP_SHORT_GI_160, 0);
+		mod_vht_cap_bit(dut, VHT_CAP_SHORT_GI_80, 1);
+		mod_vht_cap_bit(dut, VHT_CAP_RXLDPC, 1);
+
+		mod_ht_cap(dut, ht40_intolerant, 0);
+		mod_ht_cap(dut, disable_ldpc, 0);
+		mod_ht_cap(dut, disable_sgi, 0);
+		mod_ht_cap(dut, rx_stbc, 1);
+		mod_ht_cap(dut, tx_stbc, 1);
+
+		for (i = 0; i < 4; i++) {
+			dut->sta_vht_mcs_nss[RX_SS_ID][i] = IEEE80211_VHT_MCS_0_9;
+			dut->sta_vht_mcs_nss[TX_SS_ID][i] = IEEE80211_VHT_MCS_0_9;
+		}
+	}
+}
 
 static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 						   struct sigma_conn *conn,
@@ -7879,6 +8150,9 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 		break;
 	case DRIVER_WCN:
 		sta_reset_default_wcn(dut, intf, type);
+		break;
+	case DRIVER_MAC80211:
+		sta_reset_default_mac80211(dut, intf, type);
 		break;
 	default:
 		break;
@@ -8227,9 +8501,14 @@ static enum sigma_cmd_result cmd_sta_set_11n(struct sigma_dut *dut,
 
 	val = get_param(cmd, "SGI20");
 	if (val) {
+		int sgi20 = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
+
 		switch (get_driver_type(dut)) {
 		case DRIVER_ATHEROS:
 			ath_sta_set_sgi(dut, intf, val);
+			break;
+		case DRIVER_MAC80211:
+			mod_ht_cap(dut, disable_sgi, !sgi20);
 			break;
 		default:
 			send_resp(dut, conn, SIGMA_ERROR,
@@ -8296,6 +8575,50 @@ static void cmd_set_max_he_mcs(struct sigma_dut *dut, const char *intf,
 #endif /* NL80211_SUPPORT */
 }
 
+static void cmd_set_fixed_he_mcs(struct sigma_dut *dut, const char *intf,
+				 int mcs)
+{
+#ifdef NL80211_SUPPORT
+	int ratecode = 0;
+	enum he_mcs_config mcs_config;
+	int ret;
+	char buf[60];
+
+	ratecode = (0x07 & dut->sta_nss) << 5;
+	/* Add the MCS to the ratecode */
+	if (mcs >= 0 && mcs <= 11) {
+		ratecode += mcs;
+		if (dut->device_type == STA_testbed &&
+		    mcs > 7 && mcs <= 11) {
+			if (mcs <= 9)
+				mcs_config = HE_80_MCS0_9;
+			else
+				mcs_config = HE_80_MCS0_11;
+			ret = sta_set_he_mcs(dut, intf, mcs_config);
+			if (ret) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"MCS_FixedRate: mcs setting failed, mcs:%d, mcs_config %d, ret:%d",
+						mcs, mcs_config, ret);
+			}
+		}
+		snprintf(buf, sizeof(buf),
+			 "iwpriv %s set_11ax_rate 0x%03x",
+			 intf, ratecode);
+		if (system(buf) != 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"MCS_FixedRate: iwpriv setting of 11ax rates 0x%03x failed",
+					ratecode);
+		}
+	} else {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"MCS_FixedRate: HE MCS %d not supported",
+				mcs);
+	}
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"MCS_FixedRate cannot be changed without NL80211_SUPPORT defined");
+#endif /* NL80211_SUPPORT */
+}
 
 #define TWT_REQUEST_CMD     0
 #define TWT_SUGGEST_CMD     1
@@ -8587,39 +8910,57 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 	const char *intf = get_param(cmd, "Interface");
 	const char *val;
 	const char *program;
+	char buf[60];
 	int tkip = -1;
 	int wep = -1;
 
 	program = get_param(cmd, "Program");
 	val = get_param(cmd, "SGI80");
 	if (val) {
-		int sgi80;
+		int sgi80 = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
 
-		sgi80 = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
-		run_iwpriv(dut, intf, "shortgi %d", sgi80);
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			mod_vht_cap_bit(dut, VHT_CAP_SHORT_GI_80, sgi80);
+			break;
+		default:
+			run_iwpriv(dut, intf, "shortgi %d", sgi80);
+			break;
+		}
 	}
 
 	val = get_param(cmd, "TxBF");
-	if (val && (strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0)) {
+	if (val) {
+		int txbf = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
+
 		switch (get_driver_type(dut)) {
 		case DRIVER_WCN:
-			if (sta_set_tx_beamformee(dut, intf, 1)) {
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "ErrorCode,Failed to set TX beamformee enable");
-				return 0;
+			if (txbf) {
+				if (sta_set_tx_beamformee(dut, intf, 1)) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "ErrorCode,Failed to set TX beamformee enable");
+					return 0;
+				}
 			}
+
 			break;
 		case DRIVER_ATHEROS:
-			if (run_iwpriv(dut, intf, "vhtsubfee 1") < 0) {
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "ErrorCode,Setting vhtsubfee failed");
-				return 0;
+			if (txbf) {
+				if (run_iwpriv(dut, intf, "vhtsubfee 1") < 0) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "ErrorCode,Setting vhtsubfee failed");
+					return 0;
+				}
+				if (run_iwpriv(dut, intf, "vhtsubfer 1") < 0) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "ErrorCode,Setting vhtsubfer failed");
+					return 0;
+				}
 			}
-			if (run_iwpriv(dut, intf, "vhtsubfer 1") < 0) {
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "ErrorCode,Setting vhtsubfer failed");
-				return 0;
-			}
+
+			break;
+		case DRIVER_MAC80211:
+			mod_vht_cap_bit(dut, VHT_CAP_SU_BEAMFORMEE_CAPABLE, txbf);
 			break;
 		default:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -8629,20 +8970,29 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 	}
 
 	val = get_param(cmd, "MU_TxBF");
-	if (val && (strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0)) {
+	if (val) {
+		int mu_txbf = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
+
 		switch (get_driver_type(dut)) {
 		case DRIVER_ATHEROS:
-			ath_sta_set_txsp_stream(dut, intf, "1SS");
-			ath_sta_set_rxsp_stream(dut, intf, "1SS");
-			run_iwpriv(dut, intf, "vhtmubfee 1");
-			run_iwpriv(dut, intf, "vhtmubfer 1");
-			break;
-		case DRIVER_WCN:
-			if (wcn_sta_set_sp_stream(dut, intf, "1SS") < 0) {
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "ErrorCode,Failed to set RX/TXSP_STREAM");
-				return 0;
+			if (mu_txbf) {
+				ath_sta_set_txsp_stream(dut, intf, "1SS");
+				ath_sta_set_rxsp_stream(dut, intf, "1SS");
+				run_iwpriv(dut, intf, "vhtmubfee 1");
+				run_iwpriv(dut, intf, "vhtmubfer 1");
+				break;
 			}
+		case DRIVER_WCN:
+			if (mu_txbf) {
+				if (wcn_sta_set_sp_stream(dut, intf, "1SS") < 0) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "ErrorCode,Failed to set RX/TXSP_STREAM");
+					return 0;
+				}
+			}
+			break;
+		case DRIVER_MAC80211:
+			mod_vht_cap_bit(dut, VHT_CAP_MU_BEAMFORMEE_CAPABLE, mu_txbf);
 			break;
 		default:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -8653,73 +9003,81 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 
 	val = get_param(cmd, "LDPC");
 	if (val) {
-		int ldpc;
+		int ldpc = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
 
-		ldpc = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
-		run_iwpriv(dut, intf, "ldpc %d", ldpc);
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			mod_vht_cap_bit(dut, VHT_CAP_RXLDPC, ldpc);
+			mod_ht_cap(dut, disable_ldpc, !ldpc);
+			break;
+		default:
+			run_iwpriv(dut, intf, "ldpc %d", ldpc);
+			break;
+		}
 	}
 
 	val = get_param(cmd, "BCC");
 	if (val) {
-		int bcc;
+		int bcc = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
 
-		bcc = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
-		/* use LDPC iwpriv itself to set bcc coding, bcc coding
-		 * is mutually exclusive to bcc */
-		run_iwpriv(dut, intf, "ldpc %d", !bcc);
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Setting BCC not supported");
+			break;
+		default:
+			/* use LDPC iwpriv itself to set bcc coding, bcc coding
+			 * is mutually exclusive to bcc */
+			run_iwpriv(dut, intf, "ldpc %d", !bcc);
+			break;
+		}
 	}
 
 	val = get_param(cmd, "MaxHE-MCS_1SS_RxMapLTE80");
-	if (val && dut->sta_nss == 1)
-		cmd_set_max_he_mcs(dut, intf, atoi(val));
+	if (val) {
+		int mcs = atoi(val);
+
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Setting MaxHE-MCS_1SS_RxMapLTE80 not supported");
+			break;
+		default:
+			if (dut->sta_nss == 1)
+				cmd_set_max_he_mcs(dut, intf, mcs);
+			break;
+		}
+	}
 
 	val = get_param(cmd, "MaxHE-MCS_2SS_RxMapLTE80");
-	if (val && dut->sta_nss == 2)
-		cmd_set_max_he_mcs(dut, intf, atoi(val));
+	if (val) {
+		int mcs = atoi(val);
+
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Setting MaxHE-MCS_2SS_RxMapLTE80 not supported");
+			break;
+		default:
+			if (dut->sta_nss == 2)
+				cmd_set_max_he_mcs(dut, intf, mcs);
+			break;
+		}
+	}
 
 	val = get_param(cmd, "MCS_FixedRate");
 	if (val) {
-#ifdef NL80211_SUPPORT
-		int mcs, ratecode = 0;
-		enum he_mcs_config mcs_config;
-		int ret;
-		char buf[60];
+		int mcs = atoi(val);
 
-		ratecode = (0x07 & dut->sta_nss) << 5;
-		mcs = atoi(val);
-		/* Add the MCS to the ratecode */
-		if (mcs >= 0 && mcs <= 11) {
-			ratecode += mcs;
-			if (dut->device_type == STA_testbed &&
-			    mcs > 7 && mcs <= 11) {
-				if (mcs <= 9)
-					mcs_config = HE_80_MCS0_9;
-				else
-					mcs_config = HE_80_MCS0_11;
-				ret = sta_set_he_mcs(dut, intf, mcs_config);
-				if (ret) {
-					sigma_dut_print(dut, DUT_MSG_ERROR,
-							"MCS_FixedRate: mcs setting failed, mcs:%d, mcs_config %d, ret:%d",
-							mcs, mcs_config, ret);
-				}
-			}
-			snprintf(buf, sizeof(buf),
-				 "iwpriv %s set_11ax_rate 0x%03x",
-				 intf, ratecode);
-			if (system(buf) != 0) {
-				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"MCS_FixedRate: iwpriv setting of 11ax rates 0x%03x failed",
-						ratecode);
-			}
-		} else {
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
-					"MCS_FixedRate: HE MCS %d not supported",
-					mcs);
+					"Setting HE MCS_FixedRate not supported");
+			break;
+		default:
+			cmd_set_fixed_he_mcs(dut, intf, mcs);
+			break;
 		}
-#else /* NL80211_SUPPORT */
-		sigma_dut_print(dut, DUT_MSG_ERROR,
-				"MCS_FixedRate cannot be changed without NL80211_SUPPORT defined");
-#endif /* NL80211_SUPPORT */
 	}
 
 	val = get_param(cmd, "opt_md_notif_ie");
@@ -8754,9 +9112,16 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 				break;
 			}
 
-			run_iwpriv(dut, intf, "rxchainmask %d", config_val);
-			run_iwpriv(dut, intf, "txchainmask %d", config_val);
-
+			switch (get_driver_type(dut)) {
+			case DRIVER_MAC80211:
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Setting opt_md_notif_ie/nss not supported");
+				break;
+			default:
+				run_iwpriv(dut, intf, "rxchainmask %d", config_val);
+				run_iwpriv(dut, intf, "txchainmask %d", config_val);
+				break;
+			}
 		}
 
 		/* Extract the channel width information */
@@ -8781,12 +9146,27 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 				break;
 			}
 
-			dut->chwidth = config_val;
-
-			run_iwpriv(dut, intf, "chwidth %d", config_val);
+			switch (get_driver_type(dut)) {
+			case DRIVER_MAC80211:
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Setting opt_md_notif_ie/bw not supported");
+				break;
+			default:
+				dut->chwidth = config_val;
+				run_iwpriv(dut, intf, "chwidth %d", config_val);
+				break;
+			}
 		}
 
-		run_iwpriv(dut, intf, "opmode_notify 1");
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Enabling opt_md_notif_ie not supported");
+			break;
+		default:
+			run_iwpriv(dut, intf, "opmode_notify 1");
+			break;
+		}
 	}
 
 	val = get_param(cmd, "nss_mcs_cap");
@@ -8808,8 +9188,15 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 		}
 		nss = atoi(result);
 
-		run_iwpriv(dut, intf, "nss %d", nss);
-		dut->sta_nss = nss;
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			/* both nss and mcs are handled further */
+			break;
+		default:
+			run_iwpriv(dut, intf, "nss %d", nss);
+			dut->sta_nss = nss;
+			break;
+		}
 
 		result = strtok_r(NULL, ";", &saveptr);
 		if (result == NULL) {
@@ -8850,22 +9237,29 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 				return 0;
 			}
 
-			ret = sta_set_he_mcs(dut, intf, mcs_config);
-			if (ret) {
+			switch (get_driver_type(dut)) {
+			case DRIVER_MAC80211:
 				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"nss_mcs_cap: HE: Setting of MCS failed, mcs_config: %d, ret: %d",
-						mcs_config, ret);
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "errorCode,Failed to set MCS");
-				return 0;
+						"Setting NSS_MCS_CAP/HE/MCS not supported");
+				break;
+			default:
+				ret = sta_set_he_mcs(dut, intf, mcs_config);
+				if (ret) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"nss_mcs_cap: HE: Setting of MCS failed, mcs_config: %d, ret: %d",
+							mcs_config, ret);
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "errorCode,Failed to set MCS");
+					return 0;
+				}
+
+				break;
 			}
 #else /* NL80211_SUPPORT */
 			sigma_dut_print(dut, DUT_MSG_ERROR,
 					"nss_mcs_cap: HE: MCS cannot be changed without NL80211_SUPPORT defined");
 #endif /* NL80211_SUPPORT */
 		} else {
-			run_iwpriv(dut, intf, "vhtmcs %d", mcs);
-
 			switch (nss) {
 			case 1:
 				switch (mcs) {
@@ -8919,7 +9313,18 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 				vht_mcsmap = 0xffea;
 				break;
 			}
-			run_iwpriv(dut, intf, "vht_mcsmap 0x%04x", vht_mcsmap);
+
+			switch (get_driver_type(dut)) {
+			case DRIVER_MAC80211:
+				snprintf(buf, sizeof(buf), "%dSS", nss);
+				mac80211_sta_set_sp_stream(dut, intf, RX_SS_ID, buf, mcs - 7);
+				mac80211_sta_set_sp_stream(dut, intf, TX_SS_ID, buf, mcs - 7);
+				break;
+			default:
+				run_iwpriv(dut, intf, "vhtmcs %d", mcs);
+				run_iwpriv(dut, intf, "vht_mcsmap 0x%04x", vht_mcsmap);
+				break;
+			}
 		}
 	}
 
@@ -8934,14 +9339,23 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 		wep = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
 
 	if (tkip != -1 || wep != -1) {
-		if ((tkip == 1 && wep != 0) || (wep == 1 && tkip != 0)) {
-			run_iwpriv(dut, intf, "htweptkip 1");
-		} else if ((tkip == 0 && wep != 1) || (wep == 0 && tkip != 1)) {
-			run_iwpriv(dut, intf, "htweptkip 0");
-		} else {
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
-					"ErrorCode,mixed mode of VHT TKIP/WEP not supported");
-			return 0;
+					"VHT TKIP/WEP not supported");
+			break;
+		default:
+			if ((tkip == 1 && wep != 0) || (wep == 1 && tkip != 0)) {
+				run_iwpriv(dut, intf, "htweptkip 1");
+			} else if ((tkip == 0 && wep != 1) || (wep == 0 && tkip != 1)) {
+				run_iwpriv(dut, intf, "htweptkip 0");
+			} else {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"ErrorCode,mixed mode of VHT TKIP/WEP not supported");
+				return 0;
+			}
+
+			break;
 		}
 	}
 
@@ -8971,16 +9385,27 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 
 	val = get_param(cmd, "BeamformeeSTS");
 	if (val) {
-		if (sta_set_tx_beamformee(dut, intf, 1)) {
-			send_resp(dut, conn, SIGMA_ERROR,
-					"ErrorCode,Failed to set TX beamformee enable");
-			return 0;
-		}
+		int sts = atoi(val);
 
-		if (sta_set_beamformee_sts(dut, intf, atoi(val))) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Failed to set BeamformeeSTS");
-			return 0;
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"BF STS not supported");
+			break;
+		default:
+			if (sta_set_tx_beamformee(dut, intf, 1)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+						"ErrorCode,Failed to set TX beamformee enable");
+				return 0;
+			}
+
+			if (sta_set_beamformee_sts(dut, intf, sts)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,Failed to set BeamformeeSTS");
+				return 0;
+			}
+
+			break;
 		}
 	}
 
@@ -8988,27 +9413,36 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 	if (val) {
 #ifdef NL80211_SUPPORT
 		enum qca_wlan_he_mac_padding_dur set_val;
-
-		switch (atoi(val)) {
-		case 16:
-			set_val = QCA_WLAN_HE_16US_OF_PROCESS_TIME;
-			break;
-		case 8:
-			set_val = QCA_WLAN_HE_8US_OF_PROCESS_TIME;
+#endif /* NL80211_SUPPORT */
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Trig_MAC_Padding_Dur not supported");
 			break;
 		default:
-			set_val = QCA_WLAN_HE_NO_ADDITIONAL_PROCESS_TIME;
+#ifdef NL80211_SUPPORT
+			switch (atoi(val)) {
+			case 16:
+				set_val = QCA_WLAN_HE_16US_OF_PROCESS_TIME;
+				break;
+			case 8:
+				set_val = QCA_WLAN_HE_8US_OF_PROCESS_TIME;
+				break;
+			default:
+				set_val = QCA_WLAN_HE_NO_ADDITIONAL_PROCESS_TIME;
+				break;
+			}
+			if (sta_set_mac_padding_duration(dut, intf, set_val)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,Failed to set MAC padding duration");
+				return 0;
+			}
+#else /* NL80211_SUPPORT */
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"MAC padding duration cannot be changed without NL80211_SUPPORT defined");
+#endif /* NL80211_SUPPORT */
 			break;
 		}
-		if (sta_set_mac_padding_duration(dut, intf, set_val)) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Failed to set MAC padding duration");
-			return 0;
-		}
-#else /* NL80211_SUPPORT */
-		sigma_dut_print(dut, DUT_MSG_ERROR,
-				"MAC padding duration cannot be changed without NL80211_SUPPORT defined");
-#endif /* NL80211_SUPPORT */
 	}
 
 	val = get_param(cmd, "TWT_ReqSupport");
@@ -9036,11 +9470,22 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 	}
 
 	val = get_param(cmd, "MU_EDCA");
-	if (val && (strcasecmp(val, "Override") == 0)) {
-		if (sta_set_mu_edca_override(dut, intf, 1)) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Failed to set MU EDCA override");
-			return 0;
+	if (val) {
+		switch (get_driver_type(dut)) {
+		case DRIVER_MAC80211:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"MU_EDCA not supported");
+			break;
+		default:
+			if (strcasecmp(val, "Override") == 0) {
+				if (sta_set_mu_edca_override(dut, intf, 1)) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "ErrorCode,Failed to set MU EDCA override");
+					return 0;
+				}
+			}
+
+			break;
 		}
 	}
 
@@ -9068,11 +9513,21 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 			buf_size = 256;
 		else
 			buf_size = 64;
-		if (get_driver_type(dut) == DRIVER_WCN &&
-		    sta_set_addba_buf_size(dut, intf, buf_size)) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,set addbaresp_buff_size failed");
-			return 0;
+
+		switch (get_driver_type(dut)) {
+		case DRIVER_WCN:
+			if (sta_set_addba_buf_size(dut, intf, buf_size)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,set addbaresp_buff_size failed");
+				return 0;
+			}
+
+			break;
+		case DRIVER_MAC80211:
+		default:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"ADDBAResp_BufSize not supported");
+			break;
 		}
 	}
 
@@ -9084,11 +9539,21 @@ static int cmd_sta_set_wireless_vht(struct sigma_dut *dut,
 			buf_size = 256;
 		else
 			buf_size = 64;
-		if (get_driver_type(dut) == DRIVER_WCN &&
-		    sta_set_addba_buf_size(dut, intf, buf_size)) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,set addbareq_buff_size failed");
-			return 0;
+
+		switch (get_driver_type(dut)) {
+		case DRIVER_WCN:
+			if (sta_set_addba_buf_size(dut, intf, buf_size)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,set addbareq_buff_size failed");
+				return 0;
+			}
+
+			break;
+		case DRIVER_MAC80211:
+		default:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"ADDBAReq_BufSize not supported");
+			break;
 		}
 	}
 
