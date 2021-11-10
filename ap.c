@@ -8621,10 +8621,42 @@ skip_key_mgmt:
 	if (dut->ap_proxy_arp)
 		fprintf(f, "proxy_arp=1\n");
 
-	if (dut->ap_wme)
+	if (dut->ap_wme) {
 		fprintf(f, "wmm_enabled=1\n");
+    int i = 0;
+    for (i = 0; i < NUM_AP_AC; i++) {
+      if (dut->ap_qos[i].ac) {
+        const char* class = NULL;
+        switch (i) {
+          case SIGMA_TC_VOICE:
+            // Highest priority / AC_VO = voice
+            class = "vo";
+            break;
+          case SIGMA_TC_VIDEO:
+            // High priority / AC_VI = video
+            class = "vi";
+            break;
+          case SIGMA_TC_BACKGROUND:
+            // Low priority / AC_BK = background
+            class = "bk";
+            break;
+          case SIGMA_TC_BEST_EFFORT:
+            // Normal priority / AC_BE = best effort
+            class = "be";
+            break;
+          default:
+            continue;
+        }
+        fprintf(f, "wmm_ac_%s_cwmin=%d\n", class, dut->ap_qos[i].cwmin);
+        fprintf(f, "wmm_ac_%s_cwmax=%d\n", class, dut->ap_qos[i].cwmax);
+        fprintf(f, "wmm_ac_%s_aifs=%d\n", class, dut->ap_qos[i].aifs);
+        fprintf(f, "wmm_ac_%s_txop_limit=%d\n", class, dut->ap_qos[i].txop);
+        fprintf(f, "wmm_ac_%s_acm=%d\n", class, dut->ap_qos[i].acm);
+      }
+    }
+  }
 
-	if (dut->ap_wmmps == AP_WMMPS_ON)
+  if (dut->ap_wmmps == AP_WMMPS_ON)
 		fprintf(f, "uapsd_advertisement_enabled=1\n");
 
 	if (dut->ap_hs2) {
