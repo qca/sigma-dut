@@ -26,6 +26,7 @@
 #include <net/if.h>
 #include "wpa_ctrl.h"
 #include "wpa_helpers.h"
+#include "nl80211_copy.h"
 #ifdef ANDROID
 #include <hardware_legacy/wifi.h>
 #include <grp.h>
@@ -13586,22 +13587,34 @@ static enum sigma_cmd_result wcn_ap_set_rfeature(struct sigma_dut *dut,
 	val = get_param(cmd, "GI");
 	if (val) {
 		int fix_rate_sgi;
+		u8 he_gi_val;
+		u8 auto_rate_gi;
 
 		if (strcmp(val, "0.8") == 0) {
-			run_iwpriv(dut, ifname, "enable_short_gi 9");
 			fix_rate_sgi = 1;
+			auto_rate_gi = 9;
+			he_gi_val = NL80211_RATE_INFO_HE_GI_0_8;
 		} else if (strcmp(val, "1.6") == 0) {
-			run_iwpriv(dut, ifname, "enable_short_gi 10");
 			fix_rate_sgi = 2;
+			auto_rate_gi = 10;
+			he_gi_val = NL80211_RATE_INFO_HE_GI_1_6;
 		} else if (strcmp(val, "3.2") == 0) {
-			run_iwpriv(dut, ifname, "enable_short_gi 11");
 			fix_rate_sgi = 3;
+			auto_rate_gi = 11;
+			he_gi_val = NL80211_RATE_INFO_HE_GI_3_2;
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,GI value not supported");
 			return STATUS_SENT_ERROR;
 		}
-		run_iwpriv(dut, ifname, "enable_short_gi %d", fix_rate_sgi);
+		if (wcn_set_he_gi(dut, ifname, he_gi_val)) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"wcn_set_he_gi failed, using iwpriv");
+			run_iwpriv(dut, ifname, "enable_short_gi %d",
+				   auto_rate_gi);
+			run_iwpriv(dut, ifname, "enable_short_gi %d",
+				   fix_rate_sgi);
+		}
 	}
 
 	val = get_param(cmd, "LTF");

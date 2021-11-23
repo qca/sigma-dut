@@ -1182,6 +1182,7 @@ int sta_extract_60g_ese(struct sigma_dut *dut, struct sigma_cmd *cmd,
 int wil6210_set_force_mcs(struct sigma_dut *dut, int force, int mcs);
 int sta_set_addba_buf_size(struct sigma_dut *dut,
 			   const char *intf, int bufsize);
+int wcn_set_he_gi(struct sigma_dut *dut, const char *intf, u8 gi_val);
 #ifdef NL80211_SUPPORT
 int wcn_set_he_ltf(struct sigma_dut *dut, const char *intf,
 		   enum qca_wlan_he_ltf_cfg ltf);

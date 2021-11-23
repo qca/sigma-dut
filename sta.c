@@ -34,6 +34,7 @@
 #include "wpa_helpers.h"
 #include "miracast.h"
 #include "qca-vendor_copy.h"
+#include "nl80211_copy.h"
 
 /* Temporary files for sta_send_addba */
 #define VI_QOS_TMP_FILE     "/tmp/vi-qos.tmp"
@@ -8732,6 +8733,136 @@ static int sta_set_punctured_preamble_rx(struct sigma_dut *dut,
 }
 
 
+int wcn_set_he_gi(struct sigma_dut *dut, const char *intf, u8 gi_val)
+{
+ #ifdef NL80211_SUPPORT
+	struct nlattr *attr;
+	struct nlattr *attr1;
+	int ifindex, ret;
+	struct nl_msg *msg;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Index for interface %s failed",
+				__func__, intf);
+		return -1;
+	}
+
+	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
+				    NL80211_CMD_SET_TX_BITRATE_MASK)) ||
+	    !(attr = nla_nest_start(msg, NL80211_ATTR_TX_RATES))) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: NL80211_CMD_SET_TX_BITRATE_MASK msg failed",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "%s: Setting HE GI %d",
+			__func__, gi_val);
+
+	attr1 = nla_nest_start(msg, NL80211_BAND_2GHZ);
+	if (!attr1) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Netlink nest start failed for NL80211_BAND_2GHZ",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	nla_put_u8(msg, NL80211_TXRATE_HE_GI, gi_val);
+	nla_nest_end(msg, attr1);
+
+	attr1 = nla_nest_start(msg, NL80211_BAND_5GHZ);
+	if (!attr1) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Netlink nest start failed for NL80211_BAND_5GHZ",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	nla_put_u8(msg, NL80211_TXRATE_HE_GI, gi_val);
+	nla_nest_end(msg, attr1);
+
+	nla_nest_end(msg, attr);
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: send_and_recv_msgs failed, ret=%d",
+				__func__, ret);
+	}
+	return ret;
+#else /* NL80211_SUPPORT */
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
+static int sta_set_vht_gi(struct sigma_dut *dut, const char *intf, u8 gi_val)
+{
+ #ifdef NL80211_SUPPORT
+	struct nlattr *attr;
+	struct nlattr *attr1;
+	int ifindex, ret;
+	struct nl_msg *msg;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Index for interface %s failed",
+				__func__, intf);
+		return -1;
+	}
+
+	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
+				    NL80211_CMD_SET_TX_BITRATE_MASK)) ||
+	    !(attr = nla_nest_start(msg, NL80211_ATTR_TX_RATES))) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: NL80211_CMD_SET_TX_BITRATE_MASK msg failed",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "%s: Setting VHT GI %d",
+			__func__, gi_val);
+
+	attr1 = nla_nest_start(msg, NL80211_BAND_2GHZ);
+	if (!attr1) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Netlink nest start failed for NL80211_BAND_2GHZ",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	nla_put_u8(msg, NL80211_TXRATE_GI, gi_val);
+	nla_nest_end(msg, attr1);
+
+	attr1 = nla_nest_start(msg, NL80211_BAND_5GHZ);
+	if (!attr1) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Netlink nest start failed for NL80211_BAND_5GHZ",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	nla_put_u8(msg, NL80211_TXRATE_GI, gi_val);
+	nla_nest_end(msg, attr1);
+	nla_nest_end(msg, attr);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: send_and_recv_msgs failed, ret=%d",
+				__func__, ret);
+	}
+	return ret;
+#else /* NL80211_SUPPORT */
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 				  const char *type)
 {
@@ -10289,9 +10420,18 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 	val = get_param(cmd, "SGI80");
 	if (val) {
 		int sgi80;
+		enum nl80211_txrate_gi gi_val;
 
 		sgi80 = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
-		run_iwpriv(dut, intf, "shortgi %d", sgi80);
+		if (sgi80)
+			gi_val = NL80211_TXRATE_FORCE_LGI;
+		else
+			gi_val = NL80211_TXRATE_FORCE_SGI;
+		if (sta_set_vht_gi(dut, intf, (u8) gi_val)) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"sta_set_vht_gi failed, using iwpriv");
+			run_iwpriv(dut, intf, "shortgi %d", sgi80);
+		}
 	}
 
 	val = get_param(cmd, "TxBF");
@@ -14511,34 +14651,42 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 	val = get_param(cmd, "GI");
 	if (val) {
 		int fix_rate_sgi;
+		u8 he_gi_val = 0;
 
 		if (strcmp(val, "0.8") == 0) {
 			snprintf(buf, sizeof(buf), "iwpriv %s shortgi 9", intf);
 			fix_rate_sgi = 1;
+			he_gi_val = NL80211_RATE_INFO_HE_GI_0_8;
 		} else if (strcmp(val, "1.6") == 0) {
 			snprintf(buf, sizeof(buf), "iwpriv %s shortgi 10",
 				 intf);
 			fix_rate_sgi = 2;
+			he_gi_val = NL80211_RATE_INFO_HE_GI_1_6;
 		} else if (strcmp(val, "3.2") == 0) {
 			snprintf(buf, sizeof(buf), "iwpriv %s shortgi 11",
 				 intf);
 			fix_rate_sgi = 3;
+			he_gi_val = NL80211_RATE_INFO_HE_GI_3_2;
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,GI value not supported");
 			return STATUS_SENT_ERROR;
 		}
-		if (system(buf) != 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "errorCode,Failed to set shortgi");
-			return STATUS_SENT_ERROR;
-		}
-		snprintf(buf, sizeof(buf), "iwpriv %s shortgi %d",
-				intf, fix_rate_sgi);
-		if (system(buf) != 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "errorCode,Failed to set fix rate shortgi");
-			return STATUS_SENT_ERROR;
+		if (wcn_set_he_gi(dut, intf, he_gi_val)) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"wcn_set_he_gi failed, using iwpriv");
+			if (system(buf) != 0) {
+				send_resp(dut, conn, SIGMA_ERROR,
+						"errorCode,Failed to set shortgi");
+				return STATUS_SENT_ERROR;
+			}
+			snprintf(buf, sizeof(buf), "iwpriv %s shortgi %d",
+					intf, fix_rate_sgi);
+			if (system(buf) != 0) {
+				send_resp(dut, conn, SIGMA_ERROR,
+						"errorCode,Failed to set fix rate shortgi");
+				return STATUS_SENT_ERROR;
+			}
 		}
 	}
 
