@@ -1594,9 +1594,24 @@ static enum sigma_cmd_result cmd_sta_set_ip_config(struct sigma_dut *dut,
 	val = get_param(cmd, "primary-dns");
 	if (val) {
 #ifdef ANDROID
-		/* TODO */
-		sigma_dut_print(dut, DUT_MSG_INFO, "Ignored primary-dns %s "
-				"setting", val);
+		char dns_cmd[200];
+		int len;
+		char dnsmasq[100];
+
+		kill_pid(dut, concat_sigma_tmpdir(dut, "/sigma_dut-dnsmasq.pid",
+						  dnsmasq, sizeof(dnsmasq)));
+
+		len = snprintf(dns_cmd, sizeof(dns_cmd),
+			       "/system/bin/dnsmasq -uroot --no-resolv -S%s -x/%s", val,
+			       dnsmasq);
+		if (len < 0 || len >= sizeof(dns_cmd))
+			return ERROR_SEND_STATUS;
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "Running %s", dns_cmd);
+		if (system(dns_cmd) != 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set primary-dns");
+			return STATUS_SENT_ERROR;
+		}
 #else /* ANDROID */
 		char dns_cmd[200];
 		int len;
@@ -9169,6 +9184,11 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	char resp[20];
 	char buf[100];
 	int ret;
+
+#ifdef ANDROID
+	kill_pid(dut, concat_sigma_tmpdir(dut, "/sigma_dut-dnsmasq.pid",
+					  buf, sizeof(buf)));
+#endif /* ANDROID */
 
 	if (dut->station_ifname_2g &&
 	    strcmp(dut->station_ifname_2g, intf) == 0)

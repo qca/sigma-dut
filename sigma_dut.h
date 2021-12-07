@@ -1311,5 +1311,6 @@ void server_register_cmds(void);
 void miracast_register_cmds(void);
 int set_ipv6_addr(struct sigma_dut *dut, const char *ip, const char *mask,
 		  const char *ifname);
+void kill_pid(struct sigma_dut *dut, const char *pid_file);
 
 #endif /* SIGMA_DUT_H */

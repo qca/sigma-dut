@@ -10,6 +10,7 @@
 #include "sigma_dut.h"
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <signal.h>
 #include "wpa_helpers.h"
 
 enum driver_type wifi_chip_type = DRIVER_NOT_SET;
@@ -1067,4 +1068,33 @@ int set_ipv6_addr(struct sigma_dut *dut, const char *ip, const char *mask,
 int snprintf_error(size_t size, int res)
 {
 	return res < 0 || (unsigned int) res >= size;
+}
+
+
+void kill_pid(struct sigma_dut *dut, const char *pid_file)
+{
+	int pid;
+	FILE *f;
+
+	f = fopen(pid_file, "r");
+	if (!f)
+		return; /* process is not running */
+
+	if (fscanf(f, "%d", &pid) != 1 || pid <= 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"No PID for process in %s", pid_file);
+		fclose(f);
+		unlink(pid_file);
+		return;
+	}
+	fclose(f);
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Process PID found in %s: %d",
+			pid_file, pid);
+	if (kill(pid, SIGINT) < 0 && errno != ESRCH)
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "kill failed: %s",
+				strerror(errno));
+
+	unlink(pid_file);
+	sleep(1);
 }
