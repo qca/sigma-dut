@@ -10460,10 +10460,10 @@ int open_monitor(const char *ifname);
 #endif /* __linux__ */
 
 enum send_frame_type {
-		DISASSOC, DEAUTH, SAQUERY
+		DISASSOC, DEAUTH, SAQUERY, CHANNEL_SWITCH
 };
 enum send_frame_protection {
-	CORRECT_KEY, INCORRECT_KEY, UNPROTECTED
+	PROTECTION_NOT_SET, CORRECT_KEY, INCORRECT_KEY, UNPROTECTED
 };
 
 
@@ -10534,6 +10534,8 @@ static int ap_inject_frame(struct sigma_dut *dut, struct sigma_conn *conn,
 	case SAQUERY:
 		*pos++ = 0xd0;
 		break;
+	default:
+		return -1;
 	}
 
 	if (protected == INCORRECT_KEY)
@@ -10610,6 +10612,8 @@ static int ap_inject_frame(struct sigma_dut *dut, struct sigma_conn *conn,
 			*pos++ = 0x12;
 			*pos++ = 0x34;
 			break;
+		default:
+			return -1;
 		}
 	}
 
@@ -11223,8 +11227,10 @@ enum sigma_cmd_result cmd_ap_send_frame(struct sigma_dut *dut,
 	/* const char *ifname = get_param(cmd, "INTERFACE"); */
 	const char *val;
 	enum send_frame_type frame;
-	enum send_frame_protection protected;
+	enum send_frame_protection protected = PROTECTION_NOT_SET;
 	char buf[100];
+	unsigned int freq;
+	unsigned int chan;
 
 	val = get_param(cmd, "Program");
 	if (val) {
@@ -11255,6 +11261,8 @@ enum sigma_cmd_result cmd_ap_send_frame(struct sigma_dut *dut,
 		frame = DEAUTH;
 	else if (strcasecmp(val, "saquery") == 0)
 		frame = SAQUERY;
+	else if (strcasecmp(val, "ChannelSwitchAnncment") == 0)
+		frame = CHANNEL_SWITCH;
 	else {
 		send_resp(dut, conn, SIGMA_ERROR, "errorCode,Unsupported "
 			  "PMFFrameType");
@@ -11264,27 +11272,25 @@ enum sigma_cmd_result cmd_ap_send_frame(struct sigma_dut *dut,
 	val = get_param(cmd, "PMFProtected");
 	if (val == NULL)
 		val = get_param(cmd, "Protected");
-	if (val == NULL)
-		return -1;
-	if (strcasecmp(val, "Correct-key") == 0 ||
-	    strcasecmp(val, "CorrectKey") == 0)
-		protected = CORRECT_KEY;
-	else if (strcasecmp(val, "IncorrectKey") == 0)
-		protected = INCORRECT_KEY;
-	else if (strcasecmp(val, "Unprotected") == 0)
-		protected = UNPROTECTED;
-	else {
-		send_resp(dut, conn, SIGMA_ERROR, "errorCode,Unsupported "
-			  "PMFProtected");
-		return 0;
+	if (val) {
+		if (strcasecmp(val, "Correct-key") == 0 ||
+		    strcasecmp(val, "CorrectKey") == 0)
+			protected = CORRECT_KEY;
+		else if (strcasecmp(val, "IncorrectKey") == 0)
+			protected = INCORRECT_KEY;
+		else if (strcasecmp(val, "Unprotected") == 0)
+			protected = UNPROTECTED;
+		else {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Unsupported PMFProtected");
+			return STATUS_SENT_ERROR;
+		}
 	}
 
 	val = get_param(cmd, "stationID");
-	if (val == NULL)
-		return -1;
 
-	if (protected == INCORRECT_KEY ||
-	    (protected == UNPROTECTED && frame == SAQUERY))
+	if (val && (protected == INCORRECT_KEY ||
+		    (protected == UNPROTECTED && frame == SAQUERY)))
 		return ap_inject_frame(dut, conn, frame, protected, val);
 
 	switch (frame) {
@@ -11298,6 +11304,19 @@ enum sigma_cmd_result cmd_ap_send_frame(struct sigma_dut *dut,
 		break;
 	case SAQUERY:
 		snprintf(buf, sizeof(buf), "sa_query %s", val);
+		break;
+	case CHANNEL_SWITCH:
+		val = get_param(cmd, "channel");
+		if (!val)
+			return -1;
+		chan = atoi(val);
+		freq = channel_to_freq(dut, chan);
+		if (!freq) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Invalid channel: %d", chan);
+			return INVALID_SEND_STATUS;
+		}
+		snprintf(buf, sizeof(buf), "chan_switch 5 %d", freq);
 		break;
 	}
 
