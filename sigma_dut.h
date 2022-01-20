@@ -1284,6 +1284,8 @@ void hlp_thread_cleanup(struct sigma_dut *dut);
 #ifdef NL80211_SUPPORT
 struct nl80211_ctx * nl80211_init(struct sigma_dut *dut);
 void nl80211_deinit(struct sigma_dut *dut, struct nl80211_ctx *ctx);
+int nl80211_open_event_sock(struct sigma_dut *dut);
+void nl80211_close_event_sock(struct sigma_dut *dut);
 struct nl_msg * nl80211_drv_msg(struct sigma_dut *dut, struct nl80211_ctx *ctx,
 				int ifindex, int flags,
 				uint8_t cmd);

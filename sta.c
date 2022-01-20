@@ -8913,6 +8913,8 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 		sta_set_scan_unicast_probe(dut, intf, 0);
 
 #ifdef NL80211_SUPPORT
+		nl80211_close_event_sock(dut);
+
 		/* Reset the device HE capabilities to its default supported
 		 * configuration. */
 		sta_set_he_testbed_def(dut, intf, 0);
@@ -9815,11 +9817,12 @@ static int wait_on_nl_socket(struct nl_sock *sock, struct sigma_dut *dut,
 
 static int twt_async_event_wait(struct sigma_dut *dut, unsigned int twt_op)
 {
-	struct nl_cb *cb;
+	struct nl_cb *cb = NULL;
 	int err_code = 0, select_retval = 0;
 	struct wait_event wait_info;
 
-	cb = nl_socket_get_cb(dut->nl_ctx->event_sock);
+	if (dut->nl_ctx->event_sock)
+		cb = nl_socket_get_cb(dut->nl_ctx->event_sock);
 	if (!cb) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"event callback not found");
@@ -14775,6 +14778,11 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 
 	val = get_param(cmd, "TWT_Setup");
 	if (val) {
+#ifdef NL80211_SUPPORT
+		if (dut->sta_async_twt_supp && nl80211_open_event_sock(dut))
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to open nl80211 event socket");
+#endif /* NL80211_SUPPORT */
 		if (strcasecmp(val, "Request") == 0) {
 			if (set_power_save_wcn(dut, intf, 1) < 0)
 				sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -14795,6 +14803,11 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 
 	val = get_param(cmd, "TWT_Operation");
 	if (val) {
+#ifdef NL80211_SUPPORT
+		if (dut->sta_async_twt_supp && nl80211_open_event_sock(dut))
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to open nl80211 event socket");
+#endif /* NL80211_SUPPORT */
 		if (strcasecmp(val, "Suspend") == 0) {
 			if (sta_twt_suspend_or_nudge(dut, conn, cmd)) {
 				send_resp(dut, conn, SIGMA_ERROR,
