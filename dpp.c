@@ -628,12 +628,19 @@ static int dpp_wait_tx(struct sigma_dut *dut, struct wpa_ctrl *ctrl,
 {
 	char buf[200], tmp[20];
 	int res;
+	const char *events[] = { "DPP-TX", "DPP-FAIL", NULL };
 
 	snprintf(tmp, sizeof(tmp), "type=%d", frame_type);
 	for (;;) {
-		res = get_wpa_cli_event(dut, ctrl, "DPP-TX", buf, sizeof(buf));
+		res = get_wpa_cli_events(dut, ctrl, events, buf, sizeof(buf));
 		if (res < 0)
 			return -1;
+		if (strstr(buf, "DPP-FAIL")) {
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"DPP-FAIL reported while waiting for DPP-TX: %s",
+					buf);
+			return -1;
+		}
 		if (strstr(buf, tmp) != NULL)
 			break;
 	}
