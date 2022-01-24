@@ -1051,6 +1051,12 @@ static int dpp_process_csr(struct sigma_dut *dut, const char *ifname,
 }
 
 
+static bool is_pkex_bs(const char *bs)
+{
+	return strcasecmp(bs, "PKEX") == 0 || strcasecmp(bs, "PKEXv2") == 0;
+}
+
+
 static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 					       struct sigma_conn *conn,
 					       struct sigma_cmd *cmd)
@@ -1223,7 +1229,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 	}
 
 	pkex_identifier[0] = '\0';
-	if (strcasecmp(bs, "PKEX") == 0) {
+	if (is_pkex_bs(bs)) {
 		if (sigma_dut_is_ap(dut) && dut->ap_channel != 6) {
 			/* For now, have to make operating channel match DPP
 			 * listen channel. This should be removed once hostapd
@@ -1915,7 +1921,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				 netrole ? " netrole=" : "",
 				 netrole ? netrole : "",
 				 neg_freq, group_id);
-		} else if (strcasecmp(bs, "PKEX") == 0 &&
+		} else if (is_pkex_bs(bs) &&
 			   (strcasecmp(prov_role, "Configurator") == 0 ||
 			    strcasecmp(prov_role, "Both") == 0)) {
 			if (!conf_role) {
@@ -1928,7 +1934,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				 own_pkex_id, role, conf_role,
 				 conf_ssid, conf_pass, dut->dpp_conf_id,
 				 csrattrs, pkex_identifier, pkex_code);
-		} else if (strcasecmp(bs, "PKEX") == 0) {
+		} else if (is_pkex_bs(bs)) {
 			snprintf(buf, sizeof(buf),
 				 "DPP_PKEX_ADD own=%d init=1 role=%s %scode=%s",
 				 own_pkex_id, role, pkex_identifier, pkex_code);
@@ -1955,7 +1961,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		    dut->ap_oper_chn)
 			freq = channel_to_freq(dut, dut->ap_channel);
 
-		if (strcasecmp(bs, "PKEX") == 0) {
+		if (is_pkex_bs(bs)) {
 			/* default: channel 6 for PKEX */
 			freq = 2437;
 		}
@@ -2072,7 +2078,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				goto out;
 			}
 		}
-		if (strcasecmp(bs, "PKEX") == 0) {
+		if (is_pkex_bs(bs)) {
 			snprintf(buf, sizeof(buf),
 				 "DPP_PKEX_ADD own=%d role=%s %scode=%s",
 				 own_pkex_id, role, pkex_identifier, pkex_code);
@@ -2304,7 +2310,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		goto out;
 	}
 
-	if (!frametype && strcasecmp(bs, "PKEX") == 0 &&
+	if (!frametype && is_pkex_bs(bs) &&
 	    auth_role && strcasecmp(auth_role, "Responder") == 0) {
 		if (dpp_wait_tx_status(dut, ctrl, 10) < 0) {
 			send_resp(dut, conn, SIGMA_COMPLETE,
@@ -2313,7 +2319,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		}
 	}
 
-	if (!frametype && strcasecmp(bs, "PKEX") == 0 &&
+	if (!frametype && is_pkex_bs(bs) &&
 	    auth_role && strcasecmp(auth_role, "Initiator") == 0) {
 		if (dpp_wait_tx(dut, ctrl, 0) < 0) {
 			send_resp(dut, conn, SIGMA_COMPLETE,
