@@ -662,6 +662,9 @@ static int dpp_wait_tx_status(struct sigma_dut *dut, struct wpa_ctrl *ctrl,
 			return -1;
 		if (strstr(buf, tmp) != NULL)
 			break;
+		/* Alias for PKEXv2 Exchange Request */
+		if (frame_type == 7 && strstr(buf, "type=18") != NULL)
+			break;
 	}
 
 	res = get_wpa_cli_event(dut, ctrl, "DPP-TX-STATUS",
