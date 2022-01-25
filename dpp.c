@@ -1063,7 +1063,8 @@ static int dpp_process_csr(struct sigma_dut *dut, const char *ifname,
 
 static bool is_pkex_bs(const char *bs)
 {
-	return strcasecmp(bs, "PKEX") == 0 || strcasecmp(bs, "PKEXv2") == 0;
+	return strcasecmp(bs, "PKEX") == 0 || strcasecmp(bs, "PKEXv1") == 0 ||
+		strcasecmp(bs, "PKEXv2") == 0;
 }
 
 
@@ -1096,6 +1097,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 	char conf_pass[100];
 	char csrattrs[200];
 	char pkex_identifier[200];
+	const char *pkex_ver = "";
 	struct wpa_ctrl *ctrl;
 	int res;
 	unsigned int old_timeout;
@@ -1284,6 +1286,9 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 			return STATUS_SENT_ERROR;
 		}
 		own_pkex_id = atoi(buf);
+
+		if (strcasecmp(bs, "PKEXv1") == 0)
+			pkex_ver = " ver=1";
 	}
 
 	ctrl = open_wpa_mon(ifname);
@@ -1940,14 +1945,15 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				goto out;
 			}
 			snprintf(buf, sizeof(buf),
-				 "DPP_PKEX_ADD own=%d init=1 role=%s conf=%s %s %s configurator=%d%s %scode=%s",
-				 own_pkex_id, role, conf_role,
+				 "DPP_PKEX_ADD own=%d init=1%s role=%s conf=%s %s %s configurator=%d%s %scode=%s",
+				 own_pkex_id, pkex_ver, role, conf_role,
 				 conf_ssid, conf_pass, dut->dpp_conf_id,
 				 csrattrs, pkex_identifier, pkex_code);
 		} else if (is_pkex_bs(bs)) {
 			snprintf(buf, sizeof(buf),
-				 "DPP_PKEX_ADD own=%d init=1 role=%s %scode=%s",
-				 own_pkex_id, role, pkex_identifier, pkex_code);
+				 "DPP_PKEX_ADD own=%d init=1%s role=%s %scode=%s",
+				 own_pkex_id, pkex_ver, role, pkex_identifier,
+				 pkex_code);
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Unsupported DPPBS");
