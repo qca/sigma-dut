@@ -15781,6 +15781,7 @@ static enum sigma_cmd_result cmd_sta_hs2_venue_info(struct sigma_dut *dut,
 	int info_avail = 0;
 	unsigned int old_timeout;
 	int res;
+	const char *events[] = { "RX-VENUE-URL", "ANQP-QUERY-DONE", NULL };
 
 	if (get_wpa_status(intf, "bssid", bssid, sizeof(bssid)) < 0) {
 		send_resp(dut, conn, SIGMA_ERROR,
@@ -15806,18 +15807,32 @@ static enum sigma_cmd_result cmd_sta_hs2_venue_info(struct sigma_dut *dut,
 
 	old_timeout = dut->default_timeout;
 	dut->default_timeout = 2;
-	res = get_wpa_cli_event(dut, ctrl, "RX-VENUE-URL", buf, sizeof(buf));
+	for (;;) {
+		res = get_wpa_cli_events(dut, ctrl, events, buf, sizeof(buf));
+		if (res < 0)
+			break;
+		if (strstr(buf, "ANQP-QUERY-DONE") != NULL) {
+			res = -1;
+			break;
+		}
+		pos = strchr(buf, ' ');
+		if (!pos)
+			continue;
+		pos++;
+		pos = strchr(pos, ' ');
+		if (!pos)
+			continue;
+		pos++;
+
+		if (strncmp(pos, "https://", 8) == 0)
+			break;
+
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Ignore non-HTTPS venue URL: %s", pos);
+	}
 	dut->default_timeout = old_timeout;
 	if (res < 0)
 		goto done;
-	pos = strchr(buf, ' ');
-	if (!pos)
-		goto done;
-	pos++;
-	pos = strchr(pos, ' ');
-	if (!pos)
-		goto done;
-	pos++;
 	info_avail = 1;
 	snprintf(params, sizeof(params), "browser %s", pos);
 
