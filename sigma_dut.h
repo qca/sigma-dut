@@ -893,6 +893,7 @@ struct sigma_dut {
 		PROGRAM_HE,
 		PROGRAM_HS2_R3,
 		PROGRAM_QM,
+		PROGRAM_HS2_R4,
 	} program;
 
 	enum device_type {

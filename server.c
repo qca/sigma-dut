@@ -321,7 +321,8 @@ static enum sigma_cmd_result cmd_server_reset_default(struct sigma_dut *dut,
 	}
 
 	prog = sigma_program_to_enum(var);
-	if (prog != PROGRAM_HS2_R2 && prog != PROGRAM_HS2_R3) {
+	if (prog != PROGRAM_HS2_R2 && prog != PROGRAM_HS2_R3 &&
+	    prog != PROGRAM_HS2_R4) {
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,Unsupported program");
 		return STATUS_SENT;
@@ -877,8 +878,8 @@ static enum sigma_cmd_result cmd_server_request_status(struct sigma_dut *dut,
 	}
 
 	prog = sigma_program_to_enum(var);
-	if (prog != PROGRAM_HS2_R2 && prog != PROGRAM_HS2_R3) {
-		send_resp(dut, conn, SIGMA_ERROR,
+	if (prog != PROGRAM_HS2_R2 && prog != PROGRAM_HS2_R3 &&
+	    prog != PROGRAM_HS2_R4) {
 			  "errorCode,Unsupported program");
 		return STATUS_SENT;
 	}
@@ -1005,7 +1006,8 @@ static enum sigma_cmd_result cmd_server_set_parameter(struct sigma_dut *dut,
 	}
 
 	prog = sigma_program_to_enum(var);
-	if (prog != PROGRAM_HS2_R2 && prog != PROGRAM_HS2_R3) {
+	if (prog != PROGRAM_HS2_R2 && prog != PROGRAM_HS2_R3 &&
+	    prog != PROGRAM_HS2_R4) {
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,Unsupported program");
 		return STATUS_SENT;

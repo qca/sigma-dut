@@ -8450,7 +8450,8 @@ write_conf:
 				dut->ap_radius_port);
 		fprintf(f, "auth_server_shared_secret=%s\n",
 			dut->ap_radius_password);
-		if (dut->program == PROGRAM_HS2_R3) {
+		if (dut->program == PROGRAM_HS2_R3 ||
+		    dut->program == PROGRAM_HS2_R4) {
 			fprintf(f, "radius_das_port=3799\n");
 			fprintf(f, "radius_das_client=0.0.0.0 %s\n",
 				dut->ap_radius_password);
@@ -9891,7 +9892,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_ocvc = dut->user_config_ap_ocvc;
 
 	if (dut->program == PROGRAM_HS2 || dut->program == PROGRAM_HS2_R2 ||
-	    dut->program == PROGRAM_HS2_R3 ||
+	    dut->program == PROGRAM_HS2_R3 || dut->program == PROGRAM_HS2_R4 ||
 	    dut->program == PROGRAM_IOTLP) {
 		int i;
 
@@ -9949,7 +9950,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	}
 
 	if (dut->program == PROGRAM_HS2_R2 || dut->program == PROGRAM_HS2_R3 ||
-	    dut->program == PROGRAM_IOTLP) {
+	     dut->program == PROGRAM_HS2_R4 || dut->program == PROGRAM_IOTLP) {
 		int i;
 		const char hessid[] = "50:6f:9a:00:11:22";
 

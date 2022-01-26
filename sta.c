@@ -5971,7 +5971,8 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 
 	val = get_param(cmd, "Program");
 	if (val && (strcasecmp(val, "HS2-R2") == 0 ||
-		    strcasecmp(val, "HS2-R3") == 0))
+		    strcasecmp(val, "HS2-R3") == 0 ||
+		    strcasecmp(val, "HS2-R4") == 0))
 		return cmd_sta_preset_testparameters_hs2_r2(dut, conn, intf,
 							    cmd);
 
@@ -9227,7 +9228,8 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	    lowi_cmd_sta_reset_default(dut, conn, cmd) < 0)
 		return ERROR_SEND_STATUS;
 
-	if (dut->program == PROGRAM_HS2_R2 || dut->program == PROGRAM_HS2_R3) {
+	if (dut->program == PROGRAM_HS2_R2 || dut->program == PROGRAM_HS2_R3 ||
+	    dut->program == PROGRAM_HS2_R4) {
 		unlink("SP/wi-fi.org/pps.xml");
 		if (system("rm -r SP/*") != 0) {
 		}
@@ -9330,13 +9332,14 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	set_ps(intf, dut, 0);
 
 	if (dut->program == PROGRAM_HS2 || dut->program == PROGRAM_HS2_R2 ||
-	    dut->program == PROGRAM_HS2_R3) {
+	    dut->program == PROGRAM_HS2_R3 || dut->program == PROGRAM_HS2_R4) {
 		wpa_command(intf, "SET interworking 1");
 		wpa_command(intf, "SET hs20 1");
 	}
 
 	if (dut->program == PROGRAM_HS2_R2 ||
 	    dut->program == PROGRAM_HS2_R3 ||
+	    dut->program == PROGRAM_HS2_R4 ||
 	    dut->program == PROGRAM_OCE) {
 		wpa_command(intf, "SET pmf 1");
 	} else {
@@ -13933,7 +13936,8 @@ enum sigma_cmd_result cmd_sta_send_frame(struct sigma_dut *dut,
 		return cmd_sta_send_frame_tdls(dut, conn, cmd);
 	if (val && (strcasecmp(val, "HS2") == 0 ||
 		    strcasecmp(val, "HS2-R2") == 0 ||
-		    strcasecmp(val, "HS2-R3") == 0))
+		    strcasecmp(val, "HS2-R3") == 0 ||
+		    strcasecmp(val, "HS2-R4") == 0))
 		return cmd_sta_send_frame_hs2(dut, conn, cmd);
 	if (val && strcasecmp(val, "VHT") == 0)
 		return cmd_sta_send_frame_vht(dut, conn, cmd);
@@ -14143,7 +14147,8 @@ int cmd_sta_set_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 	val = get_param(cmd, "program");
 	if (val && (strcasecmp(val, "HS2") == 0 ||
 		    strcasecmp(val, "HS2-R2") == 0 ||
-		    strcasecmp(val, "HS2-R3") == 0))
+		    strcasecmp(val, "HS2-R3") == 0 ||
+		    strcasecmp(val, "HS2-R4") == 0))
 		return cmd_sta_set_parameter_hs2(dut, conn, cmd, intf);
 
 	return -1;
@@ -16060,7 +16065,8 @@ static int sta_add_credential_sim(struct sigma_dut *dut,
 		return 0;
 	}
 
-	if (dut->program == PROGRAM_HS2_R2 || dut->program == PROGRAM_HS2_R3) {
+	if (dut->program == PROGRAM_HS2_R2 || dut->program == PROGRAM_HS2_R3 ||
+	    dut->program == PROGRAM_HS2_R4) {
 		/*
 		 * Set provisioning_sp for the test cases where SIM/USIM
 		 * provisioning is used.
