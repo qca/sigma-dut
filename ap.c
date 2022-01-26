@@ -5413,6 +5413,10 @@ static int append_hostapd_conf_hs2(struct sigma_dut *dut, FILE *f)
 			"venue_url=10:https://bed-bath-and-beyond.r2m-testbed.wi-fi.org/floorplans/index.html\n"
 			);
 		break;
+	case 3:
+		fprintf(f,
+			"venue_url=1:http://the-great-mall.r2m-test bed.wi-fi.org/floorplans/index.html\n");
+		break;
 	}
 
 	switch (dut->ap_advice_of_charge) {
