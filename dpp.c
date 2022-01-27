@@ -603,6 +603,10 @@ static const struct dpp_test_info dpp_tests[] = {
 	{ "Timeout", "AuthenticationResponse", NULL, 88 },
 	{ "Timeout", "AuthenticationConfirm", NULL, 89 },
 	{ "Timeout", "ConfigurationRequest", NULL, 90 },
+	{ "MissingAttribute", "PeerDiscoveryRequest", "ProtocolVersion", 92 },
+	{ "MissingAttribute", "PeerDiscoveryResponse", "ProtocolVersion", 93 },
+	{ "InvalidValue", "PeerDiscoveryRequest", "ProtocolVersion", 94 },
+	{ "InvalidValue", "PeerDiscoveryResponse", "ProtocolVersion", 95 },
 	{ NULL, NULL, NULL, 0 }
 };
 
