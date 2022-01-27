@@ -1949,15 +1949,20 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				goto out;
 			}
 			snprintf(buf, sizeof(buf),
-				 "DPP_PKEX_ADD own=%d init=1%s role=%s conf=%s %s %s configurator=%d%s %scode=%s",
-				 own_pkex_id, pkex_ver, role, conf_role,
+				 "DPP_PKEX_ADD own=%d init=1%s%s%s role=%s conf=%s %s %s configurator=%d%s %scode=%s",
+				 own_pkex_id, pkex_ver,
+				 tcp ? " tcp_addr=" : "",
+				 tcp ? tcp : "",
+				 role, conf_role,
 				 conf_ssid, conf_pass, dut->dpp_conf_id,
 				 csrattrs, pkex_identifier, pkex_code);
 		} else if (is_pkex_bs(bs)) {
 			snprintf(buf, sizeof(buf),
-				 "DPP_PKEX_ADD own=%d init=1%s role=%s %scode=%s",
-				 own_pkex_id, pkex_ver, role, pkex_identifier,
-				 pkex_code);
+				 "DPP_PKEX_ADD own=%d init=1%s%s%s role=%s %scode=%s",
+				 own_pkex_id, pkex_ver,
+				 tcp ? " tcp_addr=" : "",
+				 tcp ? tcp : "",
+				 role, pkex_identifier, pkex_code);
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Unsupported DPPBS");
@@ -2098,16 +2103,6 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				goto out;
 			}
 		}
-		if (is_pkex_bs(bs)) {
-			snprintf(buf, sizeof(buf),
-				 "DPP_PKEX_ADD own=%d role=%s %scode=%s",
-				 own_pkex_id, role, pkex_identifier, pkex_code);
-			if (wpa_command(ifname, buf) < 0) {
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "errorCode,Failed to configure DPP PKEX");
-				goto out;
-			}
-		}
 
 		if (chirp) {
 			snprintf(buf, sizeof(buf),
@@ -2130,6 +2125,17 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Failed to start DPP listen/chirp");
 			goto out;
+		}
+
+		if (is_pkex_bs(bs)) {
+			snprintf(buf, sizeof(buf),
+				 "DPP_PKEX_ADD own=%d role=%s %scode=%s",
+				 own_pkex_id, role, pkex_identifier, pkex_code);
+			if (wpa_command(ifname, buf) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "errorCode,Failed to configure DPP PKEX");
+				goto out;
+			}
 		}
 
 		if (!(tcp && strcasecmp(tcp, "yes") == 0) &&
@@ -2332,7 +2338,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 
 	if (!frametype && is_pkex_bs(bs) &&
 	    auth_role && strcasecmp(auth_role, "Responder") == 0) {
-		if (dpp_wait_tx_status(dut, ctrl, 10) < 0) {
+		/* TODO: PKEX timeout check for over-TCP case? */
+		if (!tcp && dpp_wait_tx_status(dut, ctrl, 10) < 0) {
 			send_resp(dut, conn, SIGMA_COMPLETE,
 				  "BootstrapResult,Timeout");
 			goto out;
@@ -2341,7 +2348,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 
 	if (!frametype && is_pkex_bs(bs) &&
 	    auth_role && strcasecmp(auth_role, "Initiator") == 0) {
-		if (dpp_wait_tx(dut, ctrl, 0) < 0) {
+		/* TODO: PKEX timeout check for over-TCP case? */
+		if (!tcp && dpp_wait_tx(dut, ctrl, 0) < 0) {
 			send_resp(dut, conn, SIGMA_COMPLETE,
 				  "BootstrapResult,Timeout");
 			goto out;
