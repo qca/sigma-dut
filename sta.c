@@ -11186,6 +11186,20 @@ sta_set_wireless_wpa3(struct sigma_dut *dut, struct sigma_conn *conn,
 		return STATUS_SENT_ERROR;
 	}
 
+	val = get_param(cmd, "GKH_G2_Tx");
+	if (val) {
+		char buf[50];
+
+		snprintf(buf, sizeof(buf), "SET disable_eapol_g2_tx %d",
+			 strcasecmp(val, "disable") == 0);
+
+		if (wpa_command(intf, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Failed to enable/disable G2 transmit");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
 	return cmd_sta_set_wireless_common(intf, dut, conn, cmd);
 }
 
@@ -11197,6 +11211,8 @@ static enum sigma_cmd_result cmd_sta_set_wireless(struct sigma_dut *dut,
 	const char *val;
 
 	val = get_param(cmd, "Program");
+	if (!val)
+		val = get_param(cmd, "Prog");
 	if (val) {
 		if (strcasecmp(val, "11n") == 0)
 			return cmd_sta_set_11n(dut, conn, cmd);
