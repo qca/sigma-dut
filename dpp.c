@@ -607,6 +607,8 @@ static const struct dpp_test_info dpp_tests[] = {
 	{ "MissingAttribute", "PeerDiscoveryResponse", "ProtocolVersion", 93 },
 	{ "InvalidValue", "PeerDiscoveryRequest", "ProtocolVersion", 94 },
 	{ "InvalidValue", "PeerDiscoveryResponse", "ProtocolVersion", 95 },
+	{ "InvalidValue", "ReconfigAuthRequest", "ProtocolVersion", 96 },
+	{ "MissingAttribute", "ReconfigAuthRequest", "ProtocolVersion", 97 },
 	{ NULL, NULL, NULL, 0 }
 };
 
@@ -2773,6 +2775,9 @@ dpp_reconfigure_configurator(struct sigma_dut *dut, struct sigma_conn *conn,
 			     struct sigma_cmd *cmd)
 {
 	const char *val;
+	const char *step = get_param(cmd, "DPPStep");
+	const char *frametype = get_param(cmd, "DPPFrameType");
+	const char *attr = get_param(cmd, "DPPIEAttribute");
 	int freq;
 	struct wpa_ctrl *ctrl = NULL;
 	const char *ifname;
@@ -3028,6 +3033,26 @@ dpp_reconfigure_configurator(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 	}
 
+	if (step) {
+		int test;
+
+		test = dpp_get_test(step, frametype, attr);
+		if (test <= 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Unsupported DPPStep/DPPFrameType/DPPIEAttribute");
+			goto out;
+		}
+
+		snprintf(buf, sizeof(buf), "SET dpp_test %d", test);
+		if (wpa_command(ifname, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Failed to set dpp_test");
+			goto out;
+		}
+	} else {
+		wpa_command(ifname, "SET dpp_test 0");
+	}
+
 	snprintf(buf, sizeof(buf),
 		 "SET dpp_configurator_params  conf=%s %s %s configurator=%d%s%s%s%s%s",
 		 conf_role, conf_ssid, conf_pass,
@@ -3063,6 +3088,17 @@ dpp_reconfigure_configurator(struct sigma_dut *dut, struct sigma_conn *conn,
 				  "errorCode,Could not start listen state");
 			goto out;
 		}
+	}
+
+	if (frametype && strcasecmp(frametype, "ReconfigAuthRequest") == 0) {
+		const char *result;
+
+		if (dpp_wait_tx_status(dut, ctrl, 15) < 0)
+			result = "ReconfigAuthResult,Timeout";
+		else
+			result = "ReconfigAuthResult,Errorsent";
+		send_resp(dut, conn, SIGMA_COMPLETE, result);
+		goto out;
 	}
 
 	res = get_wpa_cli_event(dut, ctrl, "DPP-CONF-REQ-RX",
