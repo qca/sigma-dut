@@ -2129,8 +2129,9 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 
 		if (is_pkex_bs(bs)) {
 			snprintf(buf, sizeof(buf),
-				 "DPP_PKEX_ADD own=%d role=%s %scode=%s",
-				 own_pkex_id, role, pkex_identifier, pkex_code);
+				 "DPP_PKEX_ADD own=%d%s role=%s %scode=%s",
+				 own_pkex_id, pkex_ver, role,
+				 pkex_identifier, pkex_code);
 			if (wpa_command(ifname, buf) < 0) {
 				send_resp(dut, conn, SIGMA_ERROR,
 					  "errorCode,Failed to configure DPP PKEX");
