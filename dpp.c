@@ -1223,9 +1223,19 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 	if (strcasecmp(prov_role, "Configurator") == 0 ||
 	    strcasecmp(prov_role, "Both") == 0) {
 		if (dut->dpp_conf_id < 0) {
-			snprintf(buf, sizeof(buf),
-				 "DPP_CONFIGURATOR_ADD curve=%s",
-				 dpp_get_curve(cmd, "DPPSigningKeyECC"));
+			if (get_param(cmd, "DPPNAKECC")) {
+				snprintf(buf, sizeof(buf),
+					 "DPP_CONFIGURATOR_ADD curve=%s net_access_key_curve=%s",
+					 dpp_get_curve(cmd,
+						       "DPPSigningKeyECC"),
+					 dpp_get_curve(cmd,
+						       "DPPNAKECC"));
+			} else {
+				snprintf(buf, sizeof(buf),
+					 "DPP_CONFIGURATOR_ADD curve=%s",
+					 dpp_get_curve(cmd,
+						       "DPPSigningKeyECC"));
+			}
 			if (wpa_command_resp(ifname, buf,
 					     buf, sizeof(buf)) < 0) {
 				send_resp(dut, conn, SIGMA_ERROR,
