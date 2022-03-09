@@ -1243,6 +1243,12 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				return STATUS_SENT_ERROR;
 			}
 			dut->dpp_conf_id = atoi(buf);
+		} else if (get_param(cmd, "DPPNAKECC")) {
+			snprintf(buf, sizeof(buf),
+				 "DPP_CONFIGURATOR_SET %d net_access_key_curve=%s",
+				 dut->dpp_conf_id,
+				 dpp_get_curve(cmd, "DPPNAKECC"));
+			wpa_command(ifname, buf);
 		}
 		if (strcasecmp(prov_role, "Configurator") == 0)
 			role = "configurator";
