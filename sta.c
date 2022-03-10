@@ -6436,6 +6436,35 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (val)
 		dut->dscp_reject_resp_code = atoi(val);
 
+	val = get_param(cmd, "Deauth_Reconnect_Policy");
+	if (val) {
+		char buf[35];
+		int len;
+
+		if (strcasecmp(val, "0") == 0) {
+			len = snprintf(buf, sizeof(buf),
+				       "STA_AUTOCONNECT %d",
+				       dut->autoconnect_default);
+		} else if (strcasecmp(val, "1") == 0) {
+			len = snprintf(buf, sizeof(buf),
+				       "STA_AUTOCONNECT 0");
+		} else if (strcasecmp(val, "2") == 0) {
+			len = snprintf(buf, sizeof(buf),
+				       "STA_AUTOCONNECT 1");
+		} else {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Invalid Deauth_Reconnect_Policy");
+			return INVALID_SEND_STATUS;
+		}
+
+		if (len < 0 || len >= sizeof(buf) ||
+		    wpa_command(intf, buf) != 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to update Deauth_Reconnect_Policy");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
 	return 1;
 }
 
@@ -9492,6 +9521,11 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	dut->saquery_oci_freq = 0;
 	dut->prev_disable_scs_support = 0;
 	dut->prev_disable_mscs_support = 0;
+
+	if (dut->autoconnect_default)
+		wpa_command(intf, "STA_AUTOCONNECT 1");
+	else
+		wpa_command(intf, "STA_AUTOCONNECT 0");
 
 	if (dut->program != PROGRAM_VHT)
 		return cmd_sta_p2p_reset(dut, conn, cmd);

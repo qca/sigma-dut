@@ -856,6 +856,7 @@ static void set_defaults(struct sigma_dut *dut)
 #ifdef ANDROID
 	dut->dscp_use_iptables = 1;
 #endif /* ANDROID */
+	dut->autoconnect_default = 1;
 }
 
 
@@ -995,7 +996,7 @@ static void print_license(void)
 
 static void usage(void)
 {
-	printf("usage: sigma_dut [-aABdfGqDIntuVW234] [-p<port>] "
+	printf("usage: sigma_dut [-aABdfGqDIntuVW2347] [-p<port>] "
 	       "[-s<sniffer>] [-m<set_maccaddr.sh>] \\\n"
 	       "       [-M<main ifname>] [-R<radio ifname>] "
 	       "[-S<station ifname>] [-P<p2p_ifname>]\\\n"
@@ -1049,7 +1050,7 @@ int main(int argc, char *argv[])
 
 	for (;;) {
 		c = getopt(argc, argv,
-			   "aAb:Bc:C:dDE:e:fF:gGhH:j:J:i:Ik:K:l:L:m:M:nN:o:O:p:P:qr:R:s:S:tT:uv:VWw:x:y:z:Z:2345:6:");
+			   "aAb:Bc:C:dDE:e:fF:gGhH:j:J:i:Ik:K:l:L:m:M:nN:o:O:p:P:qr:R:s:S:tT:uv:VWw:x:y:z:Z:2345:6:7");
 		if (c < 0)
 			break;
 		switch (c) {
@@ -1278,6 +1279,9 @@ int main(int argc, char *argv[])
 				printf("Unsupported -6 value\n");
 				exit(1);
 			}
+			break;
+		case '7':
+			sigma_dut.autoconnect_default = 0;
 			break;
 		case 'h':
 		default:
