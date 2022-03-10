@@ -2509,8 +2509,15 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		memcpy(mud_url, ",MUDURL,", 8);
 		memcpy(mud_url + 8, pos, url_len + 1);
 
-		res = get_wpa_cli_events(dut, ctrl, conf_events,
-					 buf, sizeof(buf));
+		/* DPP-MUD-URL can be returned multiple times when configuration
+		 * exchange needs to perform multiple GAS queries, e.g., for
+		 * CSR or key changes. */
+		for (;;) {
+			res = get_wpa_cli_events(dut, ctrl, conf_events,
+						 buf, sizeof(buf));
+			if (res < 0 || !strstr(buf, "DPP-MUD-URL "))
+				break;
+		}
 	}
 	if (res < 0) {
 		send_resp(dut, conn, SIGMA_COMPLETE,
