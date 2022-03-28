@@ -5966,22 +5966,28 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 
 	val = get_param(cmd, "FT_DS");
 	if (val) {
+		int sta_ft_ds;
+
 		if (strcasecmp(val, "Enable") == 0) {
-			dut->sta_ft_ds = 1;
+			sta_ft_ds = 1;
 		} else if (strcasecmp(val, "Disable") == 0) {
-			dut->sta_ft_ds = 0;
+			sta_ft_ds = 0;
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Unsupported value for FT_DS");
 			return STATUS_SENT_ERROR;
 		}
-		if (get_driver_type(dut) == DRIVER_WCN &&
+
+		if (dut->sta_ft_ds != sta_ft_ds &&
+		    get_driver_type(dut) == DRIVER_WCN &&
 		    sta_config_params(dut, intf, STA_SET_FT_DS,
-				      dut->sta_ft_ds) != 0) {
+				      sta_ft_ds) != 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Failed to enable/disable FT_DS");
 			return STATUS_SENT_ERROR;
 		}
+
+		dut->sta_ft_ds = sta_ft_ds;
 	}
 
 	val = get_param(cmd, "Program");
