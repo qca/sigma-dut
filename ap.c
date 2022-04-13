@@ -10199,7 +10199,9 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_dpp_conf_addr = NULL;
 	free(dut->ap_dpp_conf_pkhash);
 	dut->ap_dpp_conf_pkhash = NULL;
+	dut->dpp_local_bootstrap = -1;
 	dut->ap_start_disabled = 0;
+	dpp_mdns_stop(dut);
 
 	if (is_60g_sigma_dut(dut)) {
 		dut->ap_mode = AP_11ad;

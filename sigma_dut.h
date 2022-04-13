@@ -397,6 +397,12 @@ struct dscp_policy_data {
 	struct dscp_policy_data *next;
 };
 
+enum dpp_mdns_role {
+	DPP_MDNS_NOT_RUNNING,
+	DPP_MDNS_RELAY,
+	DPP_MDNS_CONTROLLER,
+};
+
 struct sigma_dut {
 	const char *main_ifname;
 	char *main_ifname_2g;
@@ -989,6 +995,7 @@ struct sigma_dut {
 	int dpp_local_bootstrap;
 	int dpp_conf_id;
 	int dpp_network_id;
+	enum dpp_mdns_role dpp_mdns;
 
 	u8 fils_hlp;
 	pthread_t hlp_thread;
@@ -1277,6 +1284,8 @@ int lowi_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 enum sigma_cmd_result dpp_dev_exec_action(struct sigma_dut *dut,
 					  struct sigma_conn *conn,
 					  struct sigma_cmd *cmd);
+int dpp_mdns_start(struct sigma_dut *dut, enum dpp_mdns_role role);
+void dpp_mdns_stop(struct sigma_dut *dut);
 
 /* dhcp.c */
 void process_fils_hlp(struct sigma_dut *dut);
