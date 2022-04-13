@@ -33,6 +33,125 @@ static const char * dpp_mdns_role_txt(enum dpp_mdns_role role)
 }
 
 
+static int dpp_mdns_discover(struct sigma_dut *dut, enum dpp_mdns_role role,
+			     char *addr, size_t addr_size)
+{
+	char cmd[200], buf[10000], *pos, *pos2, *pos3;
+	char *ifname = NULL, *ipaddr = NULL, *bskeyhash = NULL;
+	size_t len;
+	FILE *f;
+
+	snprintf(cmd, sizeof(cmd), "avahi-browse _%s._sub._dpp._tcp -r -t -p",
+		 dpp_mdns_role_txt(role));
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Run: %s", cmd);
+	f = popen(cmd, "r");
+	if (!f) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Could not run avahi-browse: %s",
+				strerror(errno));
+		return -1;
+	}
+	len = fread(buf, 1, sizeof(buf) - 1, f);
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "avahi-browse returned %zu octets",
+			len);
+	pclose(f);
+	if (!len)
+		return -1;
+	buf[len] = '\0';
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "mDNS results:\n%s", buf);
+
+	pos = buf;
+	while (pos) {
+		pos2 = strchr(pos, '\n');
+		if (pos2)
+			*pos2 = '\0';
+		if (pos[0] != '=')
+			goto next;
+
+		pos = strchr(pos, ';');
+		if (!pos)
+			goto next;
+		pos++;
+		/* ifname */
+		pos3 = strchr(pos, ';');
+		if (!pos3)
+			goto next;
+		*pos3 = '\0';
+		ifname = pos;
+
+		pos = pos3 + 1;
+		/* IP version */
+		if (strncmp(pos, "IPv4;", 5) != 0)
+			goto next;
+
+		pos = strchr(pos, ';');
+		if (!pos)
+			goto next;
+		pos++;
+		/* name */
+
+		pos = strchr(pos, ';');
+		if (!pos)
+			goto next;
+		pos++;
+		/* service */
+
+		pos = strchr(pos, ';');
+		if (!pos)
+			goto next;
+		pos++;
+		/* local? */
+
+		pos = strchr(pos, ';');
+		if (!pos)
+			goto next;
+		pos++;
+		/* fqdn */
+
+		pos = strchr(pos, ';');
+		if (!pos)
+			goto next;
+		pos++;
+		/* IP address */
+
+		pos3 = strchr(pos, ';');
+		if (!pos3)
+			goto next;
+		*pos3 = '\0';
+		ipaddr = pos;
+		pos = pos3 + 1;
+
+		pos = strstr(pos, "\"bskeyhash=");
+		if (pos) {
+			pos += 11;
+			pos3 = strchr(pos, '"');
+			if (pos3)
+				*pos3 = '\0';
+			bskeyhash = pos;
+		}
+
+		/* Could try to pick the most appropriate candidate if multiple
+		 * entries are discovered */
+		break;
+
+	next:
+		if (!pos2)
+			break;
+		pos = pos2 + 1;
+	}
+
+	if (!ipaddr)
+		return -1;
+	sigma_dut_print(dut, DUT_MSG_INFO, "Discovered (mDNS) service at %s@%s",
+			ipaddr, ifname);
+	if (bskeyhash)
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "bskeyhash: %s", bskeyhash);
+	strlcpy(addr, ipaddr, addr_size);
+
+	return 0;
+}
+
+
 static int sigma_dut_is_ap(struct sigma_dut *dut)
 {
 	return dut->device_type == AP_unknown ||
@@ -1167,6 +1286,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 	FILE *f;
 	char *no_mud_url = "";
 	char *mud_url = no_mud_url;
+	char tcp_addr[30];
 
 	time(&start);
 
@@ -1280,6 +1400,24 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,Unknown DPPProvisioningRole");
 		return STATUS_SENT_ERROR;
+	}
+
+	if (auth_role && strcasecmp(auth_role, "Initiator") == 0 &&
+	    tcp && strcasecmp(tcp, "mDNS") == 0) {
+		enum dpp_mdns_role role;
+
+		/* Discover Controller/Relay IP address using mDNS */
+		if (strcasecmp(prov_role, "Configurator") == 0)
+			role = DPP_MDNS_RELAY;
+		else
+			role = DPP_MDNS_CONTROLLER;
+		if (dpp_mdns_discover(dut, role,
+				      tcp_addr, sizeof(tcp_addr)) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Could not discover Controller/Relay IP address using mDNS");
+			return STATUS_SENT_ERROR;
+		}
+		tcp = tcp_addr;
 	}
 
 	pkex_identifier[0] = '\0';
