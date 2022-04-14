@@ -1289,6 +1289,8 @@ static void kill_dhcp_client(struct sigma_dut *dut, const char *ifname)
 			sleep(1);
 		}
 	}
+
+	dut->dhcp_client_running = 0;
 #endif /* __linux__ */
 }
 
@@ -1329,6 +1331,8 @@ static int start_dhcp_client(struct sigma_dut *dut, const char *ifname)
 #endif /* ANDROID */
 		}
 	}
+
+	dut->dhcp_client_running = 1;
 #endif /* __linux__ */
 
 	return 0;
@@ -4630,7 +4634,8 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 
 		if ((dut->program == PROGRAM_WPA3 &&
 		     dut->sta_associate_wait_connect) ||
-		    dut->program == PROGRAM_QM) {
+		    dut->program == PROGRAM_QM ||
+		    (dut->dhcp_client_running && dut->client_privacy)) {
 			ctrl = open_wpa_mon(get_station_ifname(dut));
 			if (!ctrl)
 				return ERROR_SEND_STATUS;
@@ -4741,6 +4746,22 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 		}
 
 		if (strstr(buf, "CTRL-EVENT-CONNECTED")) {
+			if (dut->dhcp_client_running && dut->client_privacy) {
+				/*
+				 * Interface MAC address will be changed by
+				 * wpa_supplicant before connection attempt when
+				 * client privacy enabled. Restart DHCP client
+				 * to make sure DHCP frames use the correct
+				 * source MAC address.
+				 * */
+				kill_dhcp_client(dut, ifname);
+				if (start_dhcp_client(dut, ifname) < 0) {
+					send_resp(dut, conn, SIGMA_COMPLETE,
+						  "Result,DHCP client start failed");
+					ret = STATUS_SENT_ERROR;
+					break;
+				}
+			}
 			if (tod >= 0) {
 				sigma_dut_print(dut, DUT_MSG_DEBUG,
 						"Network profile TOD policy update: %d -> %d",

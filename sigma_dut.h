@@ -1050,6 +1050,7 @@ struct sigma_dut {
 	unsigned int prev_disable_mscs_support;
 	int dscp_use_iptables;
 	int autoconnect_default;
+	int dhcp_client_running;
 };
 
 
