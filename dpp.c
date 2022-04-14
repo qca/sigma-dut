@@ -283,6 +283,7 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 			struct sigma_cmd *cmd, int send_result, int *success)
 {
 	const char *curve = dpp_get_curve(cmd, "DPPCryptoIdentifier");
+	const char *uri_curves = dpp_get_curve(cmd, "DPPURICurves");
 	const char *bs = get_param(cmd, "DPPBS");
 	const char *chan_list = get_param(cmd, "DPPChannelList");
 	const char *tcp = get_param(cmd, "DPPOverTCP");
@@ -350,10 +351,12 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 	    (strcmp(chan_list, "0/0") == 0 || chan_list[0] == '\0')) {
 		/* No channel list */
 		res = snprintf(buf, sizeof(buf),
-			       "DPP_BOOTSTRAP_GEN type=%s curve=%s%s%s",
+			       "DPP_BOOTSTRAP_GEN type=%s curve=%s%s%s%s%s",
 			       type, curve,
 			       include_mac ? " mac=" : "",
-			       include_mac ? mac : "");
+			       include_mac ? mac : "",
+			       uri_curves ? " supported_curves=" : "",
+			       uri_curves ? uri_curves : "");
 	} else if (chan_list) {
 		/* Channel list override (CTT case) - space separated tuple(s)
 		 * of OperatingClass/Channel; convert to wpa_supplicant/hostapd
@@ -364,9 +367,11 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 				*pos = ',';
 		}
 		res = snprintf(buf, sizeof(buf),
-			       "DPP_BOOTSTRAP_GEN type=%s curve=%s chan=%s%s%s",
+			       "DPP_BOOTSTRAP_GEN type=%s curve=%s chan=%s%s%s%s%s",
 			       type, curve, resp, include_mac ? " mac=" : "",
-			       include_mac ? mac : "");
+			       include_mac ? mac : "",
+			       uri_curves ? " supported_curves=" : "",
+			       uri_curves ? uri_curves : "");
 	} else {
 		int channel = 11;
 
@@ -376,9 +381,11 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 		    dut->ap_channel > 0 && dut->ap_channel <= 13)
 			channel = dut->ap_channel;
 		res = snprintf(buf, sizeof(buf),
-			       "DPP_BOOTSTRAP_GEN type=%s curve=%s chan=81/%d%s%s",
+			       "DPP_BOOTSTRAP_GEN type=%s curve=%s chan=81/%d%s%s%s%s",
 			       type, curve, channel, include_mac ? " mac=" : "",
-			       include_mac ? mac : "");
+			       include_mac ? mac : "",
+			       uri_curves ? " supported_curves=" : "",
+			       uri_curves ? uri_curves : "");
 	}
 
 	if (res < 0 || res >= sizeof(buf) ||
