@@ -34,7 +34,7 @@ static const char * dpp_mdns_role_txt(enum dpp_mdns_role role)
 
 
 static int dpp_mdns_discover(struct sigma_dut *dut, enum dpp_mdns_role role,
-			     char *addr, size_t addr_size)
+			     char *addr, size_t addr_size, unsigned char *hash)
 {
 	char cmd[200], buf[10000], *pos, *pos2, *pos3;
 	char *ifname = NULL, *ipaddr = NULL, *bskeyhash = NULL;
@@ -144,11 +144,65 @@ static int dpp_mdns_discover(struct sigma_dut *dut, enum dpp_mdns_role role,
 		return -1;
 	sigma_dut_print(dut, DUT_MSG_INFO, "Discovered (mDNS) service at %s@%s",
 			ipaddr, ifname);
-	if (bskeyhash)
+	if (bskeyhash && hash) {
+		unsigned char *bin;
+		size_t bin_len;
+
 		sigma_dut_print(dut, DUT_MSG_DEBUG, "bskeyhash: %s", bskeyhash);
+
+		bin = base64_decode(bskeyhash, strlen(bskeyhash), &bin_len);
+		if (!bin || bin_len != 32) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Invalid bskeyhash value in mDNS records");
+			free(bin);
+			return -1;
+		}
+
+		memcpy(hash, bin, bin_len);
+		free(bin);
+	}
 	strlcpy(addr, ipaddr, addr_size);
 
 	return 0;
+}
+
+
+int dpp_mdns_discover_relay_params(struct sigma_dut *dut)
+{
+	char tcp_addr[30];
+	unsigned char hash[32];
+
+	if (dpp_mdns_discover(dut, DPP_MDNS_CONTROLLER,
+			      tcp_addr, sizeof(tcp_addr), hash) < 0) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Could not discover Controller IP address using mDNS");
+		return -1;
+	}
+
+	free(dut->ap_dpp_conf_addr);
+	dut->ap_dpp_conf_addr = strdup(tcp_addr);
+
+	free(dut->ap_dpp_conf_pkhash);
+	dut->ap_dpp_conf_pkhash = malloc(2 * 32 + 1);
+	if (dut->ap_dpp_conf_pkhash) {
+		int i;
+		char *pos = dut->ap_dpp_conf_pkhash;
+		char *end = pos + 2 * 32 + 1;
+
+		for (i = 0; i < 32; i++)
+			pos += snprintf(pos, end - pos, "%02x", hash[i]);
+		*pos = '\0';
+	}
+
+	if (dut->ap_dpp_conf_addr && dut->ap_dpp_conf_pkhash) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Controller discovered using mDNS: %s (pkhash %s)",
+				dut->ap_dpp_conf_addr,
+				dut->ap_dpp_conf_pkhash);
+		return 0;
+	}
+
+	return -1;
 }
 
 
@@ -164,6 +218,14 @@ static int dpp_hostapd_run(struct sigma_dut *dut)
 {
 	if (dut->hostapd_running)
 		return 0;
+
+	if (dut->ap_dpp_conf_addr &&
+	    strcasecmp(dut->ap_dpp_conf_addr, "mDNS") == 0 &&
+	    dpp_mdns_discover_relay_params(dut) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to discover Controller for AP Relay using mDNS - cannot start hostapd");
+		return -1;
+	}
 
 	sigma_dut_print(dut, DUT_MSG_INFO,
 			"Starting hostapd in unconfigured state for DPP");
@@ -1412,7 +1474,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		else
 			role = DPP_MDNS_CONTROLLER;
 		if (dpp_mdns_discover(dut, role,
-				      tcp_addr, sizeof(tcp_addr)) < 0) {
+				      tcp_addr, sizeof(tcp_addr), NULL) < 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Could not discover Controller/Relay IP address using mDNS");
 			return STATUS_SENT_ERROR;

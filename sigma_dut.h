@@ -1285,6 +1285,7 @@ int lowi_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 enum sigma_cmd_result dpp_dev_exec_action(struct sigma_dut *dut,
 					  struct sigma_conn *conn,
 					  struct sigma_cmd *cmd);
+int dpp_mdns_discover_relay_params(struct sigma_dut *dut);
 int dpp_mdns_start(struct sigma_dut *dut, enum dpp_mdns_role role);
 void dpp_mdns_stop(struct sigma_dut *dut);
 

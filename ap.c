@@ -14124,6 +14124,10 @@ cmd_ap_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 		dut->ap_dpp_conf_pkhash = strdup(val);
 	}
 
+	if (dut->ap_dpp_conf_addr &&
+	    strcasecmp(dut->ap_dpp_conf_addr, "mDNS") == 0)
+		dpp_mdns_discover_relay_params(dut);
+
 	return 1;
 }
 
