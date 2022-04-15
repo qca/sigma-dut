@@ -2680,6 +2680,7 @@ static enum sigma_cmd_result cmd_sta_set_eaptls(struct sigma_dut *dut,
 						struct sigma_conn *conn,
 						struct sigma_cmd *cmd)
 {
+	const char *type = get_param(cmd, "Type");
 	const char *intf = get_param(cmd, "Interface");
 	const char *ifname, *val;
 	int id;
@@ -2801,6 +2802,13 @@ static enum sigma_cmd_result cmd_sta_set_eaptls(struct sigma_dut *dut,
 
 	if (set_network(ifname, id, "ocsp", "1") < 0)
 		return ERROR_SEND_STATUS;
+
+	if (type && strcasecmp(type, "EAPTLS_1_3") == 0) {
+		sigma_dut_print(dut, DUT_MSG_INFO, "Enable only TLS v1.3");
+		if (set_network_quoted(ifname, id, "phase1",
+				       "tls_disable_tlsv1_0=1 tls_disable_tlsv1_1=1 tls_disable_tlsv1_2=1 tls_disable_tlsv1_3=0") < 0)
+			return ERROR_SEND_STATUS;
+	}
 
 	return 1;
 }
@@ -3140,7 +3148,8 @@ static enum sigma_cmd_result cmd_sta_set_security(struct sigma_dut *dut,
 	    strcasecmp(type, "PSK-SAE") == 0 ||
 	    strcasecmp(type, "SAE") == 0)
 		return cmd_sta_set_psk(dut, conn, cmd);
-	if (strcasecmp(type, "EAPTLS") == 0)
+	if (strcasecmp(type, "EAPTLS") == 0 ||
+	    strcasecmp(type, "EAPTLS_1_3") == 0)
 		return cmd_sta_set_eaptls(dut, conn, cmd);
 	if (strcasecmp(type, "EAPTTLS") == 0)
 		return cmd_sta_set_eapttls(dut, conn, cmd);
