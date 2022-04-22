@@ -283,7 +283,7 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 			struct sigma_cmd *cmd, int send_result, int *success)
 {
 	const char *curve = dpp_get_curve(cmd, "DPPCryptoIdentifier");
-	const char *uri_curves = dpp_get_curve(cmd, "DPPURICurves");
+	const char *uri_curves = get_param(cmd, "DPPURICurves");
 	const char *bs = get_param(cmd, "DPPBS");
 	const char *chan_list = get_param(cmd, "DPPChannelList");
 	const char *tcp = get_param(cmd, "DPPOverTCP");
