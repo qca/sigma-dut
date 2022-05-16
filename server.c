@@ -245,8 +245,12 @@ static int server_reset_cert_enroll(struct sigma_dut *dut, const char *addr)
 				SERVER_DB);
 		return -1;
 	}
-	sql = sqlite3_mprintf("DELETE FROM cert_enroll WHERE mac_addr=%Q",
-			      addr);
+
+	if (strcasecmp(addr, "any") == 0)
+		sql = sqlite3_mprintf("DELETE FROM cert_enroll");
+	else
+		sql = sqlite3_mprintf("DELETE FROM cert_enroll WHERE mac_addr=%Q",
+				      addr);
 	if (!sql) {
 		sqlite3_close(db);
 		return -1;
@@ -486,8 +490,11 @@ static char * get_last_serial(struct sigma_dut *dut, sqlite3 *db,
 {
 	char *sql, *last_serial = NULL;
 
-	sql = sqlite3_mprintf("SELECT serialnum FROM cert_enroll WHERE mac_addr=%Q",
-			      addr);
+	if (!addr || strcasecmp(addr, "any") == 0)
+		sql = sqlite3_mprintf("SELECT serialnum FROM cert_enroll");
+	else
+		sql = sqlite3_mprintf("SELECT serialnum FROM cert_enroll WHERE mac_addr=%Q",
+				      addr);
 	if (!sql)
 		return NULL;
 	sigma_dut_print(dut, DUT_MSG_DEBUG, "SQL: %s", sql);
@@ -938,7 +945,7 @@ static enum sigma_cmd_result cmd_server_request_status(struct sigma_dut *dut,
 		return aaa_auth_status(dut, conn, cmd, resp, timeout);
 	}
 
-	if (osu && status && strcasecmp(status, "OSU") == 0 && addr)
+	if (osu && status && strcasecmp(status, "OSU") == 0)
 		return osu_cert_enroll_status(dut, conn, cmd, addr, timeout);
 
 	if (osu && status && strcasecmp(status, "PolicyProvisioning") == 0 &&
