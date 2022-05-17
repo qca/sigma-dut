@@ -28,6 +28,8 @@ static const char * dpp_mdns_role_txt(enum dpp_mdns_role role)
 		return "relay";
 	case DPP_MDNS_CONTROLLER:
 		return "controller";
+	case DPP_MDNS_BOOTSTRAPPING:
+		return "bootstrapping";
 	}
 	return "unknown";
 }
@@ -3711,6 +3713,8 @@ static enum sigma_cmd_result dpp_set_mdns_advertise(struct sigma_dut *dut,
 			dut->dpp_local_bootstrap = atoi(resp);
 		}
 		ret = dpp_mdns_start(dut, DPP_MDNS_CONTROLLER);
+	} else if (strcasecmp(role, "Bootstrapping") == 0) {
+		ret = dpp_mdns_start(dut, DPP_MDNS_BOOTSTRAPPING);
 	} else {
 		sigma_dut_print(dut, DUT_MSG_INFO,
 				"Unsupported DPPmDNSAdvertise role: %s", role);

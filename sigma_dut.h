@@ -401,6 +401,7 @@ enum dpp_mdns_role {
 	DPP_MDNS_NOT_RUNNING,
 	DPP_MDNS_RELAY,
 	DPP_MDNS_CONTROLLER,
+	DPP_MDNS_BOOTSTRAPPING,
 };
 
 struct sigma_dut {
