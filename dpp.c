@@ -289,12 +289,27 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *bs = get_param(cmd, "DPPBS");
 	const char *chan_list = get_param(cmd, "DPPChannelList");
 	const char *tcp = get_param(cmd, "DPPOverTCP");
+	const char *val;
 	char *pos, mac[50], buf[200], resp[1000], hex[2000];
 	const char *ifname = get_station_ifname(dut);
 	int res;
 	const char *type;
 	int include_mac;
+	char host[100];
 
+	host[0] = '\0';
+	val = get_param(cmd, "DPPURIHost");
+	if (val && strcasecmp(val, "Yes") == 0) {
+		char ip[30];
+
+		if (get_wpa_status(get_station_ifname(dut), "ip_address",
+				   ip, sizeof(ip)) < 0 || ip[0] == '\0') {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,IP address not available on wireless interface");
+			return STATUS_SENT_ERROR;
+		}
+		snprintf(host, sizeof(host), " host=%s", ip);
+	}
 	include_mac = !tcp || strcasecmp(tcp, "yes") != 0;
 
 	if (success)
@@ -353,12 +368,13 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 	    (strcmp(chan_list, "0/0") == 0 || chan_list[0] == '\0')) {
 		/* No channel list */
 		res = snprintf(buf, sizeof(buf),
-			       "DPP_BOOTSTRAP_GEN type=%s curve=%s%s%s%s%s",
+			       "DPP_BOOTSTRAP_GEN type=%s curve=%s%s%s%s%s%s",
 			       type, curve,
 			       include_mac ? " mac=" : "",
 			       include_mac ? mac : "",
 			       uri_curves ? " supported_curves=" : "",
-			       uri_curves ? uri_curves : "");
+			       uri_curves ? uri_curves : "",
+			       host);
 	} else if (chan_list) {
 		/* Channel list override (CTT case) - space separated tuple(s)
 		 * of OperatingClass/Channel; convert to wpa_supplicant/hostapd
@@ -369,11 +385,12 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 				*pos = ',';
 		}
 		res = snprintf(buf, sizeof(buf),
-			       "DPP_BOOTSTRAP_GEN type=%s curve=%s chan=%s%s%s%s%s",
+			       "DPP_BOOTSTRAP_GEN type=%s curve=%s chan=%s%s%s%s%s%s",
 			       type, curve, resp, include_mac ? " mac=" : "",
 			       include_mac ? mac : "",
 			       uri_curves ? " supported_curves=" : "",
-			       uri_curves ? uri_curves : "");
+			       uri_curves ? uri_curves : "",
+			       host);
 	} else {
 		int channel = 11;
 
@@ -383,11 +400,12 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 		    dut->ap_channel > 0 && dut->ap_channel <= 13)
 			channel = dut->ap_channel;
 		res = snprintf(buf, sizeof(buf),
-			       "DPP_BOOTSTRAP_GEN type=%s curve=%s chan=81/%d%s%s%s%s",
+			       "DPP_BOOTSTRAP_GEN type=%s curve=%s chan=81/%d%s%s%s%s%s",
 			       type, curve, channel, include_mac ? " mac=" : "",
 			       include_mac ? mac : "",
 			       uri_curves ? " supported_curves=" : "",
-			       uri_curves ? uri_curves : "");
+			       uri_curves ? uri_curves : "",
+			       host);
 	}
 
 	if (res < 0 || res >= sizeof(buf) ||
