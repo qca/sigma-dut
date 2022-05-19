@@ -1491,6 +1491,12 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		tcp = tcp_addr;
 	}
 
+	if (auth_role && strcasecmp(auth_role, "Initiator") == 0 &&
+	    tcp && strcasecmp(tcp, "URI") == 0) {
+		/* Use the address/port from the host entry in peer URI */
+		tcp = "from-uri";
+	}
+
 	pkex_identifier[0] = '\0';
 	if (is_pkex_bs(bs)) {
 		if (sigma_dut_is_ap(dut) && dut->ap_channel != 6) {
