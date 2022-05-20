@@ -259,7 +259,7 @@ static enum sigma_cmd_result cmd_traffic_stop_ping(struct sigma_dut *dut,
 }
 
 
-static int get_ip_addr(const char *ifname, int ipv6, char *buf, size_t len)
+int get_ip_addr(const char *ifname, int ipv6, char *buf, size_t len)
 {
 	struct ifaddrs *ifa, *ifa_tmp;
 	bool non_ll_addr_found = false;

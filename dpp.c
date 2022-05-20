@@ -296,20 +296,13 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *type;
 	int include_mac;
 	char host[100];
+	bool uri_host;
+	char ip[30];
 
 	host[0] = '\0';
+	ip[0] = '\0';
 	val = get_param(cmd, "DPPURIHost");
-	if (val && strcasecmp(val, "Yes") == 0) {
-		char ip[30];
-
-		if (get_wpa_status(get_station_ifname(dut), "ip_address",
-				   ip, sizeof(ip)) < 0 || ip[0] == '\0') {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "errorCode,IP address not available on wireless interface");
-			return STATUS_SENT_ERROR;
-		}
-		snprintf(host, sizeof(host), " host=%s", ip);
-	}
+	uri_host = val && strcasecmp(val, "Yes") == 0;
 	include_mac = !tcp || strcasecmp(tcp, "yes") != 0;
 
 	if (success)
@@ -342,13 +335,35 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 		snprintf(mac, sizeof(mac), "%02x%02x%02x%02x%02x%02x",
 			 bssid[0], bssid[1], bssid[2],
 			 bssid[3], bssid[4], bssid[5]);
+
+		if (uri_host) {
+			const char *ifname;
+
+			ifname = dut->bridge ? dut->bridge :
+				dut->hostapd_ifname;
+			if (get_ip_addr(ifname, 0, ip, sizeof(ip)) < 0)
+				ip[0] = '\0';
+		}
 	} else {
 		if (get_wpa_status(ifname, "address", mac, sizeof(mac)) < 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Failed to get own MAC address from wpa_supplicant");
 			return STATUS_SENT_ERROR;
 		}
+
+		if (uri_host &&
+		    get_wpa_status(get_station_ifname(dut),
+				   "ip_address", ip, sizeof(ip)) < 0)
+			ip[0] = '\0';
 	}
+
+	if (uri_host && ip[0] == '\0') {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,IP address not available on wireless interface");
+		return STATUS_SENT_ERROR;
+	}
+	if (uri_host)
+		snprintf(host, sizeof(host), " host=%s", ip);
 
 	pos = mac;
 	while (*pos) {
