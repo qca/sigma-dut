@@ -2615,6 +2615,25 @@ static int set_eap_common(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 	}
 
+	val = get_param(cmd, "imsiPrivacyCert");
+	if (val) {
+		snprintf(buf, sizeof(buf), "%s/%s", sigma_cert_path, val);
+#ifdef __linux__
+		if (!file_exists(buf)) {
+			char msg[300];
+
+			snprintf(msg, sizeof(msg),
+				 "ErrorCode,trustedRootCA file (%s) not found",
+				 buf);
+			send_resp(dut, conn, SIGMA_ERROR, msg);
+			return STATUS_SENT_ERROR;
+		}
+#endif /* __linux__ */
+		if (set_network_quoted(ifname, id, "imsi_privacy_cert",
+				       buf) < 0)
+			return ERROR_SEND_STATUS;
+	}
+
 	if (dut->akm_values &
 	    ((1 << AKM_FILS_SHA256) |
 	     (1 << AKM_FILS_SHA384) |
