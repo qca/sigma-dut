@@ -2799,6 +2799,9 @@ static enum sigma_cmd_result cmd_sta_set_eaptls(struct sigma_dut *dut,
 		}
 	}
 
+	if (set_network(ifname, id, "ocsp", "1") < 0)
+		return ERROR_SEND_STATUS;
+
 	return 1;
 }
 
