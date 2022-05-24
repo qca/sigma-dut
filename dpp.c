@@ -1613,6 +1613,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		tcp = "from-uri";
 	}
 
+	wpa_command(ifname, "SET dpp_discard_public_action 0");
+
 	pkex_identifier[0] = '\0';
 	if (is_pkex_bs(bs)) {
 		if (sigma_dut_is_ap(dut) && dut->ap_channel != 6) {
@@ -2263,6 +2265,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 
 			if (tcp && strcasecmp(tcp, "yes") == 0) {
 				wpa_command(ifname, "DPP_STOP_LISTEN");
+				wpa_command(ifname,
+					    "SET dpp_discard_public_action 1");
 				snprintf(buf, sizeof(buf),
 					 "DPP_CONTROLLER_START");
 			} else {
