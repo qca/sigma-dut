@@ -341,8 +341,14 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 
 			ifname = dut->bridge ? dut->bridge :
 				dut->hostapd_ifname;
-			if (get_ip_addr(ifname, 0, ip, sizeof(ip)) < 0)
+			if (get_ip_addr(ifname, 0, ip, sizeof(ip)) < 0) {
+				sigma_dut_print(dut, DUT_MSG_INFO,
+						"Could not get IP address for AP mode: bridge=%s hostapd_ifname=%s",
+						dut->bridge ? dut->bridge :
+						"N/A",
+						dut->hostapd_ifname);
 				ip[0] = '\0';
+			}
 		}
 	} else {
 		if (get_wpa_status(ifname, "address", mac, sizeof(mac)) < 0) {
@@ -352,9 +358,11 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 
 		if (uri_host &&
-		    get_wpa_status(get_station_ifname(dut),
-				   "ip_address", ip, sizeof(ip)) < 0)
+		    get_wpa_status(ifname, "ip_address", ip, sizeof(ip)) < 0) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Could not get IP address for station mode");
 			ip[0] = '\0';
+		}
 	}
 
 	if (uri_host && ip[0] == '\0') {
