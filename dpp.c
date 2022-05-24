@@ -1317,6 +1317,73 @@ static bool is_pkex_bs(const char *bs)
 }
 
 
+static int dpp_pick_uri_curve(struct sigma_dut *dut, const char *ifname,
+			      const char *uri, char *buf, size_t buflen)
+{
+	char tmp[2000], *pos, *pos2;
+	int id;
+	char *curves = NULL;
+	char *saveptr, *res;
+
+	if (strlen(uri) > 1900)
+		return -1;
+	snprintf(tmp, sizeof(tmp), "DPP_QR_CODE %s", uri);
+	if (wpa_command_resp(ifname, tmp, tmp, sizeof(tmp)) < 0 ||
+	    strncmp(tmp, "FAIL", 4) == 0) {
+		sigma_dut_print(dut, DUT_MSG_INFO, "Failed to parse peer URI");
+		return -1;
+	}
+	id = atoi(tmp);
+
+	snprintf(tmp, sizeof(tmp), "DPP_BOOTSTRAP_INFO %d", id);
+	if (wpa_command_resp(ifname, tmp, tmp, sizeof(tmp)) < 0 ||
+	    strncmp(tmp, "FAIL", 4) == 0) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Failed to get bootstrap information");
+		return -1;
+	}
+
+	pos = tmp;
+	while (pos) {
+		pos2 = strchr(pos, '\n');
+		if (pos2)
+			*pos2 = '\0';
+		if (strncmp(pos, "supp_curves=", 12) == 0) {
+			pos += 12;
+			curves = pos;
+			break;
+		}
+
+		if (!pos2)
+			break;
+		pos = pos2 + 1;
+	}
+
+	if (!curves) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"No supported curves indication in peer URI");
+
+		return -1;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"Pick alternative curve from URI: %s", curves);
+	res = strtok_r(curves, ":", &saveptr);
+	while (res) {
+		if (strcmp(res, "P-256") != 0) {
+			sigma_dut_print(dut, DUT_MSG_DEBUG, "Selected %s", res);
+			strlcpy(buf, res, buflen);
+			return 0;
+		}
+		res = strtok_r(NULL, ":", &saveptr);
+	}
+
+	sigma_dut_print(dut, DUT_MSG_INFO,
+			"Peer URI did not include any alternative curve");
+	return -1;
+}
+
+
 static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 					       struct sigma_conn *conn,
 					       struct sigma_cmd *cmd)
@@ -1466,19 +1533,36 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 
 	if (strcasecmp(prov_role, "Configurator") == 0 ||
 	    strcasecmp(prov_role, "Both") == 0) {
+		bool nak_curve_set = get_param(cmd, "DPPNAKECC") != NULL;
+		const char *nak_curve, *sign_curve;
+		char sel[20];
+
+		nak_curve = dpp_get_curve(cmd, "DPPNAKECC");
+		sign_curve = dpp_get_curve(cmd, "DPPSigningKeyECC");
+		if (strcasecmp(nak_curve, "URI") == 0 ||
+		    strcasecmp(sign_curve, "URI") == 0) {
+			if (dpp_pick_uri_curve(dut, ifname, dut->dpp_peer_uri,
+					       sel, sizeof(sel)) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "errorCode,Failed to select alternative curve from URI");
+				return STATUS_SENT_ERROR;
+			}
+
+			if (strcasecmp(nak_curve, "URI") == 0)
+				nak_curve = sel;
+			if (strcasecmp(sign_curve, "URI") == 0)
+				sign_curve = sel;
+		}
+
 		if (dut->dpp_conf_id < 0) {
-			if (get_param(cmd, "DPPNAKECC")) {
+			if (nak_curve_set) {
 				snprintf(buf, sizeof(buf),
 					 "DPP_CONFIGURATOR_ADD curve=%s net_access_key_curve=%s",
-					 dpp_get_curve(cmd,
-						       "DPPSigningKeyECC"),
-					 dpp_get_curve(cmd,
-						       "DPPNAKECC"));
+					 sign_curve, nak_curve);
 			} else {
 				snprintf(buf, sizeof(buf),
 					 "DPP_CONFIGURATOR_ADD curve=%s",
-					 dpp_get_curve(cmd,
-						       "DPPSigningKeyECC"));
+					 sign_curve);
 			}
 			if (wpa_command_resp(ifname, buf,
 					     buf, sizeof(buf)) < 0) {
@@ -1487,11 +1571,10 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				return STATUS_SENT_ERROR;
 			}
 			dut->dpp_conf_id = atoi(buf);
-		} else if (get_param(cmd, "DPPNAKECC")) {
+		} else if (nak_curve_set) {
 			snprintf(buf, sizeof(buf),
 				 "DPP_CONFIGURATOR_SET %d net_access_key_curve=%s",
-				 dut->dpp_conf_id,
-				 dpp_get_curve(cmd, "DPPNAKECC"));
+				 dut->dpp_conf_id, nak_curve);
 			wpa_command(ifname, buf);
 		}
 		if (strcasecmp(prov_role, "Configurator") == 0)
