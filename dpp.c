@@ -3858,6 +3858,20 @@ static enum sigma_cmd_result dpp_set_mdns_advertise(struct sigma_dut *dut,
 }
 
 
+static int dpp_check_mdns_discovery_result(struct sigma_dut *dut)
+{
+	if (sigma_dut_is_ap(dut) && dut->ap_dpp_conf_addr &&
+	    strcasecmp(dut->ap_dpp_conf_addr, "mDNS") == 0 &&
+	    dpp_mdns_discover_relay_params(dut) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to discover Controller for AP Relay using mDNS");
+		return -1;
+	}
+
+	return 0;
+}
+
+
 static enum sigma_cmd_result dpp_set_parameter(struct sigma_dut *dut,
 					       struct sigma_conn *conn,
 					       struct sigma_cmd *cmd)
@@ -3869,6 +3883,14 @@ static enum sigma_cmd_result dpp_set_parameter(struct sigma_dut *dut,
 	if (val &&
 	    dpp_set_mdns_advertise(dut, conn, cmd, val) < 0)
 		res = ERROR_SEND_STATUS;
+
+	val = get_param(cmd, "DPPmDNSEnable");
+	if (val && strcasecmp(val, "Yes") == 0 &&
+	    dpp_check_mdns_discovery_result(dut) < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,mDNS discovery has not succeeded");
+		return STATUS_SENT_ERROR;
+	}
 
 	return res;
 }
