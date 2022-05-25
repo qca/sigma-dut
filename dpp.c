@@ -2293,6 +2293,10 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 					  "errorCode,Missing DPPConfIndex");
 				goto out;
 			}
+			if (tcp)
+				wpa_command(ifname,
+					    "SET dpp_discard_public_action 1");
+
 			snprintf(buf, sizeof(buf),
 				 "DPP_AUTH_INIT peer=%d%s role=%s%s%s conf=%s %s %s configurator=%d%s%s%s%s%s%s%s%s",
 				 dpp_peer_bootstrap, own_txt, role,
@@ -2307,6 +2311,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				 csrattrs, conf2);
 		} else if (tcp && (strcasecmp(bs, "QR") == 0 ||
 				   strcasecmp(bs, "NFC") == 0)) {
+			wpa_command(ifname, "SET dpp_discard_public_action 1");
 			snprintf(buf, sizeof(buf),
 				 "DPP_AUTH_INIT peer=%d%s role=%s%s%s tcp_addr=%s%s%s",
 				 dpp_peer_bootstrap, own_txt, role,
