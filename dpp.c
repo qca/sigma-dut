@@ -860,6 +860,9 @@ static const struct dpp_test_info dpp_tests[] = {
 	{ "InvalidValue", "PeerDiscoveryResponse", "ProtocolVersion", 95 },
 	{ "InvalidValue", "ReconfigAuthRequest", "ProtocolVersion", 96 },
 	{ "MissingAttribute", "ReconfigAuthRequest", "ProtocolVersion", 97 },
+	{ "InvalidValue", "PBPresAnnc", "RespBSKeyHash", 98 },
+	{ "InvalidValue", "PBPAResponse", "InitBSKeyHash", 99 },
+	{ "InvalidValue", "PBPAResponse", "RespBSKeyHash", 100 },
 	{ NULL, NULL, NULL, 0 }
 };
 
@@ -1466,6 +1469,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 	char *no_mud_url = "";
 	char *mud_url = no_mud_url;
 	char tcp_addr[30];
+	bool pb = strcasecmp(bs, "PBBS") == 0;
 
 	time(&start);
 
@@ -1473,6 +1477,42 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		wait_conn = "no";
 	if (!self_conf)
 		self_conf = "no";
+
+	if (pb) {
+		if (!prov_role) {
+			if (sigma_dut_is_ap(dut))
+				prov_role = "Configurator";
+			else
+				prov_role = "Enrollee";
+		} else if (!sigma_dut_is_ap(dut) &&
+			   strcasecmp(prov_role, "Enrollee") != 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,PB STA can only be an Enrollee");
+			return STATUS_SENT_ERROR;
+		} else if (sigma_dut_is_ap(dut) &&
+			   strcasecmp(prov_role, "Configurator") != 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,PB AP can only be a Configurator");
+			return STATUS_SENT_ERROR;
+		}
+
+		if (!auth_role) {
+			if (sigma_dut_is_ap(dut))
+				auth_role = "Initiator";
+			else
+				auth_role = "Responder";
+		} else if (!sigma_dut_is_ap(dut) &&
+			   strcasecmp(auth_role, "Responder") != 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,PB AP can only be a Responder");
+			return STATUS_SENT_ERROR;
+		} else if (sigma_dut_is_ap(dut) &&
+			   strcasecmp(auth_role, "Initiator") != 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,PB AP can only be an Initiator");
+			return STATUS_SENT_ERROR;
+		}
+	}
 
 	if (!prov_role) {
 		send_resp(dut, conn, SIGMA_ERROR,
@@ -2349,6 +2389,22 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				 tcp ? " tcp_addr=" : "",
 				 tcp ? tcp : "",
 				 role, pkex_identifier, pkex_code);
+		} else if (pb && conf_role) {
+			dpp_hostapd_beacon(dut);
+			snprintf(buf, sizeof(buf),
+				 "DPP_PUSH_BUTTON role=%s%s%s conf=%s %s %s configurator=%d%s%s%s%s%s%s",
+				 role,
+				 netrole ? " netrole=" : "",
+				 netrole ? netrole : "",
+				 conf_role, conf_ssid, conf_pass,
+				 dut->dpp_conf_id, neg_freq, group_id,
+				 akm_use_selector ? " akm_use_selector=1" : "",
+				 conn_status ? " conn_status=1" : "",
+				 csrattrs, conf2);
+		} else if (pb) {
+			dpp_hostapd_beacon(dut);
+			snprintf(buf, sizeof(buf),
+				 "DPP_PUSH_BUTTON");
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Unsupported DPPBS");
@@ -2499,6 +2555,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 			snprintf(buf, sizeof(buf), "DPP_CONTROLLER_START%s",
 				 (strcasecmp(bs, "QR") == 0 && mutual) ?
 				 " qr=mutual" : "");
+		} else if (pb) {
+			snprintf(buf, sizeof(buf), "DPP_PUSH_BUTTON");
 		} else {
 			snprintf(buf, sizeof(buf),
 				 "DPP_LISTEN %d role=%s%s%s%s",
