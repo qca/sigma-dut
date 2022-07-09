@@ -8815,9 +8815,11 @@ skip_key_mgmt:
 			fprintf(f, "fragment_size=128\n");
 	}
 
-	if (dut->ap_dpp_conf_addr && dut->ap_dpp_conf_pkhash)
+	if (dut->ap_dpp_conf_addr && dut->ap_dpp_conf_pkhash) {
 		fprintf(f, "dpp_controller=ipaddr=%s pkhash=%s\n",
 			dut->ap_dpp_conf_addr, dut->ap_dpp_conf_pkhash);
+		fprintf(f, "dpp_relay_port=8908\n");
+	}
 
 	if (dut->ap_he_rtsthrshld == VALUE_ENABLED)
 		fprintf(f, "he_rts_threshold=512\n");
