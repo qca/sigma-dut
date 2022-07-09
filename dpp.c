@@ -3840,6 +3840,28 @@ int dpp_mdns_start(struct sigma_dut *dut, enum dpp_mdns_role role)
 	if (bskeyhash)
 		fprintf(f, "    <txt-record>bskeyhash=%s</txt-record>\n",
 			bskeyhash);
+	if (role == DPP_MDNS_RELAY) {
+		int opclass, chan;
+
+		chan = dut->ap_channel;
+		if (!chan)
+			chan = 11;
+		if (chan >= 1 && chan <= 13)
+			opclass = 81;
+		else if (chan >= 36 && chan <= 48)
+			opclass = 115;
+		else if (chan >= 52 && chan <= 64)
+			opclass = 118;
+		else if (chan >= 100 && chan <= 144)
+			opclass = 121;
+		else if (chan >= 149 && chan <= 177)
+			opclass = 125;
+		else
+			opclass = 0;
+
+		fprintf(f, "    <txt-record>channellist=%d/%d</txt-record>\n",
+			opclass, chan);
+	}
 	fprintf(f, "  </service>\n");
 	fprintf(f, "</service-group>\n");
 
