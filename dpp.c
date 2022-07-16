@@ -1470,6 +1470,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 	char *mud_url = no_mud_url;
 	char tcp_addr[30];
 	bool pb = strcasecmp(bs, "PBBS") == 0;
+	char conf_extra[1000];
+	bool dpp_3rd_party;
 
 	time(&start);
 
@@ -1737,6 +1739,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 	csrattrs[0] = '\0';
 	group_id[0] = '\0';
 	conf2[0] = '\0';
+	conf_extra[0] = '\0';
 	if (!enrollee_configurator) {
 		val = get_param(cmd, "DPPConfIndex");
 		if (val)
@@ -1929,6 +1932,23 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		snprintf(group_id, sizeof(group_id), " group_id=%s",
 			 group_id_str);
 
+	val = get_param(cmd, "DPP3rdParty");
+	dpp_3rd_party = val && strcasecmp(val, "Yes") == 0;
+	if (dpp_3rd_party) {
+		wpa_command(ifname, "SET dpp_extra_conf_req_name com.example");
+		wpa_command(ifname,
+			    "SET dpp_extra_conf_req_value \"sample-info\"");
+	}
+
+	snprintf(conf_extra, sizeof(conf_extra),
+		 "configurator=%d%s%s%s%s%s%s",
+		 dut->dpp_conf_id, group_id,
+		 akm_use_selector ? " akm_use_selector=1" : "",
+		 conn_status ? " conn_status=1" : "",
+		 csrattrs,
+		 dpp_3rd_party ? " conf_extra_name=com.example conf_extra_value=2273616d706c652d696e666f22" : "",
+		 conf2);
+
 	if (force_gas_fragm) {
 		char spaces[1500];
 
@@ -2009,24 +2029,15 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				goto out;
 			}
 			snprintf(buf, sizeof(buf),
-				 "SET dpp_configurator_params  conf=%s %s %s configurator=%d%s%s%s%s%s",
-				 conf_role, conf_ssid, conf_pass,
-				 dut->dpp_conf_id, group_id,
-				 akm_use_selector ? " akm_use_selector=1" : "",
-				 conn_status ? " conn_status=1" : "",
-				 csrattrs, conf2);
+				 "SET dpp_configurator_params  conf=%s %s %s %s",
+				 conf_role, conf_ssid, conf_pass, conf_extra);
 			if (wpa_command(ifname, buf) < 0) {
 				send_resp(dut, conn, SIGMA_ERROR,
 					  "errorCode,Failed to set configurator parameters");
 				goto out;
 			}
-			snprintf(buf, sizeof(buf),
-				 "conf=%s %s %s configurator=%d%s%s%s%s%s",
-				 conf_role, conf_ssid, conf_pass,
-				 dut->dpp_conf_id, group_id,
-				 akm_use_selector ? " akm_use_selector=1" : "",
-				 conn_status ? " conn_status=1" : "", csrattrs,
-				 conf2);
+			snprintf(buf, sizeof(buf), "conf=%s %s %s %s",
+				 conf_role, conf_ssid, conf_pass, conf_extra);
 		} else {
 			buf[0] = '\0';
 			enrollee = 1;
@@ -2297,13 +2308,9 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 					goto out;
 				}
 				snprintf(buf, sizeof(buf),
-					 "SET dpp_configurator_params  conf=%s %s %s configurator=%d%s%s%s%s%s",
+					 "SET dpp_configurator_params  conf=%s %s %s %s",
 					 conf_role, conf_ssid, conf_pass,
-					 dut->dpp_conf_id, group_id,
-					 akm_use_selector ?
-					 " akm_use_selector=1" : "",
-					 conn_status ? " conn_status=1" : "",
-					 csrattrs, conf2);
+					 conf_extra);
 				if (wpa_command(ifname, buf) < 0) {
 					send_resp(dut, conn, SIGMA_ERROR,
 						  "errorCode,Failed to set configurator parameters");
@@ -2338,17 +2345,13 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 					    "SET dpp_discard_public_action 1");
 
 			snprintf(buf, sizeof(buf),
-				 "DPP_AUTH_INIT peer=%d%s role=%s%s%s conf=%s %s %s configurator=%d%s%s%s%s%s%s%s%s",
+				 "DPP_AUTH_INIT peer=%d%s role=%s%s%s conf=%s %s %s %s%s%s %s",
 				 dpp_peer_bootstrap, own_txt, role,
 				 netrole ? " netrole=" : "",
 				 netrole ? netrole : "",
-				 conf_role, conf_ssid, conf_pass,
-				 dut->dpp_conf_id, neg_freq, group_id,
-				 akm_use_selector ? " akm_use_selector=1" : "",
-				 conn_status ? " conn_status=1" : "",
-				 tcp ? " tcp_addr=" : "",
-				 tcp ? tcp : "",
-				 csrattrs, conf2);
+				 conf_role, conf_ssid, conf_pass, neg_freq,
+				 tcp ? " tcp_addr=" : "", tcp ? tcp : "",
+				 conf_extra);
 		} else if (tcp && (strcasecmp(bs, "QR") == 0 ||
 				   strcasecmp(bs, "NFC") == 0)) {
 			wpa_command(ifname, "SET dpp_discard_public_action 1");
@@ -2392,15 +2395,12 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		} else if (pb && conf_role) {
 			dpp_hostapd_beacon(dut);
 			snprintf(buf, sizeof(buf),
-				 "DPP_PUSH_BUTTON role=%s%s%s conf=%s %s %s configurator=%d%s%s%s%s%s%s",
+				 "DPP_PUSH_BUTTON role=%s%s%s conf=%s %s %s %s %s",
 				 role,
 				 netrole ? " netrole=" : "",
 				 netrole ? netrole : "",
 				 conf_role, conf_ssid, conf_pass,
-				 dut->dpp_conf_id, neg_freq, group_id,
-				 akm_use_selector ? " akm_use_selector=1" : "",
-				 conn_status ? " conn_status=1" : "",
-				 csrattrs, conf2);
+				 neg_freq, conf_extra);
 		} else if (pb) {
 			dpp_hostapd_beacon(dut);
 			snprintf(buf, sizeof(buf),
@@ -2533,12 +2533,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				goto out;
 			}
 			snprintf(buf, sizeof(buf),
-				 "SET dpp_configurator_params  conf=%s %s %s configurator=%d%s%s%s%s%s",
-				 conf_role, conf_ssid, conf_pass,
-				 dut->dpp_conf_id, group_id,
-				 akm_use_selector ? " akm_use_selector=1" : "",
-				 conn_status ? " conn_status=1" : "", csrattrs,
-				 conf2);
+				 "SET dpp_configurator_params  conf=%s %s %s %s",
+				 conf_role, conf_ssid, conf_pass, conf_extra);
 			if (wpa_command(ifname, buf) < 0) {
 				send_resp(dut, conn, SIGMA_ERROR,
 					  "errorCode,Failed to set configurator parameters");
