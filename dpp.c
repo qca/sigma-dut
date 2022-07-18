@@ -1522,6 +1522,14 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		return STATUS_SENT_ERROR;
 	}
 
+	val = get_param(cmd, "DPPPrivNetIntro");
+	if (val && strcasecmp(val, "Yes") == 0 && !sigma_dut_is_ap(dut) &&
+	    wpa_command(ifname, "SET dpp_connector_privacy_default 1") < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Could not enable Connector privacy");
+			return STATUS_SENT_ERROR;
+	}
+
 	val = get_param(cmd, "DPPConfEnrolleeRole");
 	if (val) {
 		enrollee_ap = strcasecmp(val, "AP") == 0;
