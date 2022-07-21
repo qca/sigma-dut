@@ -3258,6 +3258,7 @@ dpp_reconfigure_configurator(struct sigma_dut *dut, struct sigma_conn *conn,
 		NULL
 	};
 	unsigned int old_timeout = dut->default_timeout;
+	bool controller_started = false;
 
 	if (sigma_dut_is_ap(dut)) {
 		if (!dut->hostapd_ifname) {
@@ -3552,6 +3553,14 @@ dpp_reconfigure_configurator(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 	}
 
+	val = get_param(cmd, "DPPOverTCP");
+	if (val && strcasecmp(val, "yes") == 0) {
+		wpa_command(ifname, "DPP_STOP_LISTEN");
+		wpa_command(ifname, "SET dpp_discard_public_action 1");
+		wpa_command(ifname, "DPP_CONTROLLER_START");
+		controller_started = true;
+	}
+
 	if (frametype && strcasecmp(frametype, "ReconfigAuthRequest") == 0) {
 		const char *result;
 
@@ -3613,6 +3622,8 @@ out:
 		wpa_ctrl_detach(ctrl);
 		wpa_ctrl_close(ctrl);
 	}
+	if (controller_started)
+		wpa_command(ifname, "DPP_CONTROLLER_STOP");
 	dut->default_timeout = old_timeout;
 	return STATUS_SENT;
 err:
