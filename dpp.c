@@ -3257,6 +3257,7 @@ dpp_reconfigure_configurator(struct sigma_dut *dut, struct sigma_conn *conn,
 		"DPP-CONF-FAILED",
 		NULL
 	};
+	unsigned int old_timeout = dut->default_timeout;
 
 	if (sigma_dut_is_ap(dut)) {
 		if (!dut->hostapd_ifname) {
@@ -3527,6 +3528,13 @@ dpp_reconfigure_configurator(struct sigma_dut *dut, struct sigma_conn *conn,
 		return ERROR_SEND_STATUS;
 	}
 
+	val = get_param(cmd, "DPPTimeout");
+	if (val && atoi(val) > 0) {
+		dut->default_timeout = atoi(val);
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "DPP timeout: %u",
+				dut->default_timeout);
+	}
+
 	val = get_param(cmd, "DPPListenChannel");
 	if (val) {
 		freq = channel_to_freq(dut, atoi(val));
@@ -3605,6 +3613,7 @@ out:
 		wpa_ctrl_detach(ctrl);
 		wpa_ctrl_close(ctrl);
 	}
+	dut->default_timeout = old_timeout;
 	return STATUS_SENT;
 err:
 	send_resp(dut, conn, SIGMA_ERROR, NULL);
