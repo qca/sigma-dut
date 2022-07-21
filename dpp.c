@@ -3561,6 +3561,8 @@ dpp_reconfigure_configurator(struct sigma_dut *dut, struct sigma_conn *conn,
 		wpa_command(ifname, "SET dpp_discard_public_action 1");
 		wpa_command(ifname, "DPP_CONTROLLER_START");
 		controller_started = true;
+	} else {
+		wpa_command(ifname, "SET dpp_discard_public_action 0");
 	}
 
 	if (frametype && strcasecmp(frametype, "ReconfigAuthRequest") == 0) {
