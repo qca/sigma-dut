@@ -2385,6 +2385,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 					  "errorCode,Missing DPPConfIndex");
 				goto out;
 			}
+			if (tcp)
+				wpa_command(ifname, "SET dpp_discard_public_action 1");
 			snprintf(buf, sizeof(buf),
 				 "DPP_PKEX_ADD own=%d init=1%s%s%s role=%s conf=%s %s %s configurator=%d%s %scode=%s",
 				 own_pkex_id, pkex_ver,
