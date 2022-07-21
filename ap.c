@@ -8818,6 +8818,7 @@ skip_key_mgmt:
 	if (dut->ap_dpp_conf_addr && dut->ap_dpp_conf_pkhash) {
 		fprintf(f, "dpp_controller=ipaddr=%s pkhash=%s\n",
 			dut->ap_dpp_conf_addr, dut->ap_dpp_conf_pkhash);
+		fprintf(f, "dpp_configurator_connectivity=1\n");
 		fprintf(f, "dpp_relay_port=8908\n");
 	}
 
