@@ -1463,7 +1463,7 @@ static int dpp_pick_uri_curve(struct sigma_dut *dut, const char *ifname,
 	char *curves = NULL;
 	char *saveptr, *res;
 
-	if (strlen(uri) > 1900)
+	if (!uri || strlen(uri) > 1900)
 		return -1;
 	snprintf(tmp, sizeof(tmp), "DPP_QR_CODE %s", uri);
 	if (wpa_command_resp(ifname, tmp, tmp, sizeof(tmp)) < 0 ||
@@ -1519,6 +1519,36 @@ static int dpp_pick_uri_curve(struct sigma_dut *dut, const char *ifname,
 	sigma_dut_print(dut, DUT_MSG_INFO,
 			"Peer URI did not include any alternative curve");
 	return -1;
+}
+
+
+static bool dpp_peer_uri_available(struct sigma_dut *dut)
+{
+	FILE *f;
+	char buf[1000];
+	size_t len;
+
+	if (dut->dpp_peer_uri)
+		return true;
+
+	f = fopen("/tmp/dpp-rest-server.uri", "r");
+	if (!f)
+		return false;
+
+	len = fread(buf, 1, sizeof(buf) - 1, f);
+	fclose(f);
+	if (!len)
+		return false;
+	buf[len] = '\0';
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"Use the most recently received URI from REST API: %s",
+			buf);
+
+	free(dut->dpp_peer_uri);
+	dut->dpp_peer_uri = strdup(buf);
+
+	return dut->dpp_peer_uri != NULL;
 }
 
 
@@ -2349,7 +2379,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		}
 
 		if (strcasecmp(bs, "QR") == 0) {
-			if (!dut->dpp_peer_uri) {
+			if (!dpp_peer_uri_available(dut)) {
 				send_resp(dut, conn, SIGMA_ERROR,
 					  "errorCode,Missing peer bootstrapping info");
 				goto out;
@@ -2365,6 +2395,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				goto out;
 			}
 			dpp_peer_bootstrap = atoi(buf);
+			free(dut->dpp_peer_uri);
+			dut->dpp_peer_uri = NULL;
 		} else if (strcasecmp(bs, "NFC") == 0 && nfc_handover &&
 			   strcasecmp(nfc_handover, "Static") == 0) {
 			if (!dut->dpp_peer_uri) {
