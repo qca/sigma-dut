@@ -470,6 +470,24 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 }
 
 
+static void stop_stunnel(struct sigma_dut *dut)
+{
+	FILE *f;
+	int pid;
+
+	f = fopen("/tmp/stunnel-dpp-rest-client.pid", "r");
+	if (!f)
+		return;
+
+	if (fscanf(f, "%d", &pid) == 1 && pid > 1) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Terminate stunnel process %d",
+				pid);
+		kill(pid, SIGTERM);
+	}
+	fclose(f);
+}
+
 static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 					  struct sigma_conn *conn,
 					  const char *uri)
@@ -521,18 +539,7 @@ static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 	fprintf(f, "dpp-rest:00112233445566778899aabbccddeeff\n");
 	fclose(f);
 
-	f = fopen("/tmp/stunnel-dpp-rest-client.psk", "r");
-	if (f) {
-		int pid;
-
-		if (fscanf(f, "%d", &pid) == 1 && pid > 1) {
-			sigma_dut_print(dut, DUT_MSG_INFO,
-					"Terminate old stunnel process %d",
-					pid);
-			kill(pid, SIGTERM);
-		}
-		fclose(f);
-	}
+	stop_stunnel(dut);
 
 	if (system("stunnel /tmp/stunnel-dpp-rest-client.conf") != 0) {
 		send_resp(dut, conn, SIGMA_ERROR,
@@ -543,12 +550,14 @@ static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 	snprintf(buf, sizeof(buf), "curl -i --request POST --header \"Content-Type: application/json\" --data @/tmp/dppuri.json http://localhost:44444/dpp/bskey");
 	f = popen(buf, "r");
 	if (!f) {
+		stop_stunnel(dut);
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,Could not run curl");
 		return STATUS_SENT_ERROR;
 	}
 	len = fread(buf, 1, sizeof(buf) - 1, f);
 	pclose(f);
+	stop_stunnel(dut);
 	if (!len) {
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,curl failed to fetch response");
