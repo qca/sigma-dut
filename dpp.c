@@ -515,6 +515,9 @@ static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 		return STATUS_SENT_ERROR;
 	}
 
+	sigma_dut_print(dut, DUT_MSG_INFO, "Bootstrapping service at %s:%u",
+			tcp_addr, port);
+
 	f = fopen("/tmp/stunnel-dpp-rest-client.conf", "w");
 	if (!f) {
 		send_resp(dut, conn, SIGMA_ERROR,
@@ -547,7 +550,8 @@ static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 		return STATUS_SENT_ERROR;
 	}
 
-	snprintf(buf, sizeof(buf), "curl -i --request POST --header \"Content-Type: application/json\" --data @/tmp/dppuri.json http://localhost:44444/dpp/bskey");
+	snprintf(buf, sizeof(buf), "curl -i --request POST --header \"Content-Type: application/json\" --data @/tmp/dppuri.json http://localhost:33333/dpp/bskey");
+	sigma_dut_print(dut, DUT_MSG_INFO, "Run: %s", buf);
 	f = popen(buf, "r");
 	if (!f) {
 		stop_stunnel(dut);
