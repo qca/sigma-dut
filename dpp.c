@@ -558,7 +558,7 @@ static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 	pos = strchr(buf, ' ');
 	if (!pos || strncmp(buf, "HTTP/", 5) != 0) {
 		send_resp(dut, conn, SIGMA_ERROR,
-			  "errorCode,Invalud HTTP responder header received");
+			  "errorCode,Invalid HTTP responder header received");
 		return STATUS_SENT_ERROR;
 	}
 	pos++;
