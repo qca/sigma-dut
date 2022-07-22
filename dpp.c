@@ -1486,11 +1486,6 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				prov_role = "Configurator";
 			else
 				prov_role = "Enrollee";
-		} else if (!sigma_dut_is_ap(dut) &&
-			   strcasecmp(prov_role, "Enrollee") != 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "errorCode,PB STA can only be an Enrollee");
-			return STATUS_SENT_ERROR;
 		} else if (sigma_dut_is_ap(dut) &&
 			   strcasecmp(prov_role, "Configurator") != 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
@@ -1503,11 +1498,6 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				auth_role = "Initiator";
 			else
 				auth_role = "Responder";
-		} else if (!sigma_dut_is_ap(dut) &&
-			   strcasecmp(auth_role, "Responder") != 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "errorCode,PB AP can only be a Responder");
-			return STATUS_SENT_ERROR;
 		} else if (sigma_dut_is_ap(dut) &&
 			   strcasecmp(auth_role, "Initiator") != 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
@@ -2404,7 +2394,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				 tcp ? " tcp_addr=" : "",
 				 tcp ? tcp : "",
 				 role, pkex_identifier, pkex_code);
-		} else if (pb && conf_role) {
+		} else if (pb && conf_role && sigma_dut_is_ap(dut)) {
 			dpp_hostapd_beacon(dut);
 			snprintf(buf, sizeof(buf),
 				 "DPP_PUSH_BUTTON role=%s%s%s conf=%s %s %s %s %s",
@@ -2413,10 +2403,33 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 				 netrole ? netrole : "",
 				 conf_role, conf_ssid, conf_pass,
 				 neg_freq, conf_extra);
-		} else if (pb) {
+		} else if (pb && sigma_dut_is_ap(dut)) {
 			dpp_hostapd_beacon(dut);
 			snprintf(buf, sizeof(buf),
 				 "DPP_PUSH_BUTTON");
+		} else if (pb) {
+			int freq = 2437;
+
+			val = get_param(cmd, "DPPListenChannel");
+			if (val) {
+				freq = channel_to_freq(dut, atoi(val));
+				if (freq == 0) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "errorCode,Unsupported DPPListenChannel value");
+					goto out;
+				}
+			}
+
+			snprintf(buf, sizeof(buf), "DPP_LISTEN %d", freq);
+			wpa_command(ifname, buf);
+
+			snprintf(buf, sizeof(buf),
+				 "DPP_PUSH_BUTTON role=%s%s%s conf=%s %s %s %s %s",
+				 role,
+				 netrole ? " netrole=" : "",
+				 netrole ? netrole : "",
+				 conf_role, conf_ssid, conf_pass,
+				 neg_freq, conf_extra);
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Unsupported DPPBS");
