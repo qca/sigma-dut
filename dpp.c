@@ -36,12 +36,16 @@ static const char * dpp_mdns_role_txt(enum dpp_mdns_role role)
 
 
 static int dpp_mdns_discover(struct sigma_dut *dut, enum dpp_mdns_role role,
-			     char *addr, size_t addr_size, unsigned char *hash)
+			     char *addr, size_t addr_size, unsigned int *port,
+			     unsigned char *hash)
 {
 	char cmd[200], buf[10000], *pos, *pos2, *pos3;
 	char *ifname = NULL, *ipaddr = NULL, *bskeyhash = NULL;
 	size_t len;
 	FILE *f;
+
+	if (port)
+		*port = 0;
 
 	snprintf(cmd, sizeof(cmd), "avahi-browse _%s._sub._dpp._tcp -r -t -p",
 		 dpp_mdns_role_txt(role));
@@ -123,6 +127,9 @@ static int dpp_mdns_discover(struct sigma_dut *dut, enum dpp_mdns_role role,
 		ipaddr = pos;
 		pos = pos3 + 1;
 
+		if (port)
+			*port = atoi(pos);
+
 		pos = strstr(pos, "\"bskeyhash=");
 		if (pos) {
 			pos += 11;
@@ -175,7 +182,7 @@ int dpp_mdns_discover_relay_params(struct sigma_dut *dut)
 	unsigned char hash[32];
 
 	if (dpp_mdns_discover(dut, DPP_MDNS_CONTROLLER,
-			      tcp_addr, sizeof(tcp_addr), hash) < 0) {
+			      tcp_addr, sizeof(tcp_addr), NULL, hash) < 0) {
 		sigma_dut_print(dut, DUT_MSG_INFO,
 				"Could not discover Controller IP address using mDNS");
 		return -1;
@@ -463,6 +470,112 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 }
 
 
+static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
+					  struct sigma_conn *conn,
+					  const char *uri)
+{
+	FILE *f;
+	char buf[1000], *pos;
+	size_t len;
+	int status;
+	char tcp_addr[30];
+	unsigned int port;
+
+	f = fopen("/tmp/dppuri.json", "w");
+	if (!f) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Could not write dppuri.json");
+		return STATUS_SENT_ERROR;
+	}
+	fprintf(f, "{\"dppUri\":\"%s\"}", uri);
+	fclose(f);
+
+	if (dpp_mdns_discover(dut, DPP_MDNS_BOOTSTRAPPING,
+			      tcp_addr, sizeof(tcp_addr), &port, NULL) < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Could not discover (mDNS) bootstrapping service");
+		return STATUS_SENT_ERROR;
+	}
+
+	f = fopen("/tmp/stunnel-dpp-rest-client.conf", "w");
+	if (!f) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Could not write stunnel-dpp-rest-client.conf");
+		return STATUS_SENT_ERROR;
+	}
+	fprintf(f, "pid = /tmp/stunnel-dpp-rest-client.pid\n");
+	fprintf(f, "[PSK client]\n");
+	fprintf(f, "client = yes\n");
+	fprintf(f, "accept = 127.0.0.1:33333\n");
+	fprintf(f, "connect = %s:%u\n", tcp_addr, port);
+	fprintf(f, "PSKsecrets = /tmp/stunnel-dpp-rest-client.psk\n");
+	fclose(f);
+
+
+	f = fopen("/tmp/stunnel-dpp-rest-client.psk", "w");
+	if (!f) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Could not write stunnel-dpp-rest-client.psk");
+		return STATUS_SENT_ERROR;
+	}
+	fprintf(f, "dpp-rest:00112233445566778899aabbccddeeff\n");
+	fclose(f);
+
+	f = fopen("/tmp/stunnel-dpp-rest-client.psk", "r");
+	if (f) {
+		int pid;
+
+		if (fscanf(f, "%d", &pid) == 1 && pid > 1) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Terminate old stunnel process %d",
+					pid);
+			kill(pid, SIGTERM);
+		}
+		fclose(f);
+	}
+
+	if (system("stunnel /tmp/stunnel-dpp-rest-client.conf") != 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Could not start stunnel");
+		return STATUS_SENT_ERROR;
+	}
+
+	snprintf(buf, sizeof(buf), "curl -i --request POST --header \"Content-Type: application/json\" --data @/tmp/dppuri.json http://localhost:44444/dpp/bskey");
+	f = popen(buf, "r");
+	if (!f) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Could not run curl");
+		return STATUS_SENT_ERROR;
+	}
+	len = fread(buf, 1, sizeof(buf) - 1, f);
+	pclose(f);
+	if (!len) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,curl failed to fetch response");
+		return STATUS_SENT_ERROR;
+	}
+	buf[len] = '\0';
+	pos = strchr(buf, ' ');
+	if (!pos || strncmp(buf, "HTTP/", 5) != 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Invalud HTTP responder header received");
+		return STATUS_SENT_ERROR;
+	}
+	pos++;
+	status = atoi(pos);
+
+	if (status != 200) {
+		snprintf(buf, sizeof(buf),
+			 "errorCode,REST API HTTP call returned status code %d",
+			 status);
+		send_resp(dut, conn, SIGMA_ERROR, buf);
+		return STATUS_SENT_ERROR;
+	}
+
+	return SUCCESS_SEND_STATUS;
+}
+
+
 static enum sigma_cmd_result dpp_set_peer_bootstrap(struct sigma_dut *dut,
 						    struct sigma_conn *conn,
 						    struct sigma_cmd *cmd)
@@ -482,6 +595,11 @@ static enum sigma_cmd_result dpp_set_peer_bootstrap(struct sigma_dut *dut,
 		return ERROR_SEND_STATUS;
 	uri[res] = '\0';
 	sigma_dut_print(dut, DUT_MSG_DEBUG, "URI: %s", uri);
+
+	val = get_param(cmd, "DPPNetRole");
+	if (val && strcasecmp(val, "BSConfigurator") == 0)
+		return dpp_post_uri(dut, conn, uri);
+
 	free(dut->dpp_peer_uri);
 	dut->dpp_peer_uri = strdup(uri);
 
@@ -1647,7 +1765,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		else
 			role = DPP_MDNS_CONTROLLER;
 		if (dpp_mdns_discover(dut, role,
-				      tcp_addr, sizeof(tcp_addr), NULL) < 0) {
+				      tcp_addr, sizeof(tcp_addr), NULL,
+				      NULL) < 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Could not discover Controller/Relay IP address using mDNS");
 			return STATUS_SENT_ERROR;
@@ -4025,6 +4144,39 @@ static enum sigma_cmd_result dpp_set_parameter(struct sigma_dut *dut,
 }
 
 
+static enum sigma_cmd_result dpp_get_peer_bootstrap(struct sigma_dut *dut,
+						    struct sigma_conn *conn,
+						    struct sigma_cmd *cmd)
+{
+	char uri[1000], hex[2000], resp[2100];
+	FILE *f;
+	int res;
+	size_t len;
+
+	f = fopen("/tmp/dpp-rest-server.uri", "r");
+	if (!f) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,No DPP URI received through REST API");
+		return STATUS_SENT_ERROR;
+	}
+
+	len = fread(uri, 1, sizeof(uri), f);
+	fclose(f);
+	if (len == 0 || len == sizeof(uri)) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Could not read the received DPP URI");
+		return STATUS_SENT_ERROR;
+	}
+	uri[len] = '\0';
+
+	ascii2hexstr(uri, hex);
+	res = snprintf(resp, sizeof(resp), "BootstrappingData,%s", hex);
+	send_resp(dut, conn, SIGMA_COMPLETE,
+		  res >= 0 && res < sizeof(resp) ? resp : NULL);
+	return STATUS_SENT;
+}
+
+
 enum sigma_cmd_result dpp_dev_exec_action(struct sigma_dut *dut,
 					  struct sigma_conn *conn,
 					  struct sigma_cmd *cmd)
@@ -4042,6 +4194,8 @@ enum sigma_cmd_result dpp_dev_exec_action(struct sigma_dut *dut,
 		return dpp_reconfigure(dut, conn, cmd);
 	if (strcasecmp(type, "SetParameter") == 0)
 		return dpp_set_parameter(dut, conn, cmd);
+	if (strcasecmp(type, "GetPeerBootstrap") == 0)
+		return dpp_get_peer_bootstrap(dut, conn, cmd);
 
 	if (!bs) {
 		send_resp(dut, conn, SIGMA_ERROR,
