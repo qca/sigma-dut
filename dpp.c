@@ -270,20 +270,24 @@ static int dpp_hostapd_beacon(struct sigma_dut *dut)
 }
 
 
-static const char * dpp_get_curve(struct sigma_cmd *cmd, const char *arg)
+static const char * dpp_map_curve(const char *val)
 {
-	const char *val = get_param(cmd, arg);
-
 	if (!val)
-		val = "P-256";
-	else if (strcasecmp(val, "BP-256R1") == 0)
-		val = "BP-256";
-	else if (strcasecmp(val, "BP-384R1") == 0)
-		val = "BP-384";
-	else if (strcasecmp(val, "BP-512R1") == 0)
-		val = "BP-512";
+		return "P-256";
+	if (strcasecmp(val, "BP-256R1") == 0)
+		return "BP-256";
+	if (strcasecmp(val, "BP-384R1") == 0)
+		return "BP-384";
+	if (strcasecmp(val, "BP-512R1") == 0)
+		return "BP-512";
 
 	return val;
+}
+
+
+static const char * dpp_get_curve(struct sigma_cmd *cmd, const char *arg)
+{
+	return dpp_map_curve(get_param(cmd, arg));
 }
 
 
@@ -292,7 +296,6 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 			struct sigma_cmd *cmd, int send_result, int *success)
 {
 	const char *curve = dpp_get_curve(cmd, "DPPCryptoIdentifier");
-	const char *uri_curves = get_param(cmd, "DPPURICurves");
 	const char *bs = get_param(cmd, "DPPBS");
 	const char *chan_list = get_param(cmd, "DPPChannelList");
 	const char *tcp = get_param(cmd, "DPPOverTCP");
@@ -305,6 +308,8 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 	char host[100];
 	bool uri_host;
 	char ip[30];
+	char uri_curves_buf[200];
+	const char *uri_curves = NULL;
 
 	host[0] = '\0';
 	ip[0] = '\0';
@@ -322,6 +327,32 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,Unsupported DPPBS");
 		return STATUS_SENT_ERROR;
+	}
+
+	val = get_param(cmd, "DPPURICurves");
+	if (val) {
+		char *saveptr, *r, *tmp, *end;
+
+		pos = uri_curves_buf;
+		end = pos + sizeof(uri_curves_buf);
+		*pos = '\0';
+		tmp = strdup(val);
+		if (!tmp)
+			return ERROR_SEND_STATUS;
+		r = strtok_r(tmp, ":", &saveptr);
+		while (r) {
+			int len;
+
+			len = snprintf(pos, end - pos, "%s%s",
+				       pos > uri_curves_buf ? ":" : "",
+				       dpp_map_curve(r));
+			if (len < 0)
+				break;
+			pos += len;
+			r = strtok_r(NULL, ":", &saveptr);
+		}
+		free(tmp);
+		uri_curves = uri_curves_buf;
 	}
 
 	if (sigma_dut_is_ap(dut)) {
