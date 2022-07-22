@@ -1686,7 +1686,8 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		}
 
 		if (!auth_role) {
-			if (sigma_dut_is_ap(dut))
+			if (sigma_dut_is_ap(dut) ||
+			    strcasecmp(prov_role, "Configurator") == 0)
 				auth_role = "Initiator";
 			else
 				auth_role = "Responder";
