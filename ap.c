@@ -8032,6 +8032,13 @@ enum sigma_cmd_result cmd_ap_config_commit(struct sigma_dut *dut,
 
 	dut->mode = SIGMA_MODE_AP;
 
+	if (dut->ap_dpp_conf_addr &&
+	    strcasecmp(dut->ap_dpp_conf_addr, "mDNS") == 0 &&
+	    dpp_mdns_discover_relay_params(dut) < 0) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Failed to discover DPP Controller for AP Relay using mDNS");
+	}
+
 	if (drv == DRIVER_ATHEROS)
 		return cmd_ath_ap_config_commit(dut, conn, cmd);
 	if (drv == DRIVER_WCN)
@@ -8816,9 +8823,11 @@ skip_key_mgmt:
 	}
 
 	if (dut->ap_dpp_conf_addr && dut->ap_dpp_conf_pkhash) {
-		fprintf(f, "dpp_controller=ipaddr=%s pkhash=%s\n",
-			dut->ap_dpp_conf_addr, dut->ap_dpp_conf_pkhash);
-		fprintf(f, "dpp_configurator_connectivity=1\n");
+		if (strcasecmp(dut->ap_dpp_conf_addr, "mDNS") != 0) {
+			fprintf(f, "dpp_controller=ipaddr=%s pkhash=%s\n",
+				dut->ap_dpp_conf_addr, dut->ap_dpp_conf_pkhash);
+			fprintf(f, "dpp_configurator_connectivity=1\n");
+		}
 		fprintf(f, "dpp_relay_port=8908\n");
 	}
 

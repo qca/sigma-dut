@@ -204,10 +204,26 @@ int dpp_mdns_discover_relay_params(struct sigma_dut *dut)
 	}
 
 	if (dut->ap_dpp_conf_addr && dut->ap_dpp_conf_pkhash) {
+		const char *ifname = dut->hostapd_ifname;
+
 		sigma_dut_print(dut, DUT_MSG_INFO,
 				"Controller discovered using mDNS: %s (pkhash %s)",
 				dut->ap_dpp_conf_addr,
 				dut->ap_dpp_conf_pkhash);
+		if (dut->hostapd_running && ifname) {
+			char cmd[500];
+
+			snprintf(cmd, sizeof(cmd),
+				 "DPP_RELAY_ADD_CONTROLLER %s %s",
+				 dut->ap_dpp_conf_addr,
+				 dut->ap_dpp_conf_pkhash);
+			if (wpa_command(ifname, cmd) < 0)
+				sigma_dut_print(dut, DUT_MSG_INFO,
+						"Failed to add Controller connection into hostapd");
+			else
+				sigma_dut_print(dut, DUT_MSG_INFO,
+						"Added Controller connection into hostapd");
+		}
 		return 0;
 	}
 
