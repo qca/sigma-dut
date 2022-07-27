@@ -1763,16 +1763,6 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		return STATUS_SENT_ERROR;
 	}
 
-	val = get_param(cmd, "MUDURL");
-	if (val) {
-		snprintf(buf, sizeof(buf), "SET dpp_mud_url %s", val);
-		if (wpa_command(ifname, buf) < 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "errorCode,Failed to set MUD URL");
-			return STATUS_SENT_ERROR;
-		}
-	}
-
 	if (sigma_dut_is_ap(dut)) {
 		if (!dut->hostapd_ifname) {
 			sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -1784,6 +1774,16 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		if (dpp_hostapd_run(dut) < 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Failed to start hostapd");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "MUDURL");
+	if (val) {
+		snprintf(buf, sizeof(buf), "SET dpp_mud_url %s", val);
+		if (wpa_command(ifname, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Failed to set MUD URL");
 			return STATUS_SENT_ERROR;
 		}
 	}
