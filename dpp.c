@@ -1381,6 +1381,13 @@ static int dpp_process_auth_response(struct sigma_dut *dut,
 	}
 	sigma_dut_print(dut, DUT_MSG_DEBUG, "DPP auth result: %s", buf);
 
+	if (strstr(buf, "DPP-PB-RESULT") &&
+	    strstr(buf, "DPP-PB-RESULT success") == NULL) {
+		sigma_dut_print(dut, DUT_MSG_INFO, "DPP PB failed: %s", buf);
+		send_resp(dut, conn, SIGMA_COMPLETE, "BootstrapResult,Failed");
+		return -1;
+	}
+
 	if (strstr(buf, "DPP-RESPONSE-PENDING")) {
 		/* Display own QR code in manual mode */
 		if (action_type && strcasecmp(action_type, "ManualDPP") == 0 &&
@@ -1645,6 +1652,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		"DPP-RESPONSE-PENDING",
 		"DPP-SCAN-PEER-QR-CODE",
 		"DPP-AUTH-DIRECTION",
+		"DPP-PB-RESULT",
 		NULL
 	};
 	const char *conf_events[] = {
