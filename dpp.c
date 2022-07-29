@@ -3201,6 +3201,22 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		goto out;
 	}
 
+	pos = strstr(buf, " conf_status=");
+	if (pos && strstr(buf, "DPP-CONF-SENT")) {
+		int status;
+
+		pos += 13;
+		status = atoi(pos);
+		if (status) {
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"Configurator rejected configuration with status %d",
+					status);
+			send_resp(dut, conn, SIGMA_COMPLETE,
+				  "BootstrapResult,OK,AuthResult,OK,ConfResult,FAILED");
+			goto out;
+		}
+	}
+
 	if (conn_status && strstr(buf, "DPP-CONF-SENT") &&
 	    strstr(buf, "wait_conn_status=1")) {
 		res = get_wpa_cli_event(dut, ctrl, "DPP-CONN-STATUS-RESULT",
