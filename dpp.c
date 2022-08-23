@@ -610,29 +610,27 @@ static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 	pclose(f);
 	stop_stunnel(dut);
 	if (!len) {
-		send_resp(dut, conn, SIGMA_ERROR,
-			  "errorCode,curl failed to fetch response");
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"curl failed to fetch response");
+		send_resp(dut, conn, SIGMA_COMPLETE, "POSTResult,Failed");
 		return STATUS_SENT_ERROR;
 	}
 	buf[len] = '\0';
 	pos = strchr(buf, ' ');
 	if (!pos || strncmp(buf, "HTTP/", 5) != 0) {
-		send_resp(dut, conn, SIGMA_ERROR,
-			  "errorCode,Invalid HTTP responder header received");
-		return STATUS_SENT_ERROR;
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Invalid HTTP responder header received");
+		send_resp(dut, conn, SIGMA_COMPLETE, "POSTResult,Failed");
+		return STATUS_SENT;
 	}
 	pos++;
 	status = atoi(pos);
 
-	if (status != 200) {
-		snprintf(buf, sizeof(buf),
-			 "errorCode,REST API HTTP call returned status code %d",
-			 status);
-		send_resp(dut, conn, SIGMA_ERROR, buf);
-		return STATUS_SENT_ERROR;
-	}
-
-	return SUCCESS_SEND_STATUS;
+	sigma_dut_print(dut, DUT_MSG_INFO, "curl reported HTTP status code %d",
+			status);
+	snprintf(buf, sizeof(buf), "POSTResult,%d", status);
+	send_resp(dut, conn, SIGMA_COMPLETE, buf);
+	return STATUS_SENT;
 }
 
 
