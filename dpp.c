@@ -535,8 +535,10 @@ static void stop_stunnel(struct sigma_dut *dut)
 	fclose(f);
 }
 
+
 static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 					  struct sigma_conn *conn,
+					  struct sigma_cmd *cmd,
 					  const char *uri)
 {
 	FILE *f;
@@ -545,6 +547,8 @@ static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 	int status;
 	char tcp_addr[30];
 	unsigned int port;
+	const char *val;
+	bool http;
 
 	f = fopen("/tmp/dppuri.json", "w");
 	if (!f) {
@@ -564,6 +568,11 @@ static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 
 	sigma_dut_print(dut, DUT_MSG_INFO, "Bootstrapping service at %s:%u",
 			tcp_addr, port);
+
+	val = get_param(cmd, "DPPBootstrapPOST");
+	http = val && strcmp(val, "HTTP") == 0;
+	if (http)
+		goto skip_stunnel;
 
 	f = fopen("/tmp/stunnel-dpp-rest-client.conf", "w");
 	if (!f) {
@@ -597,18 +606,27 @@ static enum sigma_cmd_result dpp_post_uri(struct sigma_dut *dut,
 		return STATUS_SENT_ERROR;
 	}
 
-	snprintf(buf, sizeof(buf), "curl -i --request POST --header \"Content-Type: application/json\" --data @/tmp/dppuri.json http://localhost:33333/dpp/bskey");
+skip_stunnel:
+	if (http)
+		snprintf(buf, sizeof(buf),
+			 "curl -i --request POST --header \"Content-Type: application/json\" --data @/tmp/dppuri.json http://%s:%d/dpp/bskey",
+			 tcp_addr, port);
+	else
+		snprintf(buf, sizeof(buf),
+			 "curl -i --request POST --header \"Content-Type: application/json\" --data @/tmp/dppuri.json http://localhost:33333/dpp/bskey");
 	sigma_dut_print(dut, DUT_MSG_INFO, "Run: %s", buf);
 	f = popen(buf, "r");
 	if (!f) {
-		stop_stunnel(dut);
+		if (!http)
+			stop_stunnel(dut);
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,Could not run curl");
 		return STATUS_SENT_ERROR;
 	}
 	len = fread(buf, 1, sizeof(buf) - 1, f);
 	pclose(f);
-	stop_stunnel(dut);
+	if (!http)
+		stop_stunnel(dut);
 	if (!len) {
 		sigma_dut_print(dut, DUT_MSG_INFO,
 				"curl failed to fetch response");
@@ -656,7 +674,7 @@ static enum sigma_cmd_result dpp_set_peer_bootstrap(struct sigma_dut *dut,
 
 	val = get_param(cmd, "DPPNetRole");
 	if (val && strcasecmp(val, "BSConfigurator") == 0)
-		return dpp_post_uri(dut, conn, uri);
+		return dpp_post_uri(dut, conn, cmd, uri);
 
 	free(dut->dpp_peer_uri);
 	dut->dpp_peer_uri = strdup(uri);
