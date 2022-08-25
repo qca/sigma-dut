@@ -239,7 +239,7 @@ static int sigma_dut_is_ap(struct sigma_dut *dut)
 }
 
 
-static int dpp_hostapd_run(struct sigma_dut *dut)
+static int dpp_hostapd_run(struct sigma_dut *dut, bool chirp_chan)
 {
 	if (dut->hostapd_running)
 		return 0;
@@ -256,7 +256,7 @@ static int dpp_hostapd_run(struct sigma_dut *dut)
 			"Starting hostapd in unconfigured state for DPP");
 	snprintf(dut->ap_ssid, sizeof(dut->ap_ssid), "unconfigured");
 	if (!dut->ap_oper_chn)
-		dut->ap_channel = 11;
+		dut->ap_channel = chirp_chan ? 6 : 11;
 	dut->ap_is_dual = 0;
 	dut->ap_mode = dut->ap_channel <= 14 ? AP_11ng : AP_11na;
 	dut->ap_key_mgmt = AP_OPEN;
@@ -435,7 +435,7 @@ dpp_get_local_bootstrap(struct sigma_dut *dut, struct sigma_conn *conn,
 			pos++;
 	}
 
-	if (sigma_dut_is_ap(dut) && dpp_hostapd_run(dut) < 0) {
+	if (sigma_dut_is_ap(dut) && dpp_hostapd_run(dut, false) < 0) {
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,Failed to start hostapd");
 		return STATUS_SENT_ERROR;
@@ -1795,7 +1795,7 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 		}
 		ifname = dut->hostapd_ifname;
 
-		if (dpp_hostapd_run(dut) < 0) {
+		if (dpp_hostapd_run(dut, pb) < 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Failed to start hostapd");
 			return STATUS_SENT_ERROR;
@@ -4193,7 +4193,7 @@ static enum sigma_cmd_result dpp_set_mdns_advertise(struct sigma_dut *dut,
 	} else if (strcasecmp(role, "Controller") == 0) {
 		const char *curve = dpp_get_curve(cmd, "DPPCryptoIdentifier");
 
-		if (sigma_dut_is_ap(dut) && dpp_hostapd_run(dut) < 0) {
+		if (sigma_dut_is_ap(dut) && dpp_hostapd_run(dut, false) < 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Failed to start hostapd");
 			return STATUS_SENT_ERROR;
