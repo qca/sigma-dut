@@ -94,6 +94,7 @@ struct sigma_dut;
 #define MAX_RADIO 3
 
 #define NAN_AWARE_IFACE "wifi-aware0"
+#define BROADCAST_ADDR "255.255.255.255"
 
 /* Set default operating channel width 80 MHz */
 #define VHT_DEFAULT_OPER_CHWIDTH AP_80_VHT_OPER_CHWIDTH
