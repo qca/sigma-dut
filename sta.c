@@ -2634,6 +2634,11 @@ static int set_eap_common(struct sigma_dut *dut, struct sigma_conn *conn,
 			return ERROR_SEND_STATUS;
 	}
 
+	val = get_param(cmd, "imsiPrivacyCertID");
+	if (val && set_network_quoted(ifname, id, "imsi_privacy_attr",
+				      val) < 0)
+		return ERROR_SEND_STATUS;
+
 	if (dut->akm_values &
 	    ((1 << AKM_FILS_SHA256) |
 	     (1 << AKM_FILS_SHA384) |
