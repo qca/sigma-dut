@@ -2623,7 +2623,7 @@ static int set_eap_common(struct sigma_dut *dut, struct sigma_conn *conn,
 			char msg[300];
 
 			snprintf(msg, sizeof(msg),
-				 "ErrorCode,trustedRootCA file (%s) not found",
+				 "ErrorCode,imsiPrivacyCert file (%s) not found",
 				 buf);
 			send_resp(dut, conn, SIGMA_ERROR, msg);
 			return STATUS_SENT_ERROR;
