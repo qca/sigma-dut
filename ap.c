@@ -11334,6 +11334,11 @@ enum sigma_cmd_result cmd_ap_send_frame(struct sigma_dut *dut,
 		    (protected == UNPROTECTED && frame == SAQUERY)))
 		return ap_inject_frame(dut, conn, frame, protected, val);
 
+	if (!val && frame != CHANNEL_SWITCH) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "stationID not specified");
+		return INVALID_SEND_STATUS;
+	}
+
 	switch (frame) {
 	case DISASSOC:
 		snprintf(buf, sizeof(buf), "disassoc %s test=%d",
