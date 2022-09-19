@@ -3758,7 +3758,7 @@ dpp_reconfigure_configurator(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 	}
 
-	if (step) {
+	if (step && frametype) {
 		int test;
 
 		test = dpp_get_test(step, frametype, attr);
