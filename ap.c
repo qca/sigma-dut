@@ -9923,8 +9923,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 
 	dut->ap_ocvc = dut->user_config_ap_ocvc;
 
-	if (dut->program == PROGRAM_HS2 || dut->program == PROGRAM_HS2_R2 ||
-	    dut->program == PROGRAM_HS2_R3 || dut->program == PROGRAM_HS2_R4 ||
+	if (is_passpoint(dut->program) ||
 	    dut->program == PROGRAM_IOTLP) {
 		int i;
 
@@ -9981,8 +9980,8 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 		dut->ap_add_sha256 = 0;
 	}
 
-	if (dut->program == PROGRAM_HS2_R2 || dut->program == PROGRAM_HS2_R3 ||
-	     dut->program == PROGRAM_HS2_R4 || dut->program == PROGRAM_IOTLP) {
+	if (is_passpoint_r2_or_newer(dut->program) ||
+	    dut->program == PROGRAM_IOTLP) {
 		int i;
 		const char hessid[] = "50:6f:9a:00:11:22";
 

@@ -180,6 +180,21 @@ enum sigma_program sigma_program_to_enum(const char *prog)
 }
 
 
+bool is_passpoint_r2_or_newer(enum sigma_program prog)
+{
+	return prog == PROGRAM_HS2_R2 ||
+		prog == PROGRAM_HS2_R3 ||
+		prog == PROGRAM_HS2_R4;
+}
+
+
+bool is_passpoint(enum sigma_program prog)
+{
+	return prog == PROGRAM_HS2 ||
+		is_passpoint_r2_or_newer(prog);
+}
+
+
 static int parse_hex(char c)
 {
 	if (c >= '0' && c <= '9')

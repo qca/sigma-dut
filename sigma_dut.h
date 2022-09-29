@@ -1222,6 +1222,8 @@ void get_ver(const char *cmd, char *buf, size_t buflen);
 
 /* utils.c */
 enum sigma_program sigma_program_to_enum(const char *prog);
+bool is_passpoint_r2_or_newer(enum sigma_program prog);
+bool is_passpoint(enum sigma_program prog);
 int hex_byte(const char *str);
 int parse_hexstr(const char *hex, unsigned char *buf, size_t buflen);
 int parse_mac_address(struct sigma_dut *dut, const char *arg,
