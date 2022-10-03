@@ -699,11 +699,13 @@ static int dpp_hostapd_conf_update(struct sigma_dut *dut,
 	};
 	unsigned int old_timeout;
 	int legacy_akm, dpp_akm;
+	bool sae_akm, psk_akm;
 	char *connector = NULL, *psk = NULL, *csign = NULL,
 		*net_access_key = NULL;
 	char pass[64];
 	int pass_len = 0;
 	int ret = 0;
+	const char *cmd;
 
 	sigma_dut_print(dut, DUT_MSG_INFO,
 			"Update hostapd configuration based on DPP Config Object");
@@ -731,6 +733,8 @@ static int dpp_hostapd_conf_update(struct sigma_dut *dut,
 			"DPP: Config Object AKM: %s", pos);
 	legacy_akm = strstr(pos, "psk") != NULL || strstr(pos, "sae") != NULL;
 	dpp_akm = strstr(pos, "dpp") != NULL;
+	psk_akm = strstr(pos, "psk") != NULL;
+	sae_akm = strstr(pos, "sae") != NULL;
 
 	res = get_wpa_cli_event(dut, ctrl, "DPP-CONFOBJ-SSID",
 				buf, sizeof(buf));
@@ -827,15 +831,22 @@ static int dpp_hostapd_conf_update(struct sigma_dut *dut,
 		}
 	}
 
-	if ((!connector || !dpp_akm) &&
-	    wpa_command(ifname, "SET wpa_key_mgmt WPA-PSK") < 0) {
-		send_resp(dut, conn, SIGMA_ERROR,
-			  "errorCode,Failed to update AP security parameters");
-		goto out;
-	}
+	if ((!connector || !dpp_akm) && psk_akm && sae_akm)
+		cmd = "SET wpa_key_mgmt SAE WPA-PSK";
+	else if ((!connector || !dpp_akm) && sae_akm)
+		cmd = "SET wpa_key_mgmt SAE";
+	else if ((!connector || !dpp_akm) && psk_akm)
+		cmd = "SET wpa_key_mgmt WPA-PSK";
+	else if (connector && dpp_akm && legacy_akm && psk_akm && sae_akm)
+		cmd = "SET wpa_key_mgmt DPP SAE WPA-PSK";
+	else if (connector && dpp_akm && legacy_akm && sae_akm)
+		cmd = "SET wpa_key_mgmt DPP SAE";
+	else if (connector && dpp_akm && legacy_akm && psk_akm)
+		cmd = "SET wpa_key_mgmt DPP WPA-PSK";
+	else
+		cmd = "UNKNOWN";
 
-	if (connector && dpp_akm && legacy_akm &&
-	    wpa_command(ifname, "SET wpa_key_mgmt DPP WPA-PSK") < 0) {
+	if (wpa_command(ifname, cmd) < 0) {
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,Failed to update AP security parameters");
 		goto out;
