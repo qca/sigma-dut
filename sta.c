@@ -6050,6 +6050,7 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 	val = get_param(cmd, "Program");
 	if (val && (strcasecmp(val, "HS2-R2") == 0 ||
 		    strcasecmp(val, "HS2-R3") == 0 ||
+		    strcasecmp(val, "HS2-2022") == 0 ||
 		    strcasecmp(val, "HS2-R4") == 0))
 		return cmd_sta_preset_testparameters_hs2_r2(dut, conn, intf,
 							    cmd);
@@ -14075,6 +14076,7 @@ enum sigma_cmd_result cmd_sta_send_frame(struct sigma_dut *dut,
 	if (val && (strcasecmp(val, "HS2") == 0 ||
 		    strcasecmp(val, "HS2-R2") == 0 ||
 		    strcasecmp(val, "HS2-R3") == 0 ||
+		    strcasecmp(val, "HS2-2022") == 0 ||
 		    strcasecmp(val, "HS2-R4") == 0))
 		return cmd_sta_send_frame_hs2(dut, conn, cmd);
 	if (val && strcasecmp(val, "VHT") == 0)
@@ -14286,6 +14288,7 @@ int cmd_sta_set_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (val && (strcasecmp(val, "HS2") == 0 ||
 		    strcasecmp(val, "HS2-R2") == 0 ||
 		    strcasecmp(val, "HS2-R3") == 0 ||
+		    strcasecmp(val, "HS2-2022") == 0 ||
 		    strcasecmp(val, "HS2-R4") == 0))
 		return cmd_sta_set_parameter_hs2(dut, conn, cmd, intf);
 
