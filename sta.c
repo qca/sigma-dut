@@ -2122,6 +2122,10 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 			return -2;
 	}
 
+	val = get_param(cmd, "BeaconProtection");
+	if (val)
+		dut->beacon_prot = atoi(val);
+
 	val = get_param(cmd, "PMF");
 	if (val) {
 		if (strcasecmp(val, "Required") == 0 ||
@@ -2145,11 +2149,12 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 		dut->sta_pmf = STA_PMF_REQUIRED;
 		if (set_network(ifname, id, "ieee80211w", "2") < 0)
 			return -2;
+	} else if (dut->beacon_prot || dut->ocvc) {
+		dut->sta_pmf = STA_PMF_OPTIONAL;
+		if (set_network(ifname, id, "ieee80211w", "1") < 0)
+			return ERROR_SEND_STATUS;
 	}
 
-	val = get_param(cmd, "BeaconProtection");
-	if (val)
-		dut->beacon_prot = atoi(val);
 	if (dut->beacon_prot && set_network(ifname, id, "beacon_prot", "1") < 0)
 		return ERROR_SEND_STATUS;
 
