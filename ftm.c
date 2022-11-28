@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <regex.h>
 #include "wpa_helpers.h"
+#include "wpa_ctrl.h"
 
 static const char LOC_XML_FILE_PATH[] = "./data/sigma-dut-target.xml";
 
@@ -58,6 +59,7 @@ struct capi_loc_cmd {
 	unsigned int lci;
 	unsigned int ntb;
 	unsigned int ftm_bw_rtt;
+	unsigned int freq;
 };
 
 
@@ -772,6 +774,7 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 	/* Use parameters from LOWI cache */
 	fprintf(xml, "    <paramControl>%u</paramControl>\n", 0);
 	fprintf(xml, "    <ptsftimer>%u</ptsftimer>\n", 0);
+	fprintf(xml, "    <frequency>%u</frequency>\n", loc_cmd->freq);
 	fprintf(xml, "    <tmrtype>%u</tmrtype>\n", 1);
 	fprintf(xml, "    <sectype>%u</sectype>\n", 1);
 	fprintf(xml, "    <tmrMinDelta>%u</tmrMinDelta>\n", 2500);
@@ -788,6 +791,69 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 	sigma_dut_print(dut, DUT_MSG_INFO,
 			"%s - Successfully created XML file", __func__);
 	return 0;
+}
+
+
+static int loc_r2_get_bss_frequency(struct sigma_dut *dut,
+				    struct sigma_conn *conn,
+				    struct sigma_cmd *cmd)
+{
+	const char *intf = get_param(cmd, "Interface");
+	const char *bssid;
+	char buf[4096], *pos;
+	int freq, res;
+	struct wpa_ctrl *ctrl;
+
+	bssid = get_param(cmd, "destmac");
+	if (!bssid) {
+		send_resp(dut, conn, SIGMA_INVALID,
+			  "errorCode,destmac argument is missing");
+		return 0;
+	}
+
+	ctrl = open_wpa_mon(intf);
+	if (!ctrl) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to open wpa_supplicant monitor connection");
+		return 0;
+	}
+
+	if (wpa_command(intf, "SCAN TYPE=ONLY")) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Could not start scan");
+		wpa_ctrl_detach(ctrl);
+		wpa_ctrl_close(ctrl);
+		return 0;
+	}
+
+	res = get_wpa_cli_event(dut, ctrl, "CTRL-EVENT-SCAN-RESULTS",
+				buf, sizeof(buf));
+
+	wpa_ctrl_detach(ctrl);
+	wpa_ctrl_close(ctrl);
+
+	if (res < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Scan did not complete");
+		return 0;
+	}
+
+	snprintf(buf, sizeof(buf), "BSS %s", bssid);
+	if (wpa_command_resp(intf, buf, buf, sizeof(buf)) < 0 ||
+	    strncmp(buf, "id=", 3) != 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Specified BSSID not found");
+		return 0;
+	}
+
+	pos = strstr(buf, "\nfreq=");
+	if (!pos) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Channel not found");
+		return 0;
+	}
+	freq = atoi(pos + 6);
+	return freq;
 }
 
 
@@ -860,6 +926,10 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 	sscanf(ftm_bw_rtt, "%u", &loc_cmd.ftm_bw_rtt);
 	sigma_dut_print(dut, DUT_MSG_INFO, "%s - ftmbw: %u",
 			__func__, loc_cmd.ftm_bw_rtt);
+
+	loc_cmd.freq = loc_r2_get_bss_frequency(dut, conn, cmd);
+	sigma_dut_print(dut, DUT_MSG_INFO, "%s - freq: %u",
+			__func__, loc_cmd.freq);
 
 	if (loc_r2_write_xml_file(dut, dest_mac, &loc_cmd) < 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
