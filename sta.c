@@ -9715,6 +9715,9 @@ static enum sigma_cmd_result cmd_sta_exec_action(struct sigma_dut *dut,
 	if (program && strcasecmp(program, "Loc") == 0)
 		return loc_cmd_sta_exec_action(dut, conn, cmd);
 
+	if (program && strcasecmp(program, "LOCR2") == 0)
+		return loc_r2_cmd_sta_exec_action(dut, conn, cmd);
+
 	if (get_param(cmd, "url"))
 		return sta_exec_action_url(dut, conn, cmd);
 

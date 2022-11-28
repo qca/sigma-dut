@@ -56,6 +56,8 @@ struct capi_loc_cmd {
 	unsigned int burstPeriod;
 	unsigned int locCivic;
 	unsigned int lci;
+	unsigned int ntb;
+	unsigned int ftm_bw_rtt;
 };
 
 
@@ -699,5 +701,187 @@ int lowi_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 	}
 #endif /* ANDROID_WIFI_HAL */
 
+	return 0;
+}
+
+
+static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
+				 struct capi_loc_cmd *loc_cmd)
+{
+	FILE *xml;
+	unsigned int bw, preamble;
+
+	xml = fopen(LOC_XML_FILE_PATH, "w");
+	if (!xml) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - Unable to create the XML file", __func__);
+		return -1;
+	}
+
+#define LOC_R2_BW_VHT_20  0
+#define LOC_R2_BW_VHT_40  1
+#define LOC_R2_BW_VHT_80  2
+#define LOC_R2_BW_VHT_160 3
+
+#define LOC_R2_PREAMBLE_HT 1
+#define LOC_R2_PREAMBLE_VHT 2
+#define LOC_R2_PREAMBLE_HE 3
+
+#define LOC_R2_BW_20  0
+#define LOC_R2_BW_40  1
+#define LOC_R2_BW_80  2
+#define LOC_R2_BW_160 3
+
+	preamble = LOC_R2_PREAMBLE_HE;
+
+	switch (loc_cmd->ftm_bw_rtt) {
+	case LOC_R2_BW_VHT_20:
+		bw = LOC_R2_BW_20;
+		break;
+	case LOC_R2_BW_VHT_40:
+		bw = LOC_R2_BW_40;
+		break;
+	case LOC_R2_BW_VHT_80:
+		bw = LOC_R2_BW_80;
+		break;
+	case LOC_R2_BW_VHT_160:
+		bw = LOC_R2_BW_160;
+		break;
+	default:
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - Bad Format/BW received", __func__);
+		fclose(xml);
+		return -1;
+	}
+
+#define LOC_R2_CAPI_DEFAULT_FTMS_PER_BURST 25
+#define LOC_R2_CAPI_DEFAULT_BURST_DUR 10
+
+	fprintf(xml, "<body>\n");
+	fprintf(xml, "  <ranging>\n");
+	fprintf(xml, "    <ap>\n");
+	fprintf(xml, "    <rttType>3</rttType>\n");
+	fprintf(xml, "    <numFrames>%u</numFrames>\n",
+		LOC_R2_CAPI_DEFAULT_FTMS_PER_BURST);
+	fprintf(xml, "    <bw>%u</bw>\n", bw);
+	fprintf(xml, "    <preamble>%u</preamble>\n", preamble);
+	fprintf(xml, "    <phymode>-1</phymode>\n");
+	fprintf(xml, "    <asap>%u</asap>\n", loc_cmd->asap);
+	fprintf(xml, "    <lci>%u</lci>\n", loc_cmd->lci);
+	fprintf(xml, "    <civic>%u</civic>\n", loc_cmd->locCivic);
+	/* Use parameters from LOWI cache */
+	fprintf(xml, "    <paramControl>%u</paramControl>\n", 0);
+	fprintf(xml, "    <ptsftimer>%u</ptsftimer>\n", 0);
+	fprintf(xml, "    <tmrtype>%u</tmrtype>\n", 1);
+	fprintf(xml, "    <sectype>%u</sectype>\n", 1);
+	fprintf(xml, "    <tmrMinDelta>%u</tmrMinDelta>\n", 2500);
+	fprintf(xml, "    <tmrMaxDelta>%u</tmrMaxDelta>\n", 300);
+	fprintf(xml, "    <mac>%s</mac>\n", dst_mac);
+	fprintf(xml, "    </ap>\n");
+	fprintf(xml, "  </ranging>\n");
+	fprintf(xml, "  <summary>\n");
+	fprintf(xml, "    <mac>%s</mac>\n", dst_mac);
+	fprintf(xml, "  </summary>\n");
+	fprintf(xml, "</body>\n");
+
+	fclose(xml);
+	sigma_dut_print(dut, DUT_MSG_INFO,
+			"%s - Successfully created XML file", __func__);
+	return 0;
+}
+
+
+int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
+			       struct sigma_cmd *cmd)
+{
+	const char *params = NULL;
+	const char *program = get_param(cmd, "prog");
+	const char *loc_op = get_param(cmd, "trigger");
+	const char *interface = get_param(cmd, "interface");
+	const char *dest_mac = get_param(cmd, "destmac");
+	const char *ntb = get_param(cmd, "NTB");
+	const char *ftm_bw_rtt = get_param(cmd, "FormatBWRanging");
+	struct capi_loc_cmd loc_cmd;
+
+	memset(&loc_cmd, 0, sizeof(loc_cmd));
+
+	if (!loc_op) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - No Operation! - Aborting", __func__);
+		return -1;
+	}
+
+	if (!program || strcasecmp(program, "LOCR2") != 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - No LOCR2 Program in Command! - Aborting",
+				__func__);
+		return -1;
+	}
+
+	if (!interface || strcasecmp(interface, "wlan0") != 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - Incomplete command in LOCR2 CAPI request",
+				__func__);
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrMsg,Missing wlan0 Interface Type");
+		return 0;
+	}
+
+	if (!dest_mac) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - Incomplete command in LOCR2 CAPI request",
+				__func__);
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrMsg,Incomplete LOCR2 CAPI command - missing MAC");
+		return 0;
+	}
+
+	if (!ftm_bw_rtt) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - Incomplete command in LOCR2 CAPI request",
+				__func__);
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrMsg,Incomplete Loc CAPI command - missing Format & BW");
+		return 0;
+	}
+
+	if (!ntb) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - Incomplete command in LOCR2 CAPI request",
+				__func__);
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrMsg,Incomplete Loc CAPI command - missing NTB");
+		return 0;
+	}
+
+	sscanf(ntb, "%u", &loc_cmd.ntb);
+	sigma_dut_print(dut, DUT_MSG_INFO, "%s - ntb: %u",
+			__func__, loc_cmd.ntb);
+	sscanf(ftm_bw_rtt, "%u", &loc_cmd.ftm_bw_rtt);
+	sigma_dut_print(dut, DUT_MSG_INFO, "%s - ftmbw: %u",
+			__func__, loc_cmd.ftm_bw_rtt);
+
+	if (loc_r2_write_xml_file(dut, dest_mac, &loc_cmd) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - Failed to write to XML file because of bad command",
+				__func__);
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrMsg,Bad CAPI command");
+		return 0;
+	}
+
+	if (pass_request_to_ltest(dut, LOWI_TST_RANGING, params) < 0) {
+		/* Loc operation been failed. */
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - Failed to initiate Loc command",
+				__func__);
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrMsg,Failed to initiate Loc command");
+		return 0;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_INFO,
+			"%s - Succeeded to initiate LOCR2 command", __func__);
+	send_resp(dut, conn, SIGMA_COMPLETE, NULL);
 	return 0;
 }
