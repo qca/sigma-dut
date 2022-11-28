@@ -7646,6 +7646,7 @@ static enum sigma_cmd_result cmd_sta_disconnect(struct sigma_dut *dut,
 
 	if (dut->program == PROGRAM_OCE ||
 	    dut->program == PROGRAM_HE ||
+	    dut->program == PROGRAM_LOCR2 ||
 	    (val && atoi(val) == 1)) {
 		wpa_command(intf, "DISCONNECT");
 		return 1;
@@ -9355,7 +9356,7 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 		nan_cmd_sta_reset_default(dut, conn, cmd);
 #endif /* ANDROID_NAN */
 
-	if (dut->program == PROGRAM_LOC &&
+	if ((dut->program == PROGRAM_LOC || dut->program == PROGRAM_LOCR2) &&
 	    lowi_cmd_sta_reset_default(dut, conn, cmd) < 0)
 		return ERROR_SEND_STATUS;
 
