@@ -2409,6 +2409,13 @@ static enum sigma_cmd_result cmd_sta_set_psk(struct sigma_dut *dut,
 	    set_network(ifname, id, "pbss", "1") < 0)
 		return -2;
 
+	val = get_param(cmd, "ProfileConnect");
+	if (dut->program == PROGRAM_LOCR2 &&
+	    val && strcasecmp(val, "disable") == 0) {
+		snprintf(buf, sizeof(buf), "ENABLE_NETWORK %d no-connect", id);
+		wpa_command(ifname, buf);
+	}
+
 	return 1;
 }
 
