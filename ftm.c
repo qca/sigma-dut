@@ -779,6 +779,7 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 	fprintf(xml, "    <sectype>%u</sectype>\n", 1);
 	fprintf(xml, "    <tmrMinDelta>%u</tmrMinDelta>\n", 2500);
 	fprintf(xml, "    <tmrMaxDelta>%u</tmrMaxDelta>\n", 300);
+	fprintf(xml, "    <I2RFbPolicy>%u</I2RFbPolicy>\n", dut->i2rlmr_iftmr);
 	fprintf(xml, "    <mac>%s</mac>\n", dst_mac);
 	fprintf(xml, "    </ap>\n");
 	fprintf(xml, "  </ranging>\n");
@@ -786,6 +787,8 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 	fprintf(xml, "    <mac>%s</mac>\n", dst_mac);
 	fprintf(xml, "  </summary>\n");
 	fprintf(xml, "</body>\n");
+
+	dut->i2rlmr_iftmr = 0;
 
 	fclose(xml);
 	sigma_dut_print(dut, DUT_MSG_INFO,

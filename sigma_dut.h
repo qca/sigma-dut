@@ -1057,6 +1057,7 @@ struct sigma_dut {
 	int dscp_use_iptables;
 	int autoconnect_default;
 	int dhcp_client_running;
+	int i2rlmr_iftmr;
 };
 
 
