@@ -11338,11 +11338,22 @@ sta_set_wireless_loc_r2(struct sigma_dut *dut, struct sigma_conn *conn,
 			struct sigma_cmd *cmd)
 {
 	const char *i2rlmr_iftmr = get_param(cmd, "I2RLMRIFTMR");
+	const char *session_terminate = get_param(cmd, "FTMSessionTerminate");
 
 	if (i2rlmr_iftmr) {
 		dut->i2rlmr_iftmr = atoi(i2rlmr_iftmr);
 		sigma_dut_print(dut, DUT_MSG_INFO,
 				"i2rlmr_iftmr value is %d", dut->i2rlmr_iftmr);
+	}
+
+	if (session_terminate) {
+		int val = atoi(session_terminate);
+
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"session_terminate value is %d", val);
+		if (val)
+			dut->i2rlmrpolicy =
+				LOC_ABORT_ON_I2R_LMR_POLICY_MISMATCH;
 	}
 
 	return SUCCESS_SEND_STATUS;

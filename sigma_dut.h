@@ -407,6 +407,12 @@ enum dpp_mdns_role {
 	DPP_MDNS_BOOTSTRAPPING,
 };
 
+enum loc_i2r_lmr_policy {
+	LOC_USE_DEFAULT_I2R_LMR_POLICY = 0,
+	LOC_FORCE_FTM_I2R_LMR_POLICY = 1,
+	LOC_ABORT_ON_I2R_LMR_POLICY_MISMATCH = 2,
+};
+
 struct sigma_dut {
 	const char *main_ifname;
 	char *main_ifname_2g;
@@ -1058,6 +1064,7 @@ struct sigma_dut {
 	int autoconnect_default;
 	int dhcp_client_running;
 	int i2rlmr_iftmr;
+	int i2rlmrpolicy;
 };
 
 

@@ -13,12 +13,15 @@
 #include "wpa_ctrl.h"
 
 static const char LOC_XML_FILE_PATH[] = "./data/sigma-dut-target.xml";
+static const char LOC_11AZ_CONFIG_XML_FILE_PATH[] = "./data/lowi11az.xml";
 
 static const char LOC_LOWI_TEST_DISCOVERY[] = "lowi_test -a -b 2 -n 1";
 static const char LOC_LOWI_TEST_RANGING[] =
 "lowi_test -r ./data/sigma-dut-target.xml -n 1";
 static const char LOC_LOWI_TEST_NEIGHBOR_RPT_REQ[] = "lowi_test -nrr";
 static const char LOC_LOWI_TEST_ANQP_REQ[] = "lowi_test -anqp -mac ";
+static const char LOC_LOWI_TEST_11AZ_CONFIG[] =
+"lowi_test -11az ./data/lowi11az.xml";
 static const char WPA_INTERWORKING_ENABLE[] =
 "SET interworking 1";
 static const char WPA_INTERWORKING_DISABLE[] =
@@ -738,9 +741,37 @@ int lowi_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 	}
 #endif /* ANDROID_WIFI_HAL */
 
+	dut->i2rlmrpolicy = LOC_FORCE_FTM_I2R_LMR_POLICY;
 	lowi_cmd_sta_reset_ptksa_cache(dut, conn, cmd);
 
 	return 0;
+}
+
+
+static int loc_r2_set_11az_config(struct sigma_dut *dut, const char *dst_mac,
+				  struct capi_loc_cmd *loc_cmd)
+{
+	FILE *xml;
+
+	xml = fopen(LOC_11AZ_CONFIG_XML_FILE_PATH, "w");
+	if (!xml) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - Unable to create the XML file", __func__);
+		return -1;
+	}
+
+	fprintf(xml, "<body>\n");
+	fprintf(xml, "  <config_11az>\n");
+	fprintf(xml, "    <i2rlmrpolicy>%u</i2rlmrpolicy>\n",
+		dut->i2rlmrpolicy);
+	fprintf(xml, "  </config_11az>\n");
+	fprintf(xml, "</body>\n");
+
+	fclose(xml);
+	sigma_dut_print(dut, DUT_MSG_INFO,
+			"%s - Successfully created XML file", __func__);
+
+	return system(LOC_LOWI_TEST_11AZ_CONFIG);
 }
 
 
@@ -979,6 +1010,16 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 			  "ErrMsg,Bad CAPI command");
 		return 0;
 	}
+
+	if (loc_r2_set_11az_config(dut, dest_mac, &loc_cmd) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - Failed to set 11az config command",
+				__func__);
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrMsg,Bad CAPI command");
+		return 0;
+	}
+	sleep(1);
 
 	if (pass_request_to_ltest(dut, LOWI_TST_RANGING, params) < 0) {
 		/* Loc operation been failed. */
