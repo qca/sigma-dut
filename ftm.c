@@ -691,6 +691,41 @@ int loc_cmd_sta_preset_testparameters(struct sigma_dut *dut,
 }
 
 
+static enum sigma_cmd_result
+lowi_cmd_sta_reset_ptksa_cache(struct sigma_dut *dut, struct sigma_conn *conn,
+			       struct sigma_cmd *cmd)
+{
+	const char *intf = get_param(cmd, "Interface");
+	char buf[1024], bssid[20], req[200], *pos;
+
+	memset(req, 0, sizeof(req));
+	memset(buf, 0, sizeof(buf));
+	if (wpa_command_resp(intf, "PTKSA_CACHE_LIST", buf, sizeof(buf)) < 0 ||
+	    strncmp(buf, "UNKNOWN COMMAND", 15) == 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,PTKSA_CACHE_LIST not supported");
+		return STATUS_SENT_ERROR;
+	}
+	pos = buf;
+	while (pos) {
+		pos = strchr(pos, '\n');
+		if (!pos)
+			break;
+		pos = strchr(pos, ' ');
+		if (!pos)
+			break;
+		pos++;
+
+		memset(bssid, 0, sizeof(bssid));
+		strncpy(bssid, pos, 17);
+		snprintf(req, sizeof(req), "PASN_DEAUTH bssid=%s", bssid);
+		wpa_command(intf, req);
+	}
+
+	return STATUS_SENT;
+}
+
+
 int lowi_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 				struct sigma_cmd *cmd)
 {
@@ -702,6 +737,8 @@ int lowi_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 		return -1;
 	}
 #endif /* ANDROID_WIFI_HAL */
+
+	lowi_cmd_sta_reset_ptksa_cache(dut, conn, cmd);
 
 	return 0;
 }
