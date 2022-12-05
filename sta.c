@@ -1938,6 +1938,12 @@ static int set_akm_suites(struct sigma_dut *dut, const char *ifname,
 		case AKM_FT_FILS_SHA384:
 			str = "FT-FILS-SHA384";
 			break;
+		case AKM_SAE_EXT_KEY:
+			str = "SAE-EXT-KEY";
+			break;
+		case AKM_FT_SAE_EXT_KEY:
+			str = "FT-SAE-EXT-KEY";
+			break;
 		default:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
 					"Unsupported AKMSuitetype %d", akm);

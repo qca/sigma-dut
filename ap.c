@@ -148,6 +148,7 @@ static int ap_ft_enabled(struct sigma_dut *dut)
 		 ((1 << AKM_FT_EAP) |
 		  (1 << AKM_FT_PSK) |
 		  (1 << AKM_FT_SAE) |
+		  (1 << AKM_FT_SAE_EXT_KEY) |
 		  (1 << AKM_FT_SUITE_B) |
 		  (1 << AKM_FT_FILS_SHA256) |
 		  (1 << AKM_FT_FILS_SHA384)));
@@ -8353,6 +8354,8 @@ write_conf:
 			{ AKM_FILS_SHA384, "FILS-SHA384" },
 			{ AKM_FT_FILS_SHA256, "FT-FILS-SHA256" },
 			{ AKM_FT_FILS_SHA384, "FT-FILS-SHA384" },
+			{ AKM_SAE_EXT_KEY, "SAE-EXT-KEY" },
+			{ AKM_FT_SAE_EXT_KEY, "FT-SAE-EXT-KEY" },
 		};
 		int first = 1;
 		unsigned int i;
