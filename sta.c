@@ -9588,7 +9588,6 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	dut->beacon_prot = ret == 0 && strncmp(resp, "supported", 9) == 0;
 
 	if (sta_set_client_privacy(dut, conn, intf,
-				   dut->program == PROGRAM_WPA3 &&
 				   dut->device_type == STA_dut &&
 				   dut->client_privacy_default)) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
