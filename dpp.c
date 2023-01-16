@@ -1716,6 +1716,11 @@ static enum sigma_cmd_result dpp_automatic_dpp(struct sigma_dut *dut,
 	char conf_extra[1000];
 	bool dpp_3rd_party;
 
+	if (!sigma_dut_is_ap(dut) &&
+	    wpa_command(ifname, "SET sae_groups ") != 0)
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to clear sae_groups to default");
+
 	time(&start);
 
 	if (!wait_conn)
