@@ -9478,7 +9478,7 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	}
 
 	if (is_passpoint_r2_or_newer(dut->program) ||
-	    dut->program == PROGRAM_OCE) {
+	    dut->program == PROGRAM_OCE || dut->program == PROGRAM_WPA3) {
 		wpa_command(intf, "SET pmf 1");
 	} else {
 		wpa_command(intf, "SET pmf 0");
