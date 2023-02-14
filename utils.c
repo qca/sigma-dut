@@ -127,6 +127,22 @@ enum openwrt_driver_type get_openwrt_driver_type(void)
 }
 
 
+enum dev_mode dev_mode_to_enum(const char *mode)
+{
+	if (!mode)
+		return MODE_UNKNOWN;
+
+	if (strcasecmp(mode, "11be") == 0)
+		return MODE_11BE;
+	if (strcasecmp(mode, "11ax") == 0)
+		return MODE_11AX;
+	if (strcasecmp(mode, "11ac") == 0 || strcasecmp(mode, "ac") == 0)
+		return MODE_11AC;
+
+	return MODE_UNKNOWN;
+}
+
+
 enum sigma_program sigma_program_to_enum(const char *prog)
 {
 	if (prog == NULL)
@@ -179,6 +195,8 @@ enum sigma_program sigma_program_to_enum(const char *prog)
 		return PROGRAM_QM;
 	if (strcasecmp(prog, "LOCR2") == 0)
 		return PROGRAM_LOCR2;
+	if (strcasecmp(prog, "EHT") == 0)
+		return PROGRAM_EHT;
 
 	return PROGRAM_UNKNOWN;
 }

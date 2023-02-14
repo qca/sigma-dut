@@ -6205,8 +6205,10 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 		    strcmp(val, "11ac") == 0 ||
 		    strcmp(val, "11na") == 0 ||
 		    strcmp(val, "11an") == 0 ||
-		    strcmp(val, "11ax") == 0) {
+		    strcmp(val, "11ax") == 0 ||
+		    strcmp(val, "11be") == 0) {
 			/* STA supports all modes by default */
+			dut->device_mode = dev_mode_to_enum(val);
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "ErrorCode,Setting Mode not supported");
@@ -7180,7 +7182,8 @@ cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 
 	val = get_param(cmd, "Band");
 	if (val) {
-		if (strcmp(val, "2.4") == 0 || strcmp(val, "5") == 0) {
+		if (strcmp(val, "2.4") == 0 || strcmp(val, "5") == 0 ||
+		    strcmp(val, "6G") == 0) {
 			/* STA supports all bands by default */
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
@@ -7656,6 +7659,7 @@ static enum sigma_cmd_result cmd_sta_disconnect(struct sigma_dut *dut,
 
 	if (dut->program == PROGRAM_OCE ||
 	    dut->program == PROGRAM_HE ||
+	    dut->program == PROGRAM_EHT ||
 	    dut->program == PROGRAM_LOCR2 ||
 	    (val && atoi(val) == 1)) {
 		wpa_command(intf, "DISCONNECT");
@@ -8319,7 +8323,8 @@ static enum sigma_cmd_result cmd_sta_get_parameter(struct sigma_dut *dut,
 	if (strcasecmp(program, "60ghz") == 0)
 		return sta_get_parameter_60g(dut, conn, cmd);
 
-	if (strcasecmp(program, "he") == 0)
+	if (strcasecmp(program, "he") == 0 ||
+	    strcasecmp(program, "eht") == 0)
 		return sta_get_parameter_he(dut, conn, cmd);
 
 #ifdef ANDROID_NAN
@@ -9013,7 +9018,8 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 {
 	char buf[60];
 
-	if (dut->program == PROGRAM_HE) {
+	if (dut->program == PROGRAM_HE || dut->program == PROGRAM_EHT ||
+	    dut->device_mode == MODE_11BE) {
 		/* resetting phymode to auto in case of HE program */
 		sta_set_phymode(dut, intf, "auto");
 
@@ -9324,6 +9330,8 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	if (dut->program == PROGRAM_WFD && dut->user_config_timeout)
 		dut->default_timeout = dut->user_config_timeout;
 
+	dut->device_mode = MODE_UNKNOWN;
+
 	dut->device_type = STA_unknown;
 	type = get_param(cmd, "type");
 	if (type && strcasecmp(type, "Testbed") == 0)
@@ -9500,7 +9508,8 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 		wpa_command(get_station_ifname(dut), "SET interworking 0");
 	}
 
-	if (dut->program == PROGRAM_MBO || dut->program == PROGRAM_HE) {
+	if (dut->program == PROGRAM_MBO || dut->program == PROGRAM_HE ||
+	    dut->program == PROGRAM_EHT) {
 		free(dut->non_pref_ch_list);
 		dut->non_pref_ch_list = NULL;
 		free(dut->btm_query_cand_list);
@@ -11258,6 +11267,14 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 }
 
 
+static enum sigma_cmd_result
+cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
+			 struct sigma_cmd *cmd)
+{
+	return cmd_sta_set_wireless_vht(dut, conn, cmd);
+}
+
+
 static int sta_set_wireless_60g(struct sigma_dut *dut,
 				struct sigma_conn *conn,
 				struct sigma_cmd *cmd)
@@ -11385,6 +11402,8 @@ static enum sigma_cmd_result cmd_sta_set_wireless(struct sigma_dut *dut,
 			return sta_set_wireless_wpa3(dut, conn, cmd);
 		if (strcasecmp(val, "LOCR2") == 0)
 			return sta_set_wireless_loc_r2(dut, conn, cmd);
+		if (strcasecmp(val, "EHT") == 0)
+			return cmd_sta_set_wireless_eht(dut, conn, cmd);
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "ErrorCode,Program value not supported");
 	} else {
@@ -15647,7 +15666,8 @@ static enum sigma_cmd_result cmd_sta_set_rfeature(struct sigma_dut *dut,
 	if (strcasecmp(prog, "VHT") == 0)
 		return cmd_sta_set_rfeature_vht(intf, dut, conn, cmd);
 
-	if (strcasecmp(prog, "HE") == 0)
+	if (strcasecmp(prog, "HE") == 0 || strcasecmp(prog, "EHT") == 0 ||
+	    dut->device_mode == MODE_11BE)
 		return cmd_sta_set_rfeature_he(intf, dut, conn, cmd);
 
 	if (strcasecmp(prog, "MBO") == 0) {
