@@ -4623,6 +4623,7 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 	const char *ssid = get_param(cmd, "ssid");
 	const char *wps_param = get_param(cmd, "WPS");
 	const char *bssid = get_param(cmd, "bssid");
+	const char *ap_link_mac = get_param(cmd, "AP_Link_MAC");
 	const char *chan = get_param(cmd, "channel");
 	const char *network_mode = get_param(cmd, "network_mode");
 	const char *ifname = get_station_ifname(dut);
@@ -4712,6 +4713,13 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 				"bssid", bssid) < 0) {
 			send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
 				  "Invalid bssid argument");
+			return 0;
+		} else if (ap_link_mac &&
+			   set_network(get_station_ifname(dut),
+				       dut->infra_network_id,
+				       "bssid", ap_link_mac) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Invalid bssid argument");
 			return 0;
 		}
 
@@ -6754,6 +6762,9 @@ static int wcn_sta_set_width(struct sigma_dut *dut, const char *intf,
 	} else if (strcmp(val, "160") == 0) {
 		qca_channel_width = NL80211_CHAN_WIDTH_160;
 		dut->chwidth = 3;
+	} else if (strcmp(val, "320") == 0) {
+		qca_channel_width = NL80211_CHAN_WIDTH_320;
+		dut->chwidth = 4;
 	} else if (strcasecmp(val, "Auto") == 0) {
 		return 0;
 	} else {
@@ -15120,6 +15131,15 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 				  "ErrorCode,Failed to set ER-SU PPDU type Tx");
 			return STATUS_SENT_ERROR;
 		}
+	}
+
+	val = get_param(cmd, "CodingType");
+	if (val) {
+		int ldpc;
+
+		ldpc = strcasecmp(val, "BCCCoding") != 0;
+		if (run_iwpriv(dut, intf, "ldpc %d", ldpc))
+			sta_config_params(dut, intf, STA_SET_LDPC, ldpc);
 	}
 
 	val = get_param(cmd, "Ch_Pref");
