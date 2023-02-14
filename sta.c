@@ -1670,14 +1670,22 @@ static enum sigma_cmd_result cmd_sta_get_mac_address(struct sigma_dut *dut,
 {
 	/* const char *intf = get_param(cmd, "Interface"); */
 	char addr[20], resp[50];
+	const char *ap_link_mac = get_param(cmd, "AP_Link_MAC");
 
 	if (dut->dev_role == DEVROLE_STA_CFON)
 		return sta_cfon_get_mac_address(dut, conn, cmd);
 
 	start_sta_mode(dut);
-	if (get_wpa_status(get_station_ifname(dut), "address",
-			   addr, sizeof(addr)) < 0)
-		return -2;
+	if (ap_link_mac && strcasecmp(ap_link_mac, "mld") != 0) {
+		if (get_mlo_link_mac_ap_link(dut, get_station_ifname(dut),
+					     ap_link_mac, addr,
+					     sizeof(addr)) < 0)
+			return -2;
+	} else {
+		if (get_wpa_status(get_station_ifname(dut), "address",
+				   addr, sizeof(addr)) < 0)
+			return -2;
+	}
 
 	snprintf(resp, sizeof(resp), "mac,%s", addr);
 	send_resp(dut, conn, SIGMA_COMPLETE, resp);

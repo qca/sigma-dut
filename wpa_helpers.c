@@ -506,6 +506,89 @@ int get_wpa_ssid_bssid(struct sigma_dut *dut, const char *ifname,
 }
 
 
+static int get_wpa_ctrl_mlo_status(const char *path, const char *ifname,
+				   const char *cmd, char *obuf,
+				   size_t obuf_size)
+{
+	struct wpa_ctrl *ctrl;
+	char buf[4096];
+	size_t len;
+	int res;
+
+	res = snprintf(buf, sizeof(buf), "%s%s", path, ifname);
+	if (res < 0 || res >= sizeof(buf))
+		return -1;
+	ctrl = wpa_ctrl_open2(buf, client_socket_path);
+	if (!ctrl)
+		return -1;
+	len = sizeof(buf);
+	if (wpa_ctrl_request(ctrl, cmd, strlen(cmd), buf, &len, NULL) < 0) {
+		wpa_ctrl_close(ctrl);
+		return -1;
+	}
+	wpa_ctrl_close(ctrl);
+	buf[len] = '\0';
+
+	if (len >= obuf_size)
+		return -1;
+	memcpy(obuf, buf, len + 1);
+
+	return 0;
+}
+
+
+static int get_wpa_mlo_status(const char *ifname, char *obuf, size_t obuf_size)
+{
+	return get_wpa_ctrl_mlo_status(sigma_wpas_ctrl, ifname, "MLO_STATUS",
+				       obuf, obuf_size);
+}
+
+
+int get_mlo_link_mac_ap_link(struct sigma_dut *dut, const char *ifname,
+			     const char *ap_link_addr,
+			     char *obuf, size_t obuf_size)
+{
+	char buf[4096];
+	char *param;
+	size_t flen, flen2;
+	int ap_link_match = 0;
+
+	if (get_wpa_mlo_status(ifname, buf, sizeof(buf))) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to get MLO status");
+		return -1;
+	}
+	flen = strlen("ap_link_addr");
+	flen2 = strlen("sta_link_addr");
+	param = strtok(buf, "\n");
+	while (param) {
+		if (strncasecmp(param, "ap_link_addr", flen) == 0 &&
+		    strlen(param) > flen + 1 &&
+		    strncasecmp(&param[flen + 1], ap_link_addr, 18) == 0)
+			ap_link_match = 1;
+
+		if (ap_link_match) {
+			if (strncasecmp(param, "sta_link_addr", flen2) == 0 &&
+			    strlen(param) > flen2 + 1) {
+				sigma_dut_print(dut, DUT_MSG_DEBUG,
+						"STA link addr %s",
+						&param[flen2 + 1]);
+				strncpy(obuf, &param[flen2 + 1], obuf_size);
+				obuf[obuf_size - 1] = '\0';
+				return 0;
+			}
+		}
+		param = strtok(NULL, "\n");
+	}
+
+	if (!ap_link_match)
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"AP link address not found");
+
+	return -1;
+}
+
+
 static int get_wpa_ctrl_status_field(const char *path, const char *ifname,
 				     const char *cmd, const char *field,
 				     char *obuf, size_t obuf_size)
