@@ -2079,6 +2079,10 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 				  "errorCode,Unrecognized PairwiseCipher value");
 			return 0;
 		}
+	} else if (dut->device_mode == MODE_11BE) {
+		cipher_set = 1;
+		if (set_network(ifname, id, "pairwise", "GCMP-256") < 0)
+			return -2;
 	}
 
 	if (!cipher_set && !owe) {
@@ -2086,6 +2090,11 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 			  "errorCode,Missing encpType and PairwiseCipher");
 		return 0;
 	}
+
+	if (dut->device_mode == MODE_11BE &&
+	    set_network(ifname, id, "beacon_prot", "1") < 0)
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to enable beacon protection");
 
 	val = get_param(cmd, "GroupCipher");
 	if (val) {
@@ -2106,6 +2115,9 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 				  "errorCode,Unrecognized GroupCipher value");
 			return 0;
 		}
+	} else if (dut->device_mode == MODE_11BE) {
+		if (set_network(ifname, id, "group", "GCMP-256") < 0)
+			return -2;
 	}
 
 	val = get_param(cmd, "GroupMgntCipher");
@@ -2180,7 +2192,8 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (dut->beacon_prot && set_network(ifname, id, "beacon_prot", "1") < 0)
 		return ERROR_SEND_STATUS;
 
-	if (dut->ocvc && set_network(ifname, id, "ocv", "1") < 0)
+	if (dut->ocvc && dut->device_mode != MODE_11BE &&
+	    set_network(ifname, id, "ocv", "1") < 0)
 		return ERROR_SEND_STATUS;
 
 	return id;
@@ -8259,6 +8272,7 @@ static enum sigma_cmd_result sta_get_pmk(struct sigma_dut *dut,
 {
 	const char *intf = get_param(cmd, "Interface");
 	char buf[4096], bssid[20], resp[200], *pos, *tmp;
+	const char *ap_mld_mac = get_param(cmd, "APMLD_MAC_Address");
 
 	snprintf(buf, sizeof(buf), "PMKSA_GET %d", dut->infra_network_id);
 	if (wpa_command_resp(intf, buf, buf, sizeof(buf)) < 0 ||
@@ -8274,10 +8288,12 @@ static enum sigma_cmd_result sta_get_pmk(struct sigma_dut *dut,
 			  "ErrorCode,Could not find current network");
 		return STATUS_SENT_ERROR;
 	}
+	if (ap_mld_mac)
+		strlcpy(bssid, ap_mld_mac, sizeof(bssid));
 
 	pos = buf;
 	while (pos) {
-		if (strncmp(pos, bssid, 17) == 0) {
+		if (strncasecmp(pos, bssid, 17) == 0) {
 			pos = strchr(pos, ' ');
 			if (!pos)
 				break;
