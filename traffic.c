@@ -411,7 +411,7 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 						     struct sigma_cmd *cmd)
 {
 	const char *val, *dst, *domain_name = NULL;
-	const char *iptype;
+	const char *iptype, *binary;
 	int duration, dst_port = 0, src_port = 0;
 	const char *proto;
 	char buf[256];
@@ -571,13 +571,27 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 		return STATUS_SENT;
 	}
 
+	binary = "iperf3";
 	if (server) {
 		/* write server side command to shell file */
+		if (ipv6 && dst && (strncmp(dst, "ff", 2) == 0)) {
+			/* open IPv6 multicast server socket using iperf */
+			iptype = "-V";
+			binary = "iperf";
+			snprintf(buf, sizeof(buf), "-u -B %s%%%s", dst, ifname);
+		} else if (dst) {
+			/* open IPv4 multicast server socket using iperf3 */
+			snprintf(buf, sizeof(buf), "-B %s", dst);
+		} else {
+			buf[0] = '\0';
+		}
+
 		fprintf(f, "#!" SHELL "\n"
-			"iperf3 -s %s %s > %s"
+			"%s -s %s %s %s > %s"
 			"/sigma_dut-iperf &\n"
 			"echo $! > %s/sigma_dut-iperf-pid\n",
-			port_str, iptype, dut->sigma_tmpdir, dut->sigma_tmpdir);
+			binary, port_str, iptype, buf, dut->sigma_tmpdir,
+			dut->sigma_tmpdir);
 	} else {
 		/* write client side command to shell file */
 		if (!dst)
@@ -586,11 +600,17 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 			snprintf(buf, sizeof(buf), "%s%%%s", dst, ifname);
 		else
 			snprintf(buf, sizeof(buf), "%s", dst);
+
+		if (ipv6 && (strncmp(dst, "ff", 2) == 0)) {
+			iptype = "-V";
+			binary = "iperf";
+		}
+
 		fprintf(f, "#!" SHELL "\n"
-			"iperf3 -c %s -t %d %s %s%s %s%s%s%s > %s"
+			"%s -c %s -t %d %s %s%s %s%s%s%s > %s"
 			"/sigma_dut-iperf &\n"
 			"echo $! > %s/sigma_dut-iperf-pid\n",
-			buf, duration, iptype, proto, bitrate, port_str,
+			binary, buf, duration, iptype, proto, bitrate, port_str,
 			client_port_str, tos, reverse ? " -R" : "",
 			dut->sigma_tmpdir, dut->sigma_tmpdir);
 	}
@@ -676,7 +696,7 @@ static enum sigma_cmd_result cmd_traffic_stop_iperf(struct sigma_dut *dut,
 		if (pos)
 			*pos = '\0';
 		sigma_dut_print(dut, DUT_MSG_DEBUG, "iperf: %s", buf);
-		pos = strstr(buf, "  sec  ");
+		pos = strstr(buf, " sec  ");
 		if (pos)
 			strlcpy(summary_buf, buf, sizeof(summary_buf));
 	}
