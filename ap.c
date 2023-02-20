@@ -8920,6 +8920,26 @@ skip_key_mgmt:
 	    (dut->program == PROGRAM_HE && dut->use_5g)) {
 		int vht_oper_centr_freq_idx;
 
+		/* Do not try to enable VHT or higher channel bandwidth for HE
+		 * on the 2.4 GHz band when configuring a dual band AP that
+		 * does have VHT enabled on the 5 GHz radio. */
+		if (dut->use_5g) {
+			if (dut->ap_is_dual) {
+				int chan;
+
+				if (conf_counter)
+					chan = dut->ap_tag_channel[0];
+				else
+					chan = dut->ap_channel;
+				append_vht = chan >= 36 && chan <= 171;
+			} else {
+				append_vht = true;
+			}
+		}
+
+		if (!append_vht)
+			goto skip_vht_parameters_set;
+
 		if (check_channel(dut, dut->ap_channel) < 0) {
 			send_resp(dut, conn, SIGMA_INVALID,
 				  "errorCode,Invalid channel");
@@ -8971,23 +8991,6 @@ skip_key_mgmt:
 					get_6g_ch_op_class(dut->ap_channel));
 		}
 
-		if (dut->use_5g) {
-			/* Do not try to enable VHT on the 2.4 GHz band when
-			 * configuring a dual band AP that does have VHT enabled
-			 * on the 5 GHz radio. */
-			if (dut->ap_is_dual) {
-				int chan;
-
-				if (conf_counter)
-					chan = dut->ap_tag_channel[0];
-				else
-					chan = dut->ap_channel;
-				append_vht = chan >= 36 && chan <= 171;
-			} else {
-				append_vht = true;
-			}
-		}
-
 		find_ap_ampdu_exp_and_max_mpdu_len(dut);
 
 		if (append_vht &&
@@ -9021,6 +9024,7 @@ skip_key_mgmt:
 			fprintf(f, "\n");
 		}
 	}
+skip_vht_parameters_set:
 
 	if (dut->ap_key_mgmt == AP_WPA2_OWE && dut->ap_tag_ssid[0][0] &&
 	    dut->ap_tag_key_mgmt[0] == AP2_OPEN) {
