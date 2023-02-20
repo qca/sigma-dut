@@ -8127,6 +8127,17 @@ write_conf:
 		if (run_system_wrapper(dut, "cp %s %s", f1, f2) != 0)
 			sigma_dut_print(dut, DUT_MSG_INFO,
 					"Failed to copy %s to %s", f1, f2);
+
+#ifdef ANDROID
+		if (chmod(f2, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) < 0)
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Error changing permissions");
+
+		gr = getgrnam("wifi");
+		if (!gr || chown(f2, -1, gr->gr_gid) < 0)
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Error changing groupid");
+#endif /* ANDROID */
 	} else {
 		ap_conf_path_1[0] = '\0';
 	}
