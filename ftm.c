@@ -720,7 +720,7 @@ lowi_cmd_sta_reset_ptksa_cache(struct sigma_dut *dut, struct sigma_conn *conn,
 		pos++;
 
 		memset(bssid, 0, sizeof(bssid));
-		strncpy(bssid, pos, 17);
+		strlcpy(bssid, pos, 17);
 		snprintf(req, sizeof(req), "PASN_DEAUTH bssid=%s", bssid);
 		wpa_command(intf, req);
 	}

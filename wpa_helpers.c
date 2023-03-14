@@ -552,6 +552,7 @@ int get_mlo_link_mac_ap_link(struct sigma_dut *dut, const char *ifname,
 	char *param;
 	size_t flen, flen2;
 	int ap_link_match = 0;
+	char *save_ptr = NULL;
 
 	if (get_wpa_mlo_status(ifname, buf, sizeof(buf))) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -560,7 +561,7 @@ int get_mlo_link_mac_ap_link(struct sigma_dut *dut, const char *ifname,
 	}
 	flen = strlen("ap_link_addr");
 	flen2 = strlen("sta_link_addr");
-	param = strtok(buf, "\n");
+	param = strtok_r(buf, "\n", &save_ptr);
 	while (param) {
 		if (strncasecmp(param, "ap_link_addr", flen) == 0 &&
 		    strlen(param) > flen + 1 &&
@@ -573,12 +574,12 @@ int get_mlo_link_mac_ap_link(struct sigma_dut *dut, const char *ifname,
 				sigma_dut_print(dut, DUT_MSG_DEBUG,
 						"STA link addr %s",
 						&param[flen2 + 1]);
-				strncpy(obuf, &param[flen2 + 1], obuf_size);
+				strlcpy(obuf, &param[flen2 + 1], obuf_size);
 				obuf[obuf_size - 1] = '\0';
 				return 0;
 			}
 		}
-		param = strtok(NULL, "\n");
+		param = strtok_r(NULL, "\n", &save_ptr);
 	}
 
 	if (!ap_link_match)
