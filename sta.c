@@ -3591,11 +3591,9 @@ enum qca_sta_helper_config_params {
 	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_RX_STBC */
 	STA_SET_RX_STBC,
 
-	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_TX_MSDU_AGGREGATION */
-	STA_SET_TX_MSDU,
-
-	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_RX_MSDU_AGGREGATION */
-	STA_SET_RX_MSDU,
+	/* For the attributes QCA_WLAN_VENDOR_ATTR_CONFIG_TX_MSDU_AGGREGATION
+	 * and QCA_WLAN_VENDOR_ATTR_CONFIG_RX_MSDU_AGGREGATION */
+	STA_SET_AMSDU,
 
 	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_CHANNEL_WIDTH */
 	STA_SET_CHAN_WIDTH,
@@ -3663,14 +3661,15 @@ static int sta_config_params(struct sigma_dut *dut, const char *intf,
 		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_RX_STBC, value))
 			goto fail;
 		break;
-	case STA_SET_TX_MSDU:
+	case STA_SET_AMSDU:
+		/* The driver expects both Tx and Rx aggregation parameters to
+		 * set A-MSDU configuration. Include both Tx and Rx MSDU
+		 * aggregation parameters in the command.
+		 */
 		if (nla_put_u8(msg,
 			       QCA_WLAN_VENDOR_ATTR_CONFIG_TX_MSDU_AGGREGATION,
-			       value))
-			goto fail;
-		break;
-	case STA_SET_RX_MSDU:
-		if (nla_put_u8(msg,
+			       value) ||
+		    nla_put_u8(msg,
 			       QCA_WLAN_VENDOR_ATTR_CONFIG_RX_MSDU_AGGREGATION,
 			       value))
 			goto fail;
@@ -5488,23 +5487,23 @@ static void ath_sta_set_11nrates(struct sigma_dut *dut, const char *intf,
 static void iwpriv_sta_set_amsdu(struct sigma_dut *dut, const char *intf,
 				 const char *val)
 {
-	char buf[60];
 	int ret;
+	int value;
 
 	if (strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0)
-		snprintf(buf, sizeof(buf), "iwpriv %s amsdu 2", intf);
+		value = 2;
 	else
-		snprintf(buf, sizeof(buf), "iwpriv %s amsdu 1", intf);
+		value = 1;
 
-	ret = system(buf);
 #ifdef NL80211_SUPPORT
-	if (ret) {
-		int value = (strcasecmp(val, "Enable") == 0) ? 2 : 1;
-
-		ret = sta_config_params(dut, intf, STA_SET_TX_MSDU, value);
-		ret |= sta_config_params(dut, intf, STA_SET_RX_MSDU, value);
-	}
+	ret = sta_config_params(dut, intf, STA_SET_AMSDU, value);
+	if (!ret)
+		return;
+	sigma_dut_print(dut, DUT_MSG_ERROR, "set amsdu nl cmd failed");
+	/* Try to use the old iwpriv command instead. */
 #endif /* NL80211_SUPPORT */
+
+	ret = run_iwpriv(dut, intf, "amsdu %d", value);
 	if (ret)
 		sigma_dut_print(dut, DUT_MSG_ERROR, "iwpriv amsdu failed");
 }
