@@ -11256,7 +11256,9 @@ static int sta_transmit_omi(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *val;
 	const char *intf = get_param(cmd, "Interface");
 	uint8_t rx_nss = 0xFF, ch_bw = 0xFF, tx_nsts = 0xFF, ulmu_dis = 0,
-		ulmu_data_dis = 0;
+		ulmu_data_dis = 0, ch_bw_extn = 0, rx_nss_extn = 0,
+		tx_nsts_extn = 0;
+	bool eht_omi = false;
 
 	ifindex = if_nametoindex(intf);
 	if (ifindex == 0) {
@@ -11285,6 +11287,24 @@ static int sta_transmit_omi(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (val)
 		ulmu_data_dis = atoi(val);
 
+	val = get_param(cmd, "EHT_OMCtrl_RxNSS_Ext");
+	if (val) {
+		eht_omi = true;
+		rx_nss_extn = atoi(val);
+	}
+
+	val = get_param(cmd, "EHT_OMCtrl_ChnlWidth_Ext");
+	if (val) {
+		eht_omi = true;
+		ch_bw_extn = atoi(val);
+	}
+
+	val = get_param(cmd, "EHT_OMCtrl_TxNSTS_Ext");
+	if (val) {
+		eht_omi = true;
+		tx_nsts_extn = atoi(val);
+	}
+
 	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
 				    NL80211_CMD_VENDOR)) ||
 	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
@@ -11301,7 +11321,14 @@ static int sta_transmit_omi(struct sigma_dut *dut, struct sigma_conn *conn,
 	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_HE_OMI_ULMU_DATA_DISABLE,
 		       ulmu_data_dis) ||
 	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_HE_OMI_ULMU_DISABLE,
-		       ulmu_dis)) {
+		       ulmu_dis) ||
+	    (eht_omi &&
+	     (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_EHT_OMI_RX_NSS_EXTN,
+			 rx_nss_extn) ||
+	      nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_EHT_OMI_CH_BW_EXTN,
+			 ch_bw_extn) ||
+	      nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_EHT_OMI_TX_NSS_EXTN,
+			 tx_nsts_extn)))) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: err in adding vendor_cmd and vendor_data",
 				__func__);
