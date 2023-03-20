@@ -9066,6 +9066,21 @@ static int sta_set_exclude_sta_prof_ml_ie(struct sigma_dut *dut,
 }
 
 
+static int sta_set_eht_om_ctrl_supp(struct sigma_dut *dut, const char *intf,
+				    int val)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_OM_CTRL_SUPPORT, val);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"EHT OM ctrl cannot be changed without NL80211_SUPPORT defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 #ifdef NL80211_SUPPORT
 
 static int sta_set_he_testbed_def(struct sigma_dut *dut,
@@ -12185,6 +12200,14 @@ cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (val)
 		sta_config_params(dut, intf, STA_SET_EHT_EML_CAPABILITY,
 				  (u8) atoi(val));
+
+	val = get_param(cmd, "EHT_OMControl");
+	if (val) {
+		if (get_enable_disable(val))
+			sta_set_eht_om_ctrl_supp(dut, intf, 1);
+		else
+			sta_set_eht_om_ctrl_supp(dut, intf, 0);
+	}
 
 	return cmd_sta_set_wireless_vht(dut, conn, cmd);
 }
