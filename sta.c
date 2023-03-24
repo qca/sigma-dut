@@ -3617,6 +3617,10 @@ enum qca_sta_helper_config_params {
 
 	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_DYNAMIC_BW */
 	STA_SET_DYN_BW,
+
+	/* For the attributes QCA_WLAN_VENDOR_ATTR_CONFIG_TX_MPDU_AGGREGATION
+	 * and QCA_WLAN_VENDOR_ATTR_CONFIG_RX_MPDU_AGGREGATION */
+	STA_SET_AMPDU,
 };
 
 
@@ -3712,6 +3716,19 @@ static int sta_config_params(struct sigma_dut *dut, const char *intf,
 		break;
 	case STA_SET_DYN_BW:
 		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_DYNAMIC_BW,
+			       value))
+			goto fail;
+		break;
+	case STA_SET_AMPDU:
+		/* The driver expects both Tx and Rx aggregation parameters to
+		 * set A-MPDU configuration. Include both Tx and Rx MPDU
+		 * aggregation parameters in the command.
+		 */
+		if (nla_put_u8(msg,
+			       QCA_WLAN_VENDOR_ATTR_CONFIG_TX_MPDU_AGGREGATION,
+			       value) ||
+		    nla_put_u8(msg,
+			       QCA_WLAN_VENDOR_ATTR_CONFIG_RX_MPDU_AGGREGATION,
 			       value))
 			goto fail;
 		break;
@@ -5535,6 +5552,25 @@ static int iwpriv_sta_set_ampdu(struct sigma_dut *dut, const char *intf,
 }
 
 
+static int wcn_sta_set_ampdu(struct sigma_dut *dut, const char *intf,
+			     int ampdu)
+{
+	int maxaggregation = 63;
+
+	if (ampdu)
+		ampdu = maxaggregation;
+
+#ifdef NL80211_SUPPORT
+	if (!sta_config_params(dut, intf, STA_SET_AMPDU, ampdu))
+		return 0;
+	sigma_dut_print(dut, DUT_MSG_ERROR, "set ampdu nl cmd failed");
+#endif /* NL80211_SUPPORT */
+
+	return iwpriv_sta_set_ampdu(dut, intf, ampdu);
+
+}
+
+
 static void ath_sta_set_stbc(struct sigma_dut *dut, const char *intf,
 			     const char *val)
 {
@@ -7089,7 +7125,7 @@ cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 				ampdu ? "Enabling" : "Disabling");
 		snprintf(buf, sizeof(buf), "SET ampdu %d", ampdu);
 		if (wpa_command(intf, buf) < 0 &&
-		    iwpriv_sta_set_ampdu(dut, intf, ampdu) < 0) {
+		    wcn_sta_set_ampdu(dut, intf, ampdu)) {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "ErrorCode,set aggr failed");
 			return STATUS_SENT_ERROR;
@@ -9318,7 +9354,7 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 		}
 
 		/* Enable AMPDU by default */
-		iwpriv_sta_set_ampdu(dut, intf, 1);
+		wcn_sta_set_ampdu(dut, intf, 1);
 
 #ifdef NL80211_SUPPORT
 		if (wcn_set_he_ltf(dut, intf, QCA_WLAN_HE_LTF_AUTO)) {
