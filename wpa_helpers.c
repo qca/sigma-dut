@@ -575,7 +575,6 @@ int get_mlo_link_mac_ap_link(struct sigma_dut *dut, const char *ifname,
 						"STA link addr %s",
 						&param[flen2 + 1]);
 				strlcpy(obuf, &param[flen2 + 1], obuf_size);
-				obuf[obuf_size - 1] = '\0';
 				return 0;
 			}
 		}
