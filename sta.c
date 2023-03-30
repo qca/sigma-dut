@@ -3614,6 +3614,9 @@ enum qca_sta_helper_config_params {
 
 	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_EHT_MLO_MODE */
 	STA_SET_EHT_MLO_MODE,
+
+	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_DYNAMIC_BW */
+	STA_SET_DYN_BW,
 };
 
 
@@ -3704,6 +3707,11 @@ static int sta_config_params(struct sigma_dut *dut, const char *intf,
 		break;
 	case STA_SET_EHT_MLO_MODE:
 		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_EHT_MLO_MODE,
+			       value))
+			goto fail;
+		break;
+	case STA_SET_DYN_BW:
+		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_DYNAMIC_BW,
 			       value))
 			goto fail;
 		break;
@@ -6973,6 +6981,43 @@ static int sta_set_rts(struct sigma_dut *dut, const char *intf, int val)
 }
 
 
+static int wcn_config_dyn_bw_sig(struct sigma_dut *dut, const char *intf,
+				 const char *val)
+{
+	int set_val = -1;
+	int res;
+
+	if (strcasecmp(val, "enable") == 0)
+		set_val = 1;
+	else if (strcasecmp(val, "disable") == 0)
+		set_val = 0;
+	else
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Unsupported DYN_BW_SGL");
+	if (set_val >= 0) {
+		res = sta_config_params(dut, intf, STA_SET_DYN_BW, set_val);
+		if (res) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Set DYN_BW_SGL using NL failed");
+			if (run_iwpriv(dut, intf,
+				       "cwmenable %d", set_val) != 0) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"iwpriv cwmenable %d failed",
+						set_val);
+				return -1;
+			}
+		}
+	}
+
+	if (run_iwpriv(dut, intf, "cts_cbw 3") < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to set cts_cbw in DYN_BW_SGNL");
+		return -1;
+	}
+
+	return 0;
+}
+
+
 static enum sigma_cmd_result
 cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 			    struct sigma_conn *conn, struct sigma_cmd *cmd)
@@ -7169,33 +7214,8 @@ cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 	if (val) {
 		switch (get_driver_type(dut)) {
 		case DRIVER_WCN:
-			if (strcasecmp(val, "enable") == 0) {
-				snprintf(buf, sizeof(buf),
-					 "iwpriv %s cwmenable 1", intf);
-				if (system(buf) != 0) {
-					sigma_dut_print(dut, DUT_MSG_ERROR,
-							"iwpriv cwmenable 1 failed");
-					return ERROR_SEND_STATUS;
-				}
-			} else if (strcasecmp(val, "disable") == 0) {
-				snprintf(buf, sizeof(buf),
-					 "iwpriv %s cwmenable 0", intf);
-				if (system(buf) != 0) {
-					sigma_dut_print(dut, DUT_MSG_ERROR,
-							"iwpriv cwmenable 0 failed");
-					return ERROR_SEND_STATUS;
-				}
-			} else {
-				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"Unsupported DYN_BW_SGL");
-			}
-
-			snprintf(buf, sizeof(buf), "iwpriv %s cts_cbw 3", intf);
-			if (system(buf) != 0) {
-				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"Failed to set cts_cbw in DYN_BW_SGNL");
+			if (wcn_config_dyn_bw_sig(dut, intf, val) < 0)
 				return ERROR_SEND_STATUS;
-			}
 			break;
 		case DRIVER_ATHEROS:
 			novap_reset(dut, intf, 1);
@@ -7257,14 +7277,33 @@ cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 
 	val = get_param(cmd, "BW_SGNL");
 	if (val) {
+		int set_val;
+
 		if (strcasecmp(val, "Enable") == 0) {
-			run_iwpriv(dut, intf, "cwmenable 1");
+			set_val = 1;
 		} else if (strcasecmp(val, "Disable") == 0) {
-			/* TODO: Disable */
+			set_val = 0;
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "ErrorCode,BW_SGNL value not supported");
 			return STATUS_SENT_ERROR;
+		}
+
+		if (get_driver_type(dut) == DRIVER_WCN) {
+			res = sta_config_params(dut, intf, STA_SET_DYN_BW,
+						set_val);
+			if (res) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Set DYN_BW_SGL using NL failed");
+				if (run_iwpriv(dut, intf, "cwmenable %d") < 0) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"iwpriv cwmenable %d failed",
+							set_val);
+					return ERROR_SEND_STATUS;
+				}
+			}
+		} else {
+			run_iwpriv(dut, intf, "cwmenable %d", set_val);
 		}
 	}
 
