@@ -3621,6 +3621,9 @@ enum qca_sta_helper_config_params {
 	/* For the attributes QCA_WLAN_VENDOR_ATTR_CONFIG_TX_MPDU_AGGREGATION
 	 * and QCA_WLAN_VENDOR_ATTR_CONFIG_RX_MPDU_AGGREGATION */
 	STA_SET_AMPDU,
+
+	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_NSS */
+	STA_SET_NSS,
 };
 
 
@@ -3730,6 +3733,10 @@ static int sta_config_params(struct sigma_dut *dut, const char *intf,
 		    nla_put_u8(msg,
 			       QCA_WLAN_VENDOR_ATTR_CONFIG_RX_MPDU_AGGREGATION,
 			       value))
+			goto fail;
+		break;
+	case STA_SET_NSS:
+		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_NSS, value))
 			goto fail;
 		break;
 	}
@@ -5641,14 +5648,11 @@ int ath_set_width(struct sigma_dut *dut, struct sigma_conn *conn,
 static int wcn_sta_set_sp_stream(struct sigma_dut *dut, const char *intf,
 				 const char *val)
 {
-	char buf[60];
 	int sta_nss;
 
 	if (strcmp(val, "1SS") == 0 || strcmp(val, "1") == 0) {
-		snprintf(buf, sizeof(buf), "iwpriv %s nss 1", intf);
 		sta_nss = 1;
 	} else if (strcmp(val, "2SS") == 0 || strcmp(val, "2") == 0) {
-		snprintf(buf, sizeof(buf), "iwpriv %s nss 2", intf);
 		sta_nss = 2;
 	} else {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -5656,7 +5660,15 @@ static int wcn_sta_set_sp_stream(struct sigma_dut *dut, const char *intf,
 		return -1;
 	}
 
-	if (system(buf) != 0) {
+#ifdef NL80211_SUPPORT
+	if (!sta_config_params(dut, intf, STA_SET_NSS, sta_nss)) {
+		dut->sta_nss = sta_nss;
+		return 0;
+	}
+	sigma_dut_print(dut, DUT_MSG_ERROR, "set Nss nl cmd failed");
+#endif /* NL80211_SUPPORT */
+
+	if (run_iwpriv(dut, intf, "nss %d", sta_nss) < 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"Failed to set SP_STREAM");
 		return -1;
@@ -9436,10 +9448,9 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 
 			wpa_command(intf, "SET oce 0");
 
-			snprintf(buf, sizeof(buf), "iwpriv %s nss 1", intf);
-			if (system(buf) != 0) {
+			if (wcn_sta_set_sp_stream(dut, intf, "1SS") < 0) {
 				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"iwpriv %s nss failed", intf);
+						"set nss to 1SS failed");
 			}
 
 #ifdef NL80211_SUPPORT
@@ -9520,13 +9531,10 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 			wcn_sta_set_stbc(dut, intf, "1");
 
 			/* set nss to 2 */
-			snprintf(buf, sizeof(buf), "iwpriv %s nss 2", intf);
-			if (system(buf) != 0) {
+			if (wcn_sta_set_sp_stream(dut, intf, "2SS") < 0) {
 				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"iwpriv %s nss 2 failed", intf);
+						"set nss to 2SS failed");
 			}
-			dut->sta_nss = 2;
-
 #ifdef NL80211_SUPPORT
 			/* Set HE_MCS to 0-11 */
 			if (sta_set_he_mcs(dut, intf, HE_80_MCS0_11)) {
@@ -11123,8 +11131,10 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 		nss = atoi(result);
 
-		run_iwpriv(dut, intf, "nss %d", nss);
-		dut->sta_nss = nss;
+		if (wcn_sta_set_sp_stream(dut, intf, result) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"set nss to %s failed", result);
+		}
 
 		result = strtok_r(NULL, ";", &saveptr);
 		if (result == NULL) {
@@ -15241,14 +15251,22 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 			goto failed;
 		}
 
-		snprintf(buf, sizeof(buf), "iwpriv %s nss %d", intf, nss);
-		if (system(buf) != 0) {
-			sigma_dut_print(dut, DUT_MSG_ERROR,
-					"nss_mcs_opt: iwpriv %s nss %d failed",
-					intf, nss);
-			goto failed;
+		if (nss == 2) {
+			/* set nss to 2 */
+			if (wcn_sta_set_sp_stream(dut, intf, "2SS") < 0) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"set nss to 2SS failed");
+				goto failed;
+			}
 		}
-		dut->sta_nss = nss;
+		if (nss == 1) {
+			/* set nss to 1 */
+			if (wcn_sta_set_sp_stream(dut, intf, "1SS") < 0) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"set nss to 1SS failed");
+				goto failed;
+			}
+		}
 
 		/* Add the MCS to the ratecode */
 		if (mcs >= 0 && mcs <= 11) {
