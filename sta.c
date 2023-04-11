@@ -9021,6 +9021,21 @@ static int sta_set_eht_beamformee_ss_320(struct sigma_dut *dut,
 }
 
 
+static int sta_set_eht_emlsr_padding_delay(struct sigma_dut *dut,
+					 const char *intf, u8 val)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EMLSR_PADDING_DELAY,
+		val);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR, "NL80211_SUPPORT is not defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static int sta_set_eht_tb_sounding_fb_rl(struct sigma_dut *dut,
 					 const char *intf, int cfg)
 {
@@ -12104,6 +12119,29 @@ cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 			sigma_dut_print(dut, DUT_MSG_ERROR,
 					"Invalid MLO mode %s", val);
 		}
+	}
+
+	val = get_param(cmd, "EMLSR_Padding_Delay");
+	if (val) {
+		u8 set_val = 0;
+		int ival = atoi(val);
+
+		if (ival == 32)
+			set_val = 1;
+		else if (ival == 64)
+			set_val = 2;
+		else if (ival == 128)
+			set_val = 3;
+		else if (ival == 256)
+			set_val = 4;
+		else
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Unsupported EMLSR_Padding_Delay value '%s'",
+					val);
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"EMLSR padding %s us, set val %d",
+				val, set_val);
+		sta_set_eht_emlsr_padding_delay(dut, intf, set_val);
 	}
 
 	val = get_param(cmd, "TBSoundingFBRateLimit");
