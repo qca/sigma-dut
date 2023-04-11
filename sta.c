@@ -3407,6 +3407,174 @@ static enum sigma_cmd_result cmd_sta_set_uapsd(struct sigma_dut *dut,
 	return 1;
 }
 
+#ifdef NL80211_SUPPORT
+
+struct tspec {
+	u8 handle;
+	u8 tid;
+	u8 direction;
+	u8 psb_ts;
+	u8 up;
+	u8 ack;
+	u16 nomsize;
+	u16 msize;
+	u32 minsi;
+	u32 maxsi;
+	u32 inact;
+	u32 sussi;
+	u32 mindr;
+	u32 meandr;
+	u32 peakdr;
+	u32 burstsize;
+	u32 phyrate;
+	u16 sba;
+};
+
+static int sta_send_add_tspec_params(struct sigma_dut *dut, const char *intf,
+				     struct tspec *tspec_info)
+{
+	struct nl_msg *msg;
+	int ret;
+	struct nlattr *params;
+	int ifindex;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Index for interface %s failed",
+				__func__, intf);
+		return -1;
+	}
+
+	msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0, NL80211_CMD_VENDOR);
+	if (!msg ||
+	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			QCA_NL80211_VENDOR_SUBCMD_CONFIG_TSPEC))
+		goto fail;
+
+	params = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA);
+	if (!params ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_OPERATION,
+		       QCA_WLAN_TSPEC_ADD) ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_TSID,
+		       tspec_info->tid) ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_DIRECTION,
+		       tspec_info->direction) ||
+	    (tspec_info->psb_ts &&
+	     nla_put_flag(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_APSD)) ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_USER_PRIORITY,
+		       tspec_info->up) ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_ACK_POLICY,
+		       tspec_info->ack) ||
+	    nla_put_u16(msg,
+			QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_NOMINAL_MSDU_SIZE,
+			tspec_info->nomsize) ||
+	    nla_put_u16(msg,
+			QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_MAXIMUM_MSDU_SIZE,
+			tspec_info->msize) ||
+	    nla_put_u32(msg,
+			QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_MIN_SERVICE_INTERVAL,
+			tspec_info->minsi) ||
+	    nla_put_u32(msg,
+			QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_MAX_SERVICE_INTERVAL,
+			tspec_info->maxsi) ||
+	    nla_put_u32(msg,
+			QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_INACTIVITY_INTERVAL,
+			tspec_info->inact) ||
+	    nla_put_u32(msg,
+			QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_SUSPENSION_INTERVAL,
+			tspec_info->sussi) ||
+	    nla_put_u32(msg,
+			QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_MINIMUM_DATA_RATE,
+			tspec_info->mindr) ||
+	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_MEAN_DATA_RATE,
+			tspec_info->meandr) ||
+	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_PEAK_DATA_RATE,
+			tspec_info->peakdr) ||
+	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_BURST_SIZE,
+			tspec_info->burstsize) ||
+	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_MINIMUM_PHY_RATE,
+			tspec_info->phyrate) ||
+	    nla_put_u16(msg,
+			QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_SURPLUS_BANDWIDTH_ALLOWANCE,
+			tspec_info->sba))
+		goto fail;
+
+	nla_nest_end(msg, params);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in send_and_recv_msgs, ret=%d",
+				__func__, ret);
+		return ret;
+	}
+
+	return 0;
+
+fail:
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+		"%s: err in adding vendor_cmd and vendor_data",
+		__func__);
+	nlmsg_free(msg);
+	return -1;
+}
+
+
+static int sta_send_del_tspec_params(struct sigma_dut *dut, const char *intf,
+				     uint8_t tid)
+{
+	struct nl_msg *msg;
+	int ret;
+	struct nlattr *params;
+	int ifindex;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Index for interface %s failed",
+				__func__, intf);
+		return -1;
+	}
+
+	msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0, NL80211_CMD_VENDOR);
+	if (!msg ||
+	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			QCA_NL80211_VENDOR_SUBCMD_CONFIG_TSPEC))
+		goto fail;
+
+	params = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA);
+	if (!params ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_OPERATION,
+		       QCA_WLAN_TSPEC_DEL) ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_TSID, tid))
+		goto fail;
+	nla_nest_end(msg, params);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in send_and_recv_msgs, ret=%d",
+				__func__, ret);
+		return ret;
+	}
+
+	return 0;
+
+fail:
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+		"%s: err in adding vendor_cmd and vendor_data",
+		__func__);
+	nlmsg_free(msg);
+	return -1;
+}
+
+#endif /* NL80211_SUPPORT */
+
 
 static enum sigma_cmd_result cmd_sta_set_wmm(struct sigma_dut *dut,
 					     struct sigma_conn *conn,
@@ -3436,8 +3604,14 @@ static enum sigma_cmd_result cmd_sta_set_wmm(struct sigma_dut *dut,
 	int direction;
 	int handle;
 	float sba_fv = 0;
+	unsigned int sba_val = 0;
 	int fixed_int;
 	int psb_ts;
+#ifdef NL80211_SUPPORT
+	int tspec_status;
+	enum qca_wlan_tspec_direction tspec_dir;
+	struct tspec *tspec_info;
+#endif /* NL80211_SUPPORT */
 
 	if (intf == NULL || grp == NULL || act == NULL )
 		return -1;
@@ -3455,11 +3629,20 @@ static enum sigma_cmd_result cmd_sta_set_wmm(struct sigma_dut *dut,
 		if (strcasecmp(dir, "uplink") == 0 ||
 		    strcasecmp(dir, "up") == 0) {
 			direction = 0;
+#ifdef NL80211_SUPPORT
+			tspec_dir = QCA_WLAN_TSPEC_DIRECTION_UPLINK;
+#endif /* NL80211_SUPPORT */
 		} else if (strcasecmp(dir, "downlink") == 0 ||
 			   strcasecmp(dir, "down") == 0) {
 			direction = 1;
+#ifdef NL80211_SUPPORT
+			tspec_dir = QCA_WLAN_TSPEC_DIRECTION_DOWNLINK;
+#endif /* NL80211_SUPPORT */
 		} else if (strcasecmp(dir, "bidi") == 0) {
 			direction = 2;
+#ifdef NL80211_SUPPORT
+			tspec_dir = QCA_WLAN_TSPEC_DIRECTION_BOTH;
+#endif /* NL80211_SUPPORT */
 		} else {
 			sigma_dut_print(dut, DUT_MSG_ERROR,
 					"Direction %s not supported", dir);
@@ -3530,6 +3713,48 @@ static enum sigma_cmd_result cmd_sta_set_wmm(struct sigma_dut *dut,
 		 * must be greater than unity.
 		 */
 
+		if (sba)
+			sba_val = (unsigned int)
+				(((int) sba_fv << 13) |
+				 (int) ((sba_fv - (int) sba_fv) * 8192));
+
+#ifdef NL80211_SUPPORT
+		tspec_info = malloc(sizeof(struct tspec));
+		if (!tspec_info)
+			return ERROR_SEND_STATUS;
+
+		tspec_info->handle = handle;
+		tspec_info->tid = tid ? atoi(tid) : 0;
+		tspec_info->direction = tspec_dir;
+		tspec_info->psb_ts = psb_ts;
+		tspec_info->up = up ? atoi(up) : 0;
+		tspec_info->ack = 0;
+		tspec_info->nomsize = (unsigned int) ((fixed_int << 15) |
+						      atoi(size));
+		tspec_info->msize = msize ? atoi(msize) : 0;
+		tspec_info->minsi = minsi ? atoi(minsi) : 0;
+		tspec_info->maxsi = maxsi ? atoi(maxsi) : 0;
+		tspec_info->inact = inact ? atoi(inact) : 0;
+		tspec_info->sussi = sus ? atoi(sus) : 0;
+		tspec_info->mindr = mindr ? atoi(mindr) : 0;
+		tspec_info->meandr =  meandr ? atoi(meandr) : 0;
+		tspec_info->peakdr =  peakdr ? atoi(peakdr) : 0;
+		tspec_info->burstsize = burstsize ? atoi(burstsize) : 0;
+		tspec_info->phyrate =  phyrate ? atoi(phyrate) : 0;
+		tspec_info->sba = sba_val;
+
+		tspec_status = sta_send_add_tspec_params(dut, intf, tspec_info);
+		free(tspec_info);
+		if (!tspec_status) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"addtspec request netlink command sent");
+			dut->tid_to_handle[atoi(tid)] = handle;
+			return SUCCESS_SEND_STATUS;
+		}
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"addtspec request netlink command cmd failed - try iwpriv");
+#endif /* NL80211_SUPPORT */
+
 		snprintf(buf, sizeof(buf),
 			 "iwpriv %s addTspec %d %s %d %d %s 0x%X"
 			 " 0x%X 0x%X 0x%X"
@@ -3544,9 +3769,7 @@ static enum sigma_cmd_result cmd_sta_set_wmm(struct sigma_dut *dut,
 			 peakdr ? atoi(peakdr) : 0,
 			 burstsize ? atoi(burstsize) : 0,
 			 phyrate ? atoi(phyrate) : 0,
-			 sba ? ((unsigned int) (((int) sba_fv << 13) |
-						(int)((sba_fv - (int) sba_fv) *
-						      8192))) : 0,
+			 sba_val,
 			 minsi ? atoi(minsi) : 0,
 			 sus ? atoi(sus) : 0,
 			 0, 0,
@@ -3585,6 +3808,18 @@ static enum sigma_cmd_result cmd_sta_set_wmm(struct sigma_dut *dut,
 			sigma_dut_print(dut, DUT_MSG_ERROR,
 					"handle-> %d not found", handle);
 		}
+
+#ifdef NL80211_SUPPORT
+		tspec_status = sta_send_del_tspec_params(dut, intf, atoi(tid));
+		if (!tspec_status) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"deltspec request netlink command sent");
+			dut->tid_to_handle[atoi(tid)] = 0;
+			return SUCCESS_SEND_STATUS;
+		}
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"deltspec request netlink command failed - try iwpriv");
+#endif /* NL80211_SUPPORT */
 
 		snprintf(buf, sizeof(buf), "iwpriv %s delTspec %d",
 			 intf, handle);
