@@ -3920,6 +3920,9 @@ enum qca_sta_helper_config_params {
 
 	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_NSS */
 	STA_SET_NSS,
+
+	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_LISTEN_INTERVAL */
+	STA_SET_LISTEN_INTERVAL,
 };
 
 
@@ -4033,6 +4036,12 @@ static int sta_config_params(struct sigma_dut *dut, const char *intf,
 		break;
 	case STA_SET_NSS:
 		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_NSS, value))
+			goto fail;
+		break;
+	case STA_SET_LISTEN_INTERVAL:
+		if (nla_put_u32(msg,
+				QCA_WLAN_VENDOR_ATTR_CONFIG_LISTEN_INTERVAL,
+				value))
 			goto fail;
 		break;
 	}
@@ -7668,6 +7677,22 @@ cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 		switch (get_driver_type(dut)) {
 		case DRIVER_ATHEROS:
 			ath_set_zero_crc(dut, val);
+			break;
+		default:
+			break;
+		}
+	}
+
+	val = get_param(cmd, "Listen_Interval");
+	if (val) {
+		switch (get_driver_type(dut)) {
+		case DRIVER_WCN:
+			if (sta_config_params(dut, intf,
+					      STA_SET_LISTEN_INTERVAL,
+					      atoi(val))) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Setting listen interval failed");
+			}
 			break;
 		default:
 			break;
