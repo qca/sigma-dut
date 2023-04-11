@@ -3923,6 +3923,9 @@ enum qca_sta_helper_config_params {
 
 	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_LISTEN_INTERVAL */
 	STA_SET_LISTEN_INTERVAL,
+
+	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_EMLSR_MODE_SWITCH */
+	STA_SET_EMLSR_MODE_SWITCH,
 };
 
 
@@ -4042,6 +4045,12 @@ static int sta_config_params(struct sigma_dut *dut, const char *intf,
 		if (nla_put_u32(msg,
 				QCA_WLAN_VENDOR_ATTR_CONFIG_LISTEN_INTERVAL,
 				value))
+			goto fail;
+		break;
+	case STA_SET_EMLSR_MODE_SWITCH:
+		if (nla_put_u8(msg,
+			       QCA_WLAN_VENDOR_ATTR_CONFIG_EMLSR_MODE_SWITCH,
+			       value))
 			goto fail;
 		break;
 	}
@@ -16050,6 +16059,22 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 				  "ErrorCode,Failed to set ER-SU PPDU type Tx");
 			return STATUS_SENT_ERROR;
 		}
+	}
+
+	val = get_param(cmd, "EMLSR_Operation");
+	if (val) {
+		enum qca_wlan_emlsr_mode mode;
+
+		if (strcasecmp(val, "Initiate") == 0) {
+			mode = QCA_WLAN_EMLSR_MODE_ENTER;
+		} else if (strcasecmp(val, "Exit") == 0) {
+			mode = QCA_WLAN_EMLSR_MODE_EXIT;
+		} else {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Invalid EMLSR operation");
+			return STATUS_SENT_ERROR;
+		}
+		sta_config_params(dut, intf, STA_SET_EMLSR_MODE_SWITCH, mode);
 	}
 
 	val = get_param(cmd, "CodingType");
