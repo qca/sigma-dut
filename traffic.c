@@ -415,7 +415,7 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 						     struct sigma_cmd *cmd)
 {
 	const char *val, *dst, *domain_name = NULL;
-	const char *iptype, *binary;
+	const char *iptype;
 	int duration, dst_port = 0, src_port = 0;
 	const char *proto;
 	char buf[256];
@@ -428,6 +428,11 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 	char tos[20], client_port_str[100], bitrate[20];
 	struct hostent *host_addr;
 	char ip_addr[INET6_ADDRSTRLEN];
+	bool iperf_v2 = false;
+
+	val = get_param(cmd, "iperfversion");
+	if (val && atoi(val) == 2)
+		iperf_v2 = true;
 
 	val = get_param(cmd, "mode");
 	if (!val) {
@@ -450,6 +455,9 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 		}
 	}
 
+	if (iperf_v2)
+		iptype = ipv6 ? "-V" : "";
+
 	port_str[0] = '\0';
 	val = get_param(cmd, "port");
 	if (val) {
@@ -459,8 +467,13 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 
 	proto = "";
 	val = get_param(cmd, "transproto");
-	if (val && strcasecmp(val, "udp") == 0)
+	if (server && !iperf_v2 && val && strcasecmp(val, "tcp") != 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Invalid Iperf3 option transproto in server mode");
+		return ERROR_SEND_STATUS;
+	} else if (val && strcasecmp(val, "udp") == 0) {
 		proto = "-u";
+	}
 
 	bitrate[0] = '\0';
 	val = get_param(cmd, "bitrate");
@@ -534,7 +547,9 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 			snprintf(buf, sizeof(buf), "%s", src_ip);
 
 		res = snprintf(client_port_str, sizeof(client_port_str),
-			       " -B %s --cport %d", buf, src_port);
+			       " -B %s%s%d", buf,
+			       iperf_v2 ? ":" : " --cport ",
+			       src_port);
 		if (res < 0 || res >= sizeof(client_port_str))
 			return ERROR_SEND_STATUS;
 	}
@@ -575,14 +590,13 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 		return STATUS_SENT;
 	}
 
-	binary = "iperf3";
 	if (server) {
 		/* write server side command to shell file */
 		if (ipv6 && dst && (strncmp(dst, "ff", 2) == 0)) {
 			/* open IPv6 multicast server socket using iperf */
+			iperf_v2 = true;
 			iptype = "-V";
-			binary = "iperf";
-			snprintf(buf, sizeof(buf), "-u -B %s%%%s", dst, ifname);
+			snprintf(buf, sizeof(buf), "-B %s%%%s", dst, ifname);
 		} else if (dst) {
 			/* open IPv4 multicast server socket using iperf3 */
 			snprintf(buf, sizeof(buf), "-B %s", dst);
@@ -591,11 +605,11 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 		}
 
 		fprintf(f, "#!" SHELL "\n"
-			"%s -s %s %s %s > %s"
+			"iperf%s -s %s %s %s %s > %s"
 			"/sigma_dut-iperf &\n"
 			"echo $! > %s/sigma_dut-iperf-pid\n",
-			binary, port_str, iptype, buf, dut->sigma_tmpdir,
-			dut->sigma_tmpdir);
+			iperf_v2 ? "" : "3", port_str, iptype, proto,
+			buf, dut->sigma_tmpdir, dut->sigma_tmpdir);
 	} else {
 		/* write client side command to shell file */
 		if (!dst)
@@ -606,15 +620,16 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 			snprintf(buf, sizeof(buf), "%s", dst);
 
 		if (ipv6 && (strncmp(dst, "ff", 2) == 0)) {
+			iperf_v2 = true;
 			iptype = "-V";
-			binary = "iperf";
 		}
 
 		fprintf(f, "#!" SHELL "\n"
-			"%s -c %s -t %d %s %s%s %s%s%s%s > %s"
+			"iperf%s -c %s -t %d %s %s%s %s%s%s%s > %s"
 			"/sigma_dut-iperf &\n"
 			"echo $! > %s/sigma_dut-iperf-pid\n",
-			binary, buf, duration, iptype, proto, bitrate, port_str,
+			iperf_v2 ? "" : "3",
+			buf, duration, iptype, proto, bitrate, port_str,
 			client_port_str, tos, reverse ? " -R" : "",
 			dut->sigma_tmpdir, dut->sigma_tmpdir);
 	}
