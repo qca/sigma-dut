@@ -1490,6 +1490,34 @@ int set_ipv4_gw(struct sigma_dut *dut, const char *gw)
 }
 
 
+static void enable_sta_ipv6_configuration(struct sigma_dut *dut,
+					      const char *ifname,
+					      char *buf, size_t buf_size)
+{
+#if defined(ANDROID)
+	snprintf(buf, buf_size,
+		 "sysctl net.ipv6.conf.%s.disable_ipv6=0",
+		 ifname);
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Run: %s", buf);
+	if (system(buf) != 0) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Failed to enable IPv6 address");
+	}
+#elif defined(LINUX_EMBEDDED)
+	snprintf(buf, buf_size,
+		"echo 2 > /proc/sys/net/ipv6/conf/%s/accept_ra",
+		ifname);
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Run: %s", buf);
+	if (system(buf) != 0) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Failed to set accept_ra for IPv6 address");
+	}
+#else
+	/* No configuration changes needed */
+#endif
+}
+
+
 static enum sigma_cmd_result cmd_sta_set_ip_config(struct sigma_dut *dut,
 						   struct sigma_conn *conn,
 						   struct sigma_cmd *cmd)
@@ -1534,16 +1562,10 @@ static enum sigma_cmd_result cmd_sta_set_ip_config(struct sigma_dut *dut,
 			dut->last_set_ip_config_ipv6 = 1;
 			sigma_dut_print(dut, DUT_MSG_INFO, "Using IPv6 "
 					"stateless address autoconfiguration");
-#ifdef ANDROID
-			snprintf(buf, sizeof(buf),
-				 "sysctl net.ipv6.conf.%s.disable_ipv6=0",
-				 ifname);
-			sigma_dut_print(dut, DUT_MSG_DEBUG, "Run: %s", buf);
-			if (system(buf) != 0) {
-				sigma_dut_print(dut, DUT_MSG_DEBUG,
-						"Failed to enable IPv6 address");
-			}
 
+			enable_sta_ipv6_configuration(dut, ifname, buf,
+						      sizeof(buf));
+#ifdef ANDROID
 			/*
 			 * This sleep is required as the assignment in case of
 			 * Android is taking time and is done by the kernel.
