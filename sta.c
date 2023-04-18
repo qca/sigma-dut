@@ -9456,6 +9456,104 @@ static int sta_set_punctured_preamble_rx(struct sigma_dut *dut,
 }
 
 
+static int wcn_set_he_tx_rate(struct sigma_dut *dut, const char *intf,
+			      u16 tx_rate, u8 nss)
+{
+ #ifdef NL80211_SUPPORT
+	struct nlattr *attr;
+	struct nlattr *attr1;
+	int ifindex, ret;
+	struct nl_msg *msg;
+	struct nl80211_txrate_he he_rate;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Index for interface %s failed",
+				__func__, intf);
+		return -1;
+	}
+
+	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
+				    NL80211_CMD_SET_TX_BITRATE_MASK)) ||
+	    !(attr = nla_nest_start(msg, NL80211_ATTR_TX_RATES))) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: NL80211_CMD_SET_TX_BITRATE_MASK msg failed",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	memset(&he_rate, 0, sizeof(he_rate));
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "%s: Set HE Tx rate %0X for Nss %d",
+			__func__, tx_rate, nss);
+
+	he_rate.mcs[nss - 1] = tx_rate;
+
+	attr1 = nla_nest_start(msg, NL80211_BAND_2GHZ);
+	if (!attr1) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Netlink nest start failed for NL80211_BAND_2GHZ",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	if (nla_put(msg, NL80211_TXRATE_HE, sizeof(he_rate), &he_rate)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: NL80211_TXRATE_HE for 2.4 GHz failed",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	nla_nest_end(msg, attr1);
+
+	attr1 = nla_nest_start(msg, NL80211_BAND_5GHZ);
+	if (!attr1) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Netlink nest start failed for NL80211_BAND_5GHZ",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	if (nla_put(msg, NL80211_TXRATE_HE, sizeof(he_rate), &he_rate)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: NL80211_TXRATE_HE for 5 GHz failed",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	nla_nest_end(msg, attr1);
+
+	attr1 = nla_nest_start(msg, NL80211_BAND_6GHZ);
+	if (!attr1) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Netlink nest start failed for NL80211_BAND_6GHZ",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	if (nla_put(msg, NL80211_TXRATE_HE, sizeof(he_rate), &he_rate)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: NL80211_TXRATE_HE for 6 GHz failed",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+	nla_nest_end(msg, attr1);
+
+	nla_nest_end(msg, attr);
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: send_and_recv_msgs failed, ret=%d",
+				__func__, ret);
+	}
+	return ret;
+#else /* NL80211_SUPPORT */
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 int wcn_set_he_gi(struct sigma_dut *dut, const char *intf, u8 gi_val)
 {
  #ifdef NL80211_SUPPORT
@@ -9600,12 +9698,17 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 		sta_set_phymode(dut, intf, "auto");
 
 		/* reset the rate to Auto rate */
-		snprintf(buf, sizeof(buf), "iwpriv %s set_11ax_rate 0xff",
-			 intf);
-		if (system(buf) != 0) {
-			sigma_dut_print(dut, DUT_MSG_ERROR,
-					"iwpriv %s set_11ax_rate 0xff failed",
-					intf);
+		if (wcn_set_he_tx_rate(dut, intf, 0x0FFF, 2)) {
+			/* 0xFFF value for setting MCS 0-12 */
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"wcn_set_he_tx_rate failed, using iwpriv");
+			snprintf(buf, sizeof(buf),
+				 "iwpriv %s set_11ax_rate 0xff", intf);
+			if (system(buf) != 0) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"iwpriv %s set_11ax_rate 0xff failed",
+						intf);
+			}
 		}
 
 		/* reset the LDPC setting */
@@ -11303,12 +11406,14 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 		enum he_mcs_config mcs_config;
 		int ret;
 		char buf[60];
+		u16 tx_rate = 0;
 
 		ratecode = (0x07 & dut->sta_nss) << 5;
 		mcs = atoi(val);
 		/* Add the MCS to the ratecode */
 		if (mcs >= 0 && mcs <= 11) {
 			ratecode += mcs;
+			tx_rate = 1 << mcs;
 			if (dut->device_type == STA_testbed &&
 			    mcs > 7 && mcs <= 11) {
 				if (mcs <= 9)
@@ -11322,13 +11427,19 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 							mcs, mcs_config, ret);
 				}
 			}
-			snprintf(buf, sizeof(buf),
-				 "iwpriv %s set_11ax_rate 0x%03x",
-				 intf, ratecode);
-			if (system(buf) != 0) {
-				sigma_dut_print(dut, DUT_MSG_ERROR,
-						"MCS_FixedRate: iwpriv setting of 11ax rates 0x%03x failed",
-						ratecode);
+
+			if (wcn_set_he_tx_rate(dut, intf, tx_rate,
+					       dut->sta_nss)) {
+				sigma_dut_print(dut, DUT_MSG_INFO,
+						"wcn_set_he_tx_rate failed, using iwpriv");
+				snprintf(buf, sizeof(buf),
+					 "iwpriv %s set_11ax_rate 0x%03x",
+					 intf, ratecode);
+				if (system(buf) != 0) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"MCS_FixedRate: iwpriv setting of 11ax rates 0x%03x failed",
+							ratecode);
+				}
 			}
 		} else {
 			sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -15507,6 +15618,7 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 	const char *val;
 	char *token = NULL, *result;
 	char buf[60];
+	u16 tx_rate = 0;
 
 	val = get_param(cmd, "nss_mcs_opt");
 	if (val) {
@@ -15567,6 +15679,7 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 		/* Add the MCS to the ratecode */
 		if (mcs >= 0 && mcs <= 11) {
 			ratecode += mcs;
+			tx_rate = 1 << mcs;
 #ifdef NL80211_SUPPORT
 			if (dut->device_type == STA_testbed) {
 				enum he_mcs_config mcs_config;
@@ -15592,12 +15705,18 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 					"HE MCS %d not supported", mcs);
 			goto failed;
 		}
-		snprintf(buf, sizeof(buf), "iwpriv %s set_11ax_rate 0x%03x",
-			 intf, ratecode);
-		if (system(buf) != 0) {
-			sigma_dut_print(dut, DUT_MSG_ERROR,
-					"iwpriv setting of 11ax rates failed");
-			goto failed;
+
+		if (wcn_set_he_tx_rate(dut, intf, tx_rate, dut->sta_nss)) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"wcn_set_he_tx_rate failed, using iwpriv");
+			snprintf(buf, sizeof(buf),
+				 "iwpriv %s set_11ax_rate 0x%03x",
+				 intf, ratecode);
+			if (system(buf) != 0) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"iwpriv setting of 11ax rates failed");
+				goto failed;
+			}
 		}
 		free(token);
 	}
