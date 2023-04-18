@@ -14774,6 +14774,7 @@ cmd_sta_send_frame_scs(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *val, *scs_id, *classifier_type;
 	int len, rem_len, total_bytes;
 	int num_of_scs_desc = 0, num_of_tclas_elem = 0;
+	bool qos_char_up = false;
 
 	scs_id = get_param(cmd, "SCSDescrElem_SCSID_1");
 	if (!scs_id) {
@@ -14830,9 +14831,16 @@ cmd_sta_send_frame_scs(struct sigma_dut *dut, struct sigma_conn *conn,
 		val = get_param_fmt(cmd, "IntraAccessCatElem_UP_%d",
 				    num_of_scs_desc);
 		if (!val) {
-			sigma_dut_print(dut, DUT_MSG_ERROR,
-					"IntraAccess Priority empty");
-			return INVALID_SEND_STATUS;
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"IntraAccess Priority empty. Check QoSChar_UserPriority");
+			val = get_param_fmt(cmd, "QoSChar_UserPriority_%d",
+					    num_of_scs_desc);
+			if (!val) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Both IntraAccess and QoS Characteristics Priorities are empty");
+				return INVALID_SEND_STATUS;
+			}
+			qos_char_up = true;
 		}
 
 		len = snprintf(pos, rem_len, " scs_up=%s", val);
@@ -14841,6 +14849,9 @@ cmd_sta_send_frame_scs(struct sigma_dut *dut, struct sigma_conn *conn,
 
 		pos += len;
 		rem_len -= len;
+
+		if (qos_char_up)
+			goto qos_char;
 
 		classifier_type = get_param_fmt(cmd,
 						"TCLASElem_ClassifierType_%d_1",
@@ -14908,6 +14919,81 @@ cmd_sta_send_frame_scs(struct sigma_dut *dut, struct sigma_conn *conn,
 			pos += len;
 			rem_len -= len;
 		}
+
+	qos_char:
+		/* QoS Characteristics mandatory elements parsing */
+		val = get_param_fmt(cmd, "QoSChar_Direction_%d",
+				    num_of_scs_desc);
+		if (val) {
+			char *direction_str[] = { "up", "down", "direct" };
+			int direction = atoi(val);
+			int min_si, max_si, min_data_rate, delay_bound;
+
+			if (direction < 0 || direction > 2) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Invalid QoSChar_Direction_%d=%d",
+						num_of_scs_desc, direction);
+				goto fail;
+			}
+
+			val = get_param_fmt(cmd,
+					    "QoSChar_MinService_Interval_%d",
+					    num_of_scs_desc);
+			if (!val) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"QoSChar_MinService_Interval_%d empty",
+						num_of_scs_desc);
+				goto fail;
+			}
+			min_si = atoi(val);
+
+			val = get_param_fmt(cmd,
+					    "QoSChar_MaxService_Interval_%d",
+					    num_of_scs_desc);
+			if (!val) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"QoSChar_MaxService_Interval_%d empty",
+						num_of_scs_desc);
+				goto fail;
+			}
+			max_si = atoi(val);
+
+			val = get_param_fmt(cmd,
+					    "QoSChar_MinDataRate_%d",
+					    num_of_scs_desc);
+			if (!val) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"QoSChar_MinDataRate_%d empty",
+						num_of_scs_desc);
+				goto fail;
+			}
+			min_data_rate = atoi(val);
+
+			val = get_param_fmt(cmd,
+					    "QoSChar_DelayBound_%d",
+					    num_of_scs_desc);
+			if (!val) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"QoSChar_DelayBound_%d empty",
+						num_of_scs_desc);
+				goto fail;
+			}
+			delay_bound = atoi(val);
+
+			len = snprintf(pos, rem_len,
+				       " qos_characteristics %s min_si=%d"
+				       " max_si=%d min_data_rate=%d"
+				       " delay_bound=%d",
+				       direction_str[direction],
+				       min_si, max_si, min_data_rate,
+				       delay_bound);
+			if (len < 0 || len >= rem_len)
+				goto fail;
+
+			pos += len;
+			rem_len -= len;
+		}
+
 scs_desc_end:
 		num_of_tclas_elem = 0;
 		scs_id = get_param_fmt(cmd, "SCSDescrElem_SCSID_%d",
