@@ -22,6 +22,10 @@
 #define NAN_NEW_CERT_VERSION
 #endif
 
+#if (NAN_MAJOR_VERSION >= 4 && NAN_CERT_VERSION >= 6)
+#define WFA_CERT_NANR4
+#endif
+
 pthread_cond_t gCondition;
 pthread_mutex_t gMutex;
 static NanSyncStats global_nan_sync_stats;
@@ -462,6 +466,9 @@ int sigma_nan_enable(struct sigma_dut *dut, struct sigma_conn *conn,
 #ifdef NAN_NEW_CERT_VERSION
 	const char *ndpe = get_param(cmd, "NDPE");
 #endif
+#ifdef WFA_CERT_NANR4
+	const char *unsync_srvdsc = get_param(cmd, "UnsyncServDisc");
+#endif /* WFA_CERT_NANR4 */
 	struct timespec abstime;
 	NanEnableRequest req;
 
@@ -495,6 +502,17 @@ int sigma_nan_enable(struct sigma_dut *dut, struct sigma_conn *conn,
 		req.config_hop_count_force = 1;
 		req.hop_count_force_val = hop_count_val;
 	}
+
+#ifdef WFA_CERT_NANR4
+	if (unsync_srvdsc) {
+		req.config_unsync_srvdsc = 1;
+
+		if (strcasecmp(unsync_srvdsc, "Enable") == 0)
+			req.enable_unsync_srvdsc = 1;
+		else
+			req.enable_unsync_srvdsc = 0;
+	}
+#endif /* WFA_CERT_NANR4 */
 
 	if (sdftx_band) {
 		if (strcasecmp(sdftx_band, "5G") == 0) {
@@ -1507,6 +1525,10 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 #ifdef NAN_NEW_CERT_VERSION
 	const char *ndp_attr = get_param(cmd, "ndpAttr");
 #endif
+#ifdef WFA_CERT_NANR4
+	const char *fsd_gas = get_param(cmd, "FsdGas");
+	const char *fsd_req = get_param(cmd, "FsdReq");
+#endif /* WFA_CERT_NANR4 */
 	NanPublishRequest req;
 	NanConfigRequest config_req;
 	int filter_len_rx = 0, filter_len_tx = 0;
@@ -1548,8 +1570,14 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (publish_type) {
 		if (strcasecmp(publish_type, "Solicited") == 0) {
 			req.publish_type = NAN_PUBLISH_TYPE_SOLICITED;
+			req.tx_type = NAN_TX_TYPE_UNICAST;
 		} else if (strcasecmp(publish_type, "Unsolicited") == 0) {
 			req.publish_type = NAN_PUBLISH_TYPE_UNSOLICITED;
+		} else if (strcasecmp(publish_type,
+				      "solicited_unsolicited") == 0) {
+			req.publish_type =
+				NAN_PUBLISH_TYPE_UNSOLICITED_SOLICITED;
+			req.tx_type = NAN_TX_TYPE_UNICAST;
 		} else if (strcasecmp(publish_type, "Cancel") == 0) {
 			NanPublishCancelRequest req;
 
@@ -1620,6 +1648,17 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 			strlen(service_name) + 1);
 		req.service_name_len = strlen(service_name);
 	}
+
+#ifdef WFA_CERT_NANR4
+	if (fsd_gas) {
+		req.sdea_params.config_fsd_gas = 1;
+		req.sdea_params.enable_fsd_gas = atoi(fsd_gas);
+	}
+	if (fsd_req) {
+		req.sdea_params.config_fsd_req = 1;
+		req.sdea_params.enable_fsd_req = atoi(fsd_req);
+	}
+#endif /* WFA_CERT_NANR4 */
 
 	if (ndp_enable) {
 		if (strcasecmp(ndp_enable, "enable") == 0)
@@ -1915,8 +1954,20 @@ int sigma_nan_transmit_followup(struct sigma_dut *dut,
 	const char *requestor_id = get_param(cmd, "RemoteInstanceId");
 	const char *local_id = get_param(cmd, "LocalInstanceId");
 	const char *service_name = get_param(cmd, "servicename");
+#ifdef WFA_CERT_NANR4
+	const char *serv_info_absent = get_param(cmd, "ServInfoAbsent");
+	const char *serv_info_len = get_param(cmd, "ServSpecificInfoPayload");
+#endif /* WFA_CERT_NANR4 */
 	wifi_error ret;
 	NanTransmitFollowupRequest req;
+
+#ifdef WFA_CERT_NANR4
+	if (serv_info_absent && strcasecmp(serv_info_absent, "Absent") == 0) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "Service Info is Absent");
+		serv_info_len = NULL;
+		service_name = NULL;
+	}
+#endif /* WFA_CERT_NANR4 */
 
 	memset(&req, 0, sizeof(NanTransmitFollowupRequest));
 	req.requestor_instance_id = global_match_handle;
@@ -1931,6 +1982,22 @@ int sigma_nan_transmit_followup(struct sigma_dut *dut,
 
 	if (service_name)
 		req.service_specific_info_len = strlen(service_name);
+
+#ifdef WFA_CERT_NANR4
+	if (serv_info_len) {
+		req.sdea_service_specific_info_len = atoi(serv_info_len);
+		if (req.sdea_service_specific_info_len >
+		    NAN_MAX_SDEA_SERVICE_SPECIFIC_INFO_LEN) {
+			req.sdea_service_specific_info_len =
+				NAN_MAX_SDEA_SERVICE_SPECIFIC_INFO_LEN;
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"SDEA Service len is greater than max len");
+		}
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Service Info Len %d",
+				req.sdea_service_specific_info_len);
+	}
+#endif /* WFA_CERT_NANR4 */
 
 	if (requestor_id) {
 		/* int requestor_id_val = atoi(requestor_id); */
