@@ -2,6 +2,7 @@
  * Sigma Control API DUT (NAN functionality)
  * Copyright (c) 2014-2017, Qualcomm Atheros, Inc.
  * Copyright (c) 2018, The Linux Foundation
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc.
  * All Rights Reserved.
  * Licensed under the Clear BSD license. See README for more details.
  */
@@ -1075,8 +1076,13 @@ static int sigma_nan_data_request(struct sigma_dut *dut,
 		       sizeof(init_req.peer_disc_mac_addr));
 	}
 
-	/* Not requesting the channel and letting FW decide */
-	if (dut->sta_channel == 0) {
+	if (dut->data_ch_freq) {
+		init_req.channel_request_type = NAN_DP_FORCE_CHANNEL_SETUP;
+		init_req.channel = dut->data_ch_freq;
+		sigma_dut_print(dut, DUT_MSG_INFO, "%s: DATA CH FREQ = %d",
+				__func__, init_req.channel);
+	} else if (dut->sta_channel == 0) {
+		/* Not requesting the channel and letting FW decide */
 		init_req.channel_request_type = NAN_DP_CHANNEL_NOT_REQUESTED;
 		init_req.channel = 0;
 	} else {
@@ -2400,6 +2406,7 @@ void nan_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 	memset(&dut->nan_pmk[0], 0, NAN_PMK_INFO_LEN);
 	dut->nan_pmk_len = 0;
 	dut->sta_channel = 0;
+	dut->data_ch_freq = 0;
 	dut->ndpe = 0;
 	dut->trans_proto = NAN_TRANSPORT_PROTOCOL_DEFAULT;
 	dut->trans_port = NAN_TRANSPORT_PORT_DEFAULT;
@@ -2427,6 +2434,7 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *nan_op = get_param(cmd, "NANOp");
 	const char *method_type = get_param(cmd, "MethodType");
 	const char *band = get_param(cmd, "band");
+	const char *data_ch_freq = get_param(cmd, "DataChnlFreq");
 	const char *disc_mac_addr = get_param(cmd, "DiscoveryMacAddress");
 	char resp_buf[100];
 	wifi_error ret;
@@ -2501,6 +2509,8 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 					dut, conn, cmd,
 					NAN_DATA_PATH_SUPPORT_DUAL_BAND);
 			}
+			if (data_ch_freq)
+				dut->data_ch_freq = atoi(data_ch_freq);
 		} else if (strcasecmp(nan_op, "Off") == 0) {
 			nan_data_interface_delete(0,
 				dut->wifi_hal_iface_handle, (char *) "nan0");

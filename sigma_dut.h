@@ -961,6 +961,7 @@ struct sigma_dut {
 	const char *version;
 	int no_ip_addr_set;
 	int sta_channel;
+	int data_ch_freq;
 
 	const char *summary_log;
 	const char *hostapd_entropy_log;
