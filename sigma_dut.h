@@ -413,6 +413,66 @@ enum loc_i2r_lmr_policy {
 	LOC_ABORT_ON_I2R_LMR_POLICY_MISMATCH = 2,
 };
 
+#define NAN_MAX_COOKIE_LEN 64
+#define NAN_MAX_PASSWORD_LEN 63
+#define NAN_NIK_LEN 16
+
+enum nan_bootstrapping_state {
+	NAN_BOOTSTRAP_IDLE,
+	NAN_BOOTSTRAP_REQ_SENT,
+	NAN_BOOTSTRAP_REQ_RECVD,
+	NAN_BOOTSTRAP_COMEBACK_RSP_SENT,
+	NAN_BOOTSTRAP_COMEBACK_RSP_RECVD,
+	NAN_BOOTSTRAP_COMEBACK_REQ_SENT,
+	NAN_BOOTSTRAPPING_DONE,
+};
+
+enum secure_nan_role {
+	SECURE_NAN_IDLE,
+	SECURE_NAN_BOOTSTRAPPING_INITIATOR,
+	SECURE_NAN_BOOTSTRAPPING_RESPONDER,
+	SECURE_NAN_PAIRING_INITIATOR,
+	SECURE_NAN_PAIRING_RESPONDER,
+};
+
+struct device_pairing_info {
+	bool pairing_setup;
+	bool npk_nik_caching;
+	bool pairing_verification;
+	int bootstrapping_methods;
+	int dialog_token;
+	bool password_valid;
+	char password[NAN_MAX_PASSWORD_LEN];
+	bool nik_valid;
+	char nik[NAN_NIK_LEN];
+	enum secure_nan_role role;
+	bool trigger_verification;
+};
+
+enum nan_akm {
+	NAN_AKM_SAE,
+	NAN_AKM_PASN = 1
+};
+
+struct peer_pairing_info {
+	u16 publish_subscribe_id;
+	int pairing_instance_id;
+	char peer_mac_addr[ETH_ALEN];
+	bool pairing_setup;
+	bool npk_nik_caching;
+	bool pairing_verification;
+	int supported_bootstrap_methods;
+	int selected_bootstrap_method;
+	enum nan_bootstrapping_state bs_state;
+	bool nik_valid;
+	char nik[NAN_NIK_LEN];
+	enum secure_nan_role role;
+	int cookie_len;
+	char cookie[NAN_MAX_COOKIE_LEN];
+	enum nan_akm akm;
+	bool is_paired;
+};
+
 struct sigma_dut {
 	const char *main_ifname;
 	char *main_ifname_2g;
@@ -1074,6 +1134,8 @@ struct sigma_dut {
 	int dhcp_client_running;
 	int i2rlmr_iftmr;
 	int i2rlmrpolicy;
+	struct device_pairing_info dev_info;
+	struct peer_pairing_info peer_info;
 };
 
 

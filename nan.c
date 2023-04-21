@@ -2491,6 +2491,10 @@ void nan_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 	sigma_nan_disable(dut, conn, cmd);
 	global_header_handle = 0;
 	global_match_handle = 0;
+#ifdef WFA_CERT_NANR4
+	memset(&dut->dev_info, 0, sizeof(struct device_pairing_info));
+	memset(&dut->peer_info, 0, sizeof(struct peer_pairing_info));
+#endif /* WFA_CERT_NANR4 */
 }
 
 
