@@ -2504,6 +2504,15 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 				sigma_ndp_configure_band(
 					dut, conn, cmd,
 					NAN_DATA_PATH_SUPPORTED_BAND_2G);
+#if NAN_CERT_VERSION >= 6
+			} else if (band && strcasecmp(band, "24g_6g") == 0) {
+				sigma_dut_print(dut, DUT_MSG_INFO,
+						"%s: Setting band to 2G and 6G",
+						__func__);
+				sigma_ndp_configure_band(
+					dut, conn, cmd,
+					NAN_DATA_PATH_SUPPORTED_BAND_2G_6G);
+#endif
 			} else if (band && dut->sta_channel > 12) {
 				sigma_ndp_configure_band(
 					dut, conn, cmd,
