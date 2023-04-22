@@ -2898,6 +2898,10 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *bootstrap_method =
 		get_param(cmd, "Pairing_bootstrapmethod");
 	const char *nira = get_param(cmd, "NIRA");
+	const char *pincode_bstrapmethod =
+		get_param(cmd, "pincode_bstrapmethod");
+	const char *passphrase_bstrapmethod =
+		get_param(cmd, "passphrase_bstrapmethod");
 #endif /* WFA_CERT_NANR4 */
 	char resp_buf[100];
 	wifi_error ret;
@@ -3085,6 +3089,19 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 				dut->dev_info.bootstrapping_methods,
 				dut->dev_info.pairing_verification);
 	}
+
+	if (pincode_bstrapmethod) {
+		strlcpy(dut->dev_info.password, pincode_bstrapmethod,
+			sizeof(dut->dev_info.password));
+		dut->dev_info.password_valid = true;
+	}
+
+	if (passphrase_bstrapmethod) {
+		strlcpy(dut->dev_info.password, passphrase_bstrapmethod,
+			sizeof(dut->dev_info.password));
+		dut->dev_info.password_valid = true;
+	}
+
 #endif /* WFA_CERT_NANR4 */
 
 	return 0;
