@@ -3090,6 +3090,14 @@ static void ndp_event_data_confirm(NanDataPathConfirmInd *event)
 					"Failed to run: ip -6 neighbor replace");
 			return;
 		}
+
+#ifdef WFA_CERT_NANR4
+		if (system("ip route add multicast ff1e::/16 dev nan0 table local metric 100") !=
+		    0) {
+			sigma_dut_print(global_dut, DUT_MSG_ERROR,
+					"Failed to run ip route add multicast ff1e::/16 dev nan0 table local metric 100");
+		}
+ #endif /* WFA_CERT_NANR4 */
 	}
 }
 
