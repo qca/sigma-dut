@@ -1484,6 +1484,12 @@ static int sigma_nan_schedule_update(struct sigma_dut *dut,
 	const char *channel_availability = get_param(cmd,
 						     "ChannelAvailability");
 	const char *responder_nmi_mac = get_param(cmd, "ResponderNMI");
+#ifdef WFA_CERT_NANR4
+	const char *s3_entry_control = get_param(cmd, "S3EntryControl");
+	const char *s3_time_bitmap_control =
+		get_param(cmd, "S3TimeBitmapControl");
+	const char *s3_time_bitmap = get_param(cmd, "S3TimeBitmap");
+ #endif /* WFA_CERT_NANR4 */
 	NanDebugParams cfg_debug;
 	int size = 0;
 
@@ -1539,6 +1545,33 @@ static int sigma_nan_schedule_update(struct sigma_dut *dut,
 		sigma_dut_print(dut, DUT_MSG_INFO,
 				"%s: Schedule Update cmd type = %d", __func__,
 				cfg_debug.cmd);
+#ifdef WFA_CERT_NANR4
+	} else if (strcasecmp(schedule_update_type, "S3notify") == 0) {
+		NanS3Params s3_params;
+
+		cfg_debug.cmd = NAN_TEST_MODE_CMD_SCHED_UPDATE_S3_NOTIFY;
+		size = sizeof(u32);
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"%s: Schedule Update cmd type = %d", __func__,
+				cfg_debug.cmd);
+		memset(&s3_params, 0, sizeof(NanS3Params));
+		if (s3_entry_control && s3_time_bitmap_control &&
+		    s3_time_bitmap) {
+			s3_params.entry_control =
+				strtoul(s3_entry_control, NULL, 0);
+			s3_params.time_bitmap_control =
+				strtoul(s3_time_bitmap_control, NULL, 0);
+			s3_params.time_bitmap = strtoul(s3_time_bitmap,
+							NULL, 0);
+		}
+		memcpy(cfg_debug.debug_cmd_data, &s3_params,
+		       sizeof(NanS3Params));
+		size += sizeof(NanS3Params);
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"%s: Schedule Update cmd data with s3_entry_control= %s, s3_time_bitmap_control = %s, s3_time_bitmap %s, size = %d",
+				__func__, s3_entry_control,
+				s3_time_bitmap_control, s3_time_bitmap, size);
+ #endif /* WFA_CERT_NANR4 */
 	}
 
 	nan_debug_command_config(0, dut->wifi_hal_iface_handle, cfg_debug,
@@ -1896,8 +1929,10 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *cipher_suite = get_param(cmd, "CipherSuiteIdList");
 	const char *gtk_protection = get_param(cmd, "GTKProtection");
 	const char *cipher_capabilities = get_param(cmd, "CipherCapabilities");
+	const char *s3_capabilities = get_param(cmd, "S3Capabilities");
 #endif /* WFA_CERT_NANR4 */
 	NanPublishRequest req;
+	NanDebugParams cfg_debug;
 	NanConfigRequest config_req;
 	int filter_len_rx = 0, filter_len_tx = 0;
 	u8 input_rx[NAN_MAX_MATCH_FILTER_LEN];
@@ -1905,6 +1940,7 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 	wifi_error ret;
 
 	memset(&req, 0, sizeof(NanPublishRequest));
+	memset(&cfg_debug, 0, sizeof(NanDebugParams));
 	memset(&config_req, 0, sizeof(NanConfigRequest));
 	req.ttl = 0;
 	req.period = 1;
@@ -2152,10 +2188,8 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 
 #ifdef NAN_NEW_CERT_VERSION
 	if (dut->ndpe && ndp_attr) {
-		NanDebugParams cfg_debug;
 		int ndp_attr_val, size;
 
-		memset(&cfg_debug, 0, sizeof(NanDebugParams));
 		cfg_debug.cmd = NAN_TEST_MODE_CMD_ENABLE_NDP;
 		if (strcasecmp(ndp_attr, "Absent") == 0)
 			ndp_attr_val = NAN_NDP_ATTR_ABSENT;
@@ -2175,7 +2209,6 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (dut->ndpe) {
 		unsigned char nan_mac_addr[ETH_ALEN];
 		size_t len = 0, tlv_len = 0;
-		NanDebugParams cfg_debug;
 		NdpIpTransParams ndp_ip_trans_param;
 		u8 *p_buf;
 
@@ -2245,6 +2278,12 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 		sigma_dut_print(dut, DUT_MSG_INFO,
 				"%s: NAN Bootstrapping Method: %d", __func__,
 				dut->dev_info.bootstrapping_methods);
+	}
+
+	if (s3_capabilities) {
+		req.s3_capabilities = atoi(s3_capabilities);
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"S3 Capabilities: %d", req.s3_capabilities);
 	}
 #endif /* WFA_CERT_NANR4 */
 
@@ -3223,9 +3262,14 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 		get_param(cmd, "PairingSetup_PASN");
 	const char *pairing_verification_pasn =
 		get_param(cmd, "PairingVerification_PASN");
+	const char *s3_entry_control = get_param(cmd, "S3EntryControl");
+	const char *s3_time_bitmap_control =
+		get_param(cmd, "S3TimeBitmapControl");
+	const char *s3_time_bitmap = get_param(cmd, "S3TimeBitmap");
 #endif /* WFA_CERT_NANR4 */
 	char resp_buf[100];
 	wifi_error ret;
+	NanDebugParams cfg_debug;
 
 	if (program == NULL)
 		return -1;
@@ -3236,13 +3280,12 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 		return 0;
 	}
 
+	memset(&cfg_debug, 0, sizeof(NanDebugParams));
 	if (nan_op) {
 #if NAN_CERT_VERSION >= 3
 		int size = 0;
 		u32 device_type_val = 0;
-		NanDebugParams cfg_debug;
 
-		memset(&cfg_debug, 0, sizeof(NanDebugParams));
 		cfg_debug.cmd = NAN_TEST_MODE_CMD_DEVICE_TYPE;
 		if (dut->device_type == STA_testbed)
 			device_type_val = NAN_DEVICE_TYPE_TEST_BED;
@@ -3428,6 +3471,39 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 
 	if (pairing_verification_pasn)
 		sigma_nan_pairing_verification(dut, conn, cmd);
+
+	if (s3_entry_control && s3_time_bitmap_control && s3_time_bitmap) {
+		NanS3Params s3_params;
+		int ret, size;
+
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"S3 Interface Attr: Entry Control %s, Time Bitmap Control %s, Time bitmap %s",
+				s3_entry_control, s3_time_bitmap_control,
+				s3_time_bitmap);
+
+		memset(&s3_params, 0, sizeof(NanS3Params));
+		cfg_debug.cmd = NAN_TEST_MODE_CMD_S3_ATTR_PARAMS;
+
+		s3_params.entry_control = strtoul(s3_entry_control, NULL, 0);
+		s3_params.time_bitmap_control =
+			strtoul(s3_time_bitmap_control, NULL, 0);
+		s3_params.time_bitmap = strtoul(s3_time_bitmap, NULL, 0);
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"S3 Interface Attr: Entry Control %d, Time Bitmap Control %d, Time bitmap %d",
+				s3_params.entry_control,
+				s3_params.time_bitmap_control,
+				s3_params.time_bitmap);
+		memcpy(cfg_debug.debug_cmd_data, &s3_params,
+		       sizeof(NanS3Params));
+		size = sizeof(u32) + sizeof(NanS3Params);
+		ret = nan_debug_command_config(0, dut->wifi_hal_iface_handle,
+					       cfg_debug, size);
+		if (ret != WIFI_SUCCESS) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "NAN config s3 interface failed");
+			return 0;
+		}
+	}
 #endif /* WFA_CERT_NANR4 */
 
 	return 0;
