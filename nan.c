@@ -2378,6 +2378,7 @@ int sigma_nan_transmit_followup(struct sigma_dut *dut,
 #ifdef WFA_CERT_NANR4
 	const char *serv_info_absent = get_param(cmd, "ServInfoAbsent");
 	const char *serv_info_len = get_param(cmd, "ServSpecificInfoPayload");
+	const char *nan_id_key = get_param(cmd, "NANIdKey");
 #endif /* WFA_CERT_NANR4 */
 	wifi_error ret;
 	NanTransmitFollowupRequest req;
@@ -2444,6 +2445,12 @@ int sigma_nan_transmit_followup(struct sigma_dut *dut,
 		return -1;
 	}
 	nan_parse_mac_address(dut, mac, req.addr);
+
+#ifdef WFA_CERT_NANR4
+	if (nan_id_key && ((strcasecmp(nan_id_key, "Requestor") == 0) ||
+			   (strcasecmp(nan_id_key, "Responder") == 0)))
+		req.shared_key_desc_flag = 1;
+#endif /* WFA_CERT_NANR4 */
 
 	ret = nan_transmit_followup_request(0, dut->wifi_hal_iface_handle,
 					    &req);
