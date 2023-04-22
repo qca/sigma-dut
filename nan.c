@@ -3440,7 +3440,8 @@ int nan_cmd_sta_get_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 
 	const char *program = get_param(cmd, "Program");
 	const char *parameter = get_param(cmd, "Parameter");
-	char resp_buf[100];
+	const char *peer_mac = get_param(cmd, "peermac");
+	char resp_buf[200];
 	NanStatsRequest req;
 	struct timespec abstime;
 	u64 master_rank;
@@ -3453,6 +3454,12 @@ int nan_cmd_sta_get_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 #if NAN_CERT_VERSION >= 3
 	u32 sched_update_channel_freq;
 #endif
+#ifdef WFA_CERT_NANR4
+	int i;
+	char *temp;
+	char string[100];
+	wifi_error ret;
+#endif /* WFA_CERT_NANR4 */
 
 	if (program == NULL) {
 		sigma_dut_print(dut, DUT_MSG_ERROR, "Invalid Program Name");
@@ -3548,6 +3555,49 @@ int nan_cmd_sta_get_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 		snprintf(resp_buf, sizeof(resp_buf), "schedupdatechannel,%d",
 			 freq_to_channel(sched_update_channel_freq));
 #endif
+#ifdef WFA_CERT_NANR4
+	} else if (strcasecmp(parameter, "TK") == 0) {
+		NanPairingTK msg;
+
+		memset(&msg, 0, sizeof(NanPairingTK));
+		if (!peer_mac) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Invalid MAC address");
+			return -1;
+		}
+		nan_parse_mac_address(dut, peer_mac, msg.bssid);
+		ret = nan_get_pairing_tk(0, dut->wifi_hal_iface_handle, &msg);
+		if (ret) {
+			sigma_dut_print(dut, DUT_MSG_ERROR, "Request failed");
+			return -1;
+		}
+		temp = string;
+		for (i = 0; i < msg.tk_len; i++)
+			temp += sprintf(temp, "%02x", msg.tk[i]);
+		string[msg.tk_len * 2] = '\0';
+		snprintf(resp_buf, sizeof(resp_buf), "TK,%s", string);
+	} else if (strcasecmp(parameter, "PMKID") == 0) {
+		NanPairingPmkid msg;
+
+		memset(&msg, 0, sizeof(NanPairingPmkid));
+		if (!peer_mac) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Invalid MAC address");
+			return -1;
+		}
+		nan_parse_mac_address(dut, peer_mac, msg.bssid);
+		ret = nan_get_pairing_pmkid(0, dut->wifi_hal_iface_handle,
+					    &msg);
+		if (ret) {
+			sigma_dut_print(dut, DUT_MSG_ERROR, "Request failed");
+			return -1;
+		}
+		temp = string;
+		for (i = 0; i < msg.pmkid_len; i++)
+			temp += sprintf(temp, "%02x", msg.pmkid[i]);
+		string[msg.pmkid_len * 2] = '\0';
+		snprintf(resp_buf, sizeof(resp_buf), "PMKID,%s", string);
+#endif /* WFA_CERT_NANR4 */
 	} else {
 		send_resp(dut, conn, SIGMA_ERROR, "Invalid Parameter");
 		return 0;
