@@ -3100,8 +3100,22 @@ static NanCallbackHandler callbackHandler = {
 	.EventFollowup = nan_event_followup,
 	.EventDiscEngEvent = nan_event_disceng_event,
 	.EventDisabled = nan_event_disabled,
+	.EventTca = NULL,
+	.EventBeaconSdfPayload = NULL,
 	.EventDataRequest = ndp_event_data_indication,
 	.EventDataConfirm = ndp_event_data_confirm,
+	.EventDataEnd = NULL,
+	.EventTransmitFollowup = NULL,
+	.EventRangeRequest = NULL,
+	.EventRangeReport = NULL,
+	.EventScheduleUpdate = NULL,
+#ifdef WFA_CERT_NANR4
+	.EventPairingRequest = nan_event_pairing_request_indication,
+	.EventPairingConfirm = nan_event_pairing_confirm,
+	.EventBootstrappingRequest = nan_event_bootstrapping_request_ind,
+	.EventBootstrappingConfirm = nan_event_bootstrapping_confirm_ind,
+	.EventSuspensionModeChange = NULL,
+#endif /* WFA_CERT_NANR4 */
 };
 
 
