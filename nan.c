@@ -471,6 +471,7 @@ int sigma_nan_enable(struct sigma_dut *dut, struct sigma_conn *conn,
 #endif
 #ifdef WFA_CERT_NANR4
 	const char *unsync_srvdsc = get_param(cmd, "UnsyncServDisc");
+	const char *country_code = get_param(cmd, "CountryCode");
 #endif /* WFA_CERT_NANR4 */
 	struct timespec abstime;
 	NanEnableRequest req;
@@ -514,6 +515,18 @@ int sigma_nan_enable(struct sigma_dut *dut, struct sigma_conn *conn,
 			req.enable_unsync_srvdsc = 1;
 		else
 			req.enable_unsync_srvdsc = 0;
+	}
+
+	if (country_code) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s - set country %s",
+				__func__, country_code);
+		wifi_set_country_code(dut->wifi_hal_iface_handle, country_code);
+		/*
+		 * Intended sleep to trigger NAN enable after setting the
+		 * country code.
+		 */
+		usleep(200000);
 	}
 #endif /* WFA_CERT_NANR4 */
 
