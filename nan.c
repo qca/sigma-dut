@@ -52,8 +52,8 @@ static const u8 nan_wfa_oui[] = { 0x50, 0x6f, 0x9a };
 #define NAN_INTF_ID_LEN   8
 
 struct sigma_dut *global_dut = NULL;
-static char global_nan_mac_addr[ETH_ALEN];
-static char global_peer_mac_addr[ETH_ALEN];
+static u8 global_nan_mac_addr[ETH_ALEN];
+static u8 global_peer_mac_addr[ETH_ALEN];
 static char global_event_resp_buf[1024];
 static u8 global_publish_service_name[NAN_MAX_SERVICE_NAME_LEN];
 static u32 global_publish_service_name_len = 0;
