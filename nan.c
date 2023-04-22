@@ -59,6 +59,9 @@ static u8 global_publish_service_name[NAN_MAX_SERVICE_NAME_LEN];
 static u32 global_publish_service_name_len = 0;
 static u8 global_subscribe_service_name[NAN_MAX_SERVICE_NAME_LEN];
 static u32 global_subscribe_service_name_len = 0;
+#ifdef WFA_CERT_NANR4
+static NanPairingConfig global_peer_pairing_cfg;
+#endif /* WFA_CERT_NANR4 */
 
 static int nan_further_availability_tx(struct sigma_dut *dut,
 				       struct sigma_conn *conn,
@@ -1571,6 +1574,295 @@ int config_post_disc_attr(struct sigma_dut *dut)
 }
 
 
+#ifdef WFA_CERT_NANR4
+
+int sigma_nan_pairing_setup(struct sigma_dut *dut, struct sigma_conn *conn,
+			    struct sigma_cmd *cmd)
+{
+	wifi_error ret;
+	NanPairingRequest req;
+	const char *mac = get_param(cmd, "mac");
+	const char *requestor_id = get_param(cmd, "RemoteInstanceId");
+	const char *pairing_setup_pasn = get_param(cmd, "PairingSetup_PASN");
+
+	if (!mac) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Invalid MAC Address");
+		return -1;
+	}
+
+	if (strcasecmp(pairing_setup_pasn, "Responder") == 0) {
+		nan_parse_mac_address(dut, mac, dut->peer_info.peer_mac_addr);
+		dut->peer_info.role = SECURE_NAN_PAIRING_INITIATOR;
+		dut->dev_info.role = SECURE_NAN_PAIRING_RESPONDER;
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Set Responder for Pairing setup");
+		return 0;
+	}
+
+	memset(&req, 0, sizeof(NanPairingRequest));
+
+	req.requestor_instance_id = global_match_handle;
+	nan_parse_mac_address(dut, mac, req.peer_disc_mac_addr);
+
+	if (requestor_id) {
+		if (global_match_handle != 0) {
+			req.requestor_instance_id = global_match_handle;
+		} else {
+			u32 requestor_id_val = atoi(requestor_id);
+
+			requestor_id_val =
+				(requestor_id_val << 24) | 0x0000FFFF;
+			req.requestor_instance_id = requestor_id_val;
+		}
+	}
+
+	if (memcmp(dut->peer_info.peer_mac_addr, req.peer_disc_mac_addr,
+		   NAN_MAC_ADDR_LEN) != 0)
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Pairing request with unmatched peer");
+
+	strlcpy(req.key_info.body.passphrase_info.passphrase,
+		dut->dev_info.password,
+		sizeof(req.key_info.body.passphrase_info.passphrase));
+
+	req.key_info.body.passphrase_info.passphrase_len =
+		strlen(dut->dev_info.password);
+	req.nan_pairing_request_type = NAN_PAIRING_SETUP;
+
+	if (memcmp(global_peer_mac_addr, req.peer_disc_mac_addr,
+		   NAN_MAC_ADDR_LEN) == 0) {
+		dut->peer_info.pairing_setup =
+			global_peer_pairing_cfg.enable_pairing_setup;
+		dut->peer_info.npk_nik_caching =
+			global_peer_pairing_cfg.enable_pairing_cache;
+		dut->peer_info.pairing_verification =
+			global_peer_pairing_cfg.enable_pairing_verification;
+	}
+
+	if (dut->dev_info.npk_nik_caching || dut->peer_info.npk_nik_caching)
+		req.enable_pairing_cache = true;
+
+	if (dut->peer_info.selected_bootstrap_method &
+	    NAN_PAIRING_BOOTSTRAPPING_OPPORTUNISTIC_MASK) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Pairing setup with Opportunistic Bootstrapping");
+		req.is_opportunistic = true;
+		dut->peer_info.akm = NAN_AKM_PASN;
+		req.akm = PASN;
+	} else {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Pairing setup with Password");
+		req.is_opportunistic = false;
+		dut->peer_info.akm = NAN_AKM_SAE;
+		req.akm = SAE;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_INFO,
+			"Pairing Request params: req type = %d, auth = %d, npk_nik_cache = %d, peer MAC:"
+			MAC_ADDR_STR " passphrase %s",
+			req.nan_pairing_request_type, req.is_opportunistic,
+			req.enable_pairing_cache,
+			MAC_ADDR_ARRAY(req.peer_disc_mac_addr),
+			req.key_info.body.passphrase_info.passphrase);
+
+	ret = nan_pairing_request(0, dut->wifi_hal_iface_handle, &req);
+	if (ret != WIFI_SUCCESS) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Unable to send Pairing request: retval = %d",
+				ret);
+		return -1;
+	}
+
+	dut->dev_info.role = SECURE_NAN_PAIRING_INITIATOR;
+	dut->peer_info.role = SECURE_NAN_PAIRING_RESPONDER;
+	sigma_dut_print(dut, DUT_MSG_INFO, "NAN Pairing Setup request sent");
+
+	return 0;
+}
+
+
+void nan_event_pairing_request_indication(NanPairingRequestInd *event)
+{
+	NanPairingIndicationResponse msg;
+
+	sigma_dut_print(global_dut, DUT_MSG_INFO,
+			"Pairing Request indication : pub_sub_id %d, requestor instance id = %d, pairing id = %d, peer MAC:"
+			MAC_ADDR_STR " req type = %d, npk_nik_cache = %d",
+			event->publish_subscribe_id,
+			event->requestor_instance_id,
+			event->pairing_instance_id,
+			MAC_ADDR_ARRAY(event->peer_disc_mac_addr),
+			event->nan_pairing_request_type,
+			event->enable_pairing_cache);
+
+	if (global_dut->dev_info.role == SECURE_NAN_PAIRING_RESPONDER &&
+	    memcmp(global_dut->peer_info.peer_mac_addr,
+		   event->peer_disc_mac_addr,
+		   NAN_MAC_ADDR_LEN)) {
+		sigma_dut_print(global_dut, DUT_MSG_INFO,
+				"Pairing request Indication of unmatched peer");
+		return;
+	}
+
+	if (global_dut->peer_info.is_paired)
+		sigma_dut_print(global_dut, DUT_MSG_INFO,
+				"Pairing request Indication of already paired peer");
+
+	memset(&msg, 0, sizeof(NanPairingIndicationResponse));
+	msg.pairing_instance_id = event->pairing_instance_id;
+	msg.nan_pairing_request_type = event->nan_pairing_request_type;
+	msg.rsp_code = NAN_PAIRING_REQUEST_ACCEPT;
+	msg.enable_pairing_cache = global_dut->dev_info.npk_nik_caching;
+
+	if (global_dut->peer_info.selected_bootstrap_method &
+	    NAN_PAIRING_BOOTSTRAPPING_OPPORTUNISTIC_MASK) {
+		msg.is_opportunistic = true;
+		global_dut->peer_info.akm = NAN_AKM_PASN;
+		msg.akm = PASN;
+	} else {
+		msg.is_opportunistic = false;
+		global_dut->peer_info.akm = NAN_AKM_SAE;
+		msg.akm = SAE;
+	}
+
+	if (global_dut->dev_info.trigger_verification) {
+		sigma_dut_print(global_dut, DUT_MSG_INFO,
+				"trigger Pairing verification");
+		msg.nan_pairing_request_type = NAN_PAIRING_VERIFICATION;
+	}
+
+	if (msg.nan_pairing_request_type == NAN_PAIRING_SETUP) {
+		msg.key_info.key_type = NAN_SECURITY_KEY_INPUT_PASSPHRASE;
+		strlcpy(msg.key_info.body.passphrase_info.passphrase,
+			global_dut->dev_info.password,
+			sizeof(msg.key_info.body.passphrase_info.passphrase));
+
+		msg.key_info.body.passphrase_info.passphrase_len =
+			strlen(global_dut->dev_info.password);
+	} else {
+		memcpy(msg.nan_identity_key, global_dut->dev_info.nik,
+		       NAN_IDENTITY_KEY_LEN);
+	}
+
+	nan_pairing_indication_response(0, global_dut->wifi_hal_iface_handle,
+					&msg);
+	sigma_dut_print(global_dut, DUT_MSG_INFO,
+			"NAN Pairing Indication Rsp sent");
+}
+
+
+void nan_event_pairing_confirm(NanPairingConfirmInd *event)
+{
+	sigma_dut_print(global_dut, DUT_MSG_INFO,
+			"Pairing Confirm params: pairing id = %d, type = %d, npk_nik_cache = %d, rsp_code %d, reason_code %d",
+			event->pairing_instance_id,
+			event->nan_pairing_request_type,
+			event->enable_pairing_cache,
+			event->rsp_code, event->reason_code);
+
+	if (event->rsp_code == NAN_PAIRING_REQUEST_ACCEPT) {
+		sigma_dut_print(global_dut, DUT_MSG_INFO,
+				"Pairing Confirm Success");
+		memcpy(global_dut->dev_info.nik,
+		       event->npk_security_association.local_nan_identity_key,
+		       NAN_IDENTITY_KEY_LEN);
+		memcpy(global_dut->peer_info.nik,
+		       event->npk_security_association.peer_nan_identity_key,
+		       NAN_IDENTITY_KEY_LEN);
+		global_dut->peer_info.is_paired = true;
+	} else {
+		sigma_dut_print(global_dut, DUT_MSG_INFO,
+				"Pairing Confirm Failed");
+		global_dut->peer_info.is_paired = false;
+	}
+}
+
+
+int sigma_nan_pairing_verification(struct sigma_dut *dut,
+				   struct sigma_conn *conn,
+				   struct sigma_cmd *cmd)
+{
+	wifi_error ret;
+	NanPairingRequest req;
+	const char *mac = get_param(cmd, "mac");
+	const char *requestor_id = get_param(cmd, "RemoteInstanceId");
+	const char *pairingverification_pasn =
+				get_param(cmd, "PairingVerification_PASN");
+
+	if (!mac) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Invalid MAC Address");
+		return -1;
+	}
+	if (strcasecmp(pairingverification_pasn, "Responder") == 0) {
+		nan_parse_mac_address(dut, mac, dut->peer_info.peer_mac_addr);
+		dut->peer_info.role = SECURE_NAN_PAIRING_INITIATOR;
+		dut->dev_info.role = SECURE_NAN_PAIRING_RESPONDER;
+		dut->dev_info.trigger_verification = true;
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Set Responder for Pairing verification");
+		return 0;
+	}
+
+	memset(&req, 0, sizeof(NanPairingRequest));
+
+	req.requestor_instance_id = global_match_handle;
+	nan_parse_mac_address(dut, mac, req.peer_disc_mac_addr);
+
+	if (requestor_id) {
+		if (global_match_handle != 0) {
+			req.requestor_instance_id = global_match_handle;
+		} else {
+			u32 requestor_id_val = atoi(requestor_id);
+
+			requestor_id_val =
+				(requestor_id_val << 24) | 0x0000FFFF;
+			req.requestor_instance_id = requestor_id_val;
+		}
+	}
+
+	if (memcmp(dut->peer_info.peer_mac_addr, req.peer_disc_mac_addr,
+		   NAN_MAC_ADDR_LEN) != 0) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Pairing request with unmatched peer");
+	}
+	req.nan_pairing_request_type = NAN_PAIRING_VERIFICATION;
+
+	if (memcmp(global_peer_mac_addr, req.peer_disc_mac_addr,
+		   NAN_MAC_ADDR_LEN) == 0) {
+		dut->peer_info.pairing_setup =
+			global_peer_pairing_cfg.enable_pairing_setup;
+		dut->peer_info.npk_nik_caching =
+			global_peer_pairing_cfg.enable_pairing_cache;
+		dut->peer_info.pairing_verification =
+			global_peer_pairing_cfg.enable_pairing_verification;
+	}
+
+	if (dut->dev_info.npk_nik_caching || dut->peer_info.npk_nik_caching)
+		req.enable_pairing_cache = true;
+
+	sigma_dut_print(dut, DUT_MSG_INFO,
+			"Pairing Verification Request params: npk_nik_cache %d, peer MAC: "
+			MAC_ADDR_STR,
+			req.enable_pairing_cache,
+			MAC_ADDR_ARRAY(req.peer_disc_mac_addr));
+
+	ret = nan_pairing_request(0, dut->wifi_hal_iface_handle, &req);
+	if (ret != WIFI_SUCCESS) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Unable to send Pairing Verification: retval = %d",
+				ret);
+		return -1;
+	}
+	dut->dev_info.role = SECURE_NAN_PAIRING_INITIATOR;
+	dut->peer_info.role = SECURE_NAN_PAIRING_RESPONDER;
+	sigma_dut_print(dut, DUT_MSG_INFO,
+			"NAN Pairing Verification request sent");
+	return 0;
+}
+
+#endif /* WFA_CERT_NANR4 */
+
+
 int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 			      struct sigma_cmd *cmd)
 {
@@ -2447,6 +2739,10 @@ void nan_event_match(NanMatchInd *event)
 	global_header_handle = event->publish_subscribe_id;
 	global_match_handle = event->requestor_instance_id;
 	memcpy(global_peer_mac_addr, event->addr, sizeof(global_peer_mac_addr));
+#ifdef WFA_CERT_NANR4
+	memcpy(&global_peer_pairing_cfg, &event->peer_pairing_config,
+	       sizeof(NanPairingConfig));
+#endif /* WFA_CERT_NANR4 */
 
 	/* memset(event_resp_buf, 0, sizeof(event_resp_buf)); */
 	/* global_pub_sub_handle = event->header.handle; */
@@ -2902,6 +3198,10 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 		get_param(cmd, "pincode_bstrapmethod");
 	const char *passphrase_bstrapmethod =
 		get_param(cmd, "passphrase_bstrapmethod");
+	const char *pairing_setup_pasn =
+		get_param(cmd, "PairingSetup_PASN");
+	const char *pairing_verification_pasn =
+		get_param(cmd, "PairingVerification_PASN");
 #endif /* WFA_CERT_NANR4 */
 	char resp_buf[100];
 	wifi_error ret;
@@ -3102,6 +3402,11 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 		dut->dev_info.password_valid = true;
 	}
 
+	if (pairing_setup_pasn)
+		sigma_nan_pairing_setup(dut, conn, cmd);
+
+	if (pairing_verification_pasn)
+		sigma_nan_pairing_verification(dut, conn, cmd);
 #endif /* WFA_CERT_NANR4 */
 
 	return 0;
