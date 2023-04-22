@@ -2164,6 +2164,214 @@ int sigma_nan_transmit_followup(struct sigma_dut *dut,
 }
 
 
+#ifdef WFA_CERT_NANR4
+
+int sigma_nan_bootstrapping_request(struct sigma_dut *dut,
+				    struct sigma_conn *conn,
+				    struct sigma_cmd *cmd)
+{
+	wifi_error ret;
+	u32 cookie_length = 0;
+	NanBootstrappingRequest *req;
+	const char *mac = get_param(cmd, "mac");
+	const char *requestor_id = get_param(cmd, "RemoteInstanceId");
+	const char *local_id = get_param(cmd, "LocalInstanceId");
+	const char *service_name = get_param(cmd, "servicename");
+	const char *nan_bootstrapping_status =
+		get_param(cmd, "NanBootstrappingStatus");
+	const char *pairing_bootstrapmethod =
+		get_param(cmd, "Pairing_bootstrapmethod");
+
+	if (nan_bootstrapping_status &&
+	    atoi(nan_bootstrapping_status) ==
+	    NAN_BOOTSTRAPPING_REQUEST_COMEBACK)
+		cookie_length = dut->peer_info.cookie_len;
+
+	req = (NanBootstrappingRequest *)
+		malloc(sizeof(NanBootstrappingRequest) + cookie_length);
+	if (!req) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Memory Allocation Failed");
+		return -1;
+	}
+
+	memset(req, 0, sizeof(NanBootstrappingRequest) + cookie_length);
+	req->requestor_instance_id = global_match_handle;
+	req->request_bootstrapping_method =
+		dut->peer_info.selected_bootstrap_method;
+
+	if (requestor_id) {
+		if (global_match_handle != 0) {
+			req->requestor_instance_id = global_match_handle;
+		} else {
+			u32 requestor_id_val = atoi(requestor_id);
+
+			requestor_id_val =
+				(requestor_id_val << 24) | 0x0000FFFF;
+			req->requestor_instance_id = requestor_id_val;
+		}
+	}
+	if (!mac) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Invalid MAC Address");
+		free(req);
+		return -1;
+	}
+	nan_parse_mac_address(dut, mac, req->peer_disc_mac_addr);
+
+	if (service_name)
+		req->service_specific_info_len = strlen(service_name);
+
+	if (pairing_bootstrapmethod)
+		req->request_bootstrapping_method =
+			(int) strtol(pairing_bootstrapmethod, NULL, 0);
+
+	if (cookie_length) {
+		req->cookie_length = cookie_length;
+		memcpy(req->cookie, dut->peer_info.cookie, cookie_length);
+	}
+
+	ret = nan_bootstrapping_request(0, dut->wifi_hal_iface_handle, req);
+	if (ret != WIFI_SUCCESS) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "Unable to complete NAN Bootstrapping request");
+		free(req);
+		return -1;
+	}
+
+	dut->peer_info.bs_state = NAN_BOOTSTRAP_REQ_SENT;
+	dut->dev_info.role = SECURE_NAN_BOOTSTRAPPING_INITIATOR;
+	dut->peer_info.selected_bootstrap_method =
+		req->request_bootstrapping_method;
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "NAN Bootsrapping Request sent");
+	free(req);
+	return 0;
+}
+
+
+int sigma_nan_bootstrapping_indication_response(struct sigma_dut *dut,
+						struct sigma_conn *conn,
+						struct sigma_cmd *cmd)
+{
+	wifi_error ret;
+	const char *mac = get_param(cmd, "mac");
+	const char *requestor_id = get_param(cmd, "RemoteInstanceId");
+	const char *local_id = get_param(cmd, "LocalInstanceId");
+	const char *service_name = get_param(cmd, "servicename");
+	const char *nan_bootstrapping_status =
+		get_param(cmd, "NanBootstrappingStatus");
+	const char *pairing_bootstrapmethod =
+		get_param(cmd, "Pairing_bootstrapmethod");
+	const char *comeback_after = get_param(cmd, "ComebackAfter");
+	NanBootstrappingIndicationResponse msg;
+
+	if (dut->dev_info.role == SECURE_NAN_BOOTSTRAPPING_RESPONDER &&
+	    dut->peer_info.bs_state != NAN_BOOTSTRAP_REQ_RECVD) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"NAN Bootstrapping Indication Rsp not allowed");
+		return -1;
+	}
+
+	memset(&msg, 0, sizeof(NanBootstrappingIndicationResponse));
+	msg.service_instance_id = global_match_handle;
+
+	if (requestor_id) {
+		if (global_match_handle != 0) {
+			msg.service_instance_id = global_match_handle;
+		} else {
+			u32 requestor_id_val = atoi(requestor_id);
+
+			requestor_id_val =
+				(requestor_id_val << 24) | 0x0000FFFF;
+			msg.service_instance_id = requestor_id_val;
+		}
+	}
+
+	if (!mac) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Invalid MAC Address");
+		return -1;
+	}
+	nan_parse_mac_address(dut, mac, msg.peer_disc_mac_addr);
+
+	if (memcmp(dut->peer_info.peer_mac_addr, msg.peer_disc_mac_addr,
+		   NAN_MAC_ADDR_LEN) != 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Bootstrap request Ind received from other peer: "
+				MAC_ADDR_STR,
+				MAC_ADDR_ARRAY(dut->peer_info.peer_mac_addr));
+	}
+
+	if (service_name)
+		msg.service_specific_info_len = strlen(service_name);
+
+	if (pairing_bootstrapmethod) {
+		int bootstrapping_method =
+			(int) strtol(pairing_bootstrapmethod, NULL, 0);
+
+		if (bootstrapping_method &
+		    dut->peer_info.supported_bootstrap_methods) {
+			dut->peer_info.selected_bootstrap_method =
+				bootstrapping_method;
+		} else {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Bootstrap method mismatch. DUT method %d, Peer method %d",
+					bootstrapping_method,
+					dut->peer_info.supported_bootstrap_methods);
+		}
+	}
+
+	if (nan_bootstrapping_status)
+		msg.rsp_code = atoi(nan_bootstrapping_status);
+	if (comeback_after)
+		msg.come_back_delay = atoi(comeback_after);
+
+	ret = nan_bootstrapping_indication_response(0,
+						    dut->wifi_hal_iface_handle,
+						    &msg);
+	if (ret != WIFI_SUCCESS) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "Unable to complete Bootstrapping Indication Rsp");
+		return -1;
+	}
+
+	if (comeback_after) {
+		dut->peer_info.bs_state = NAN_BOOTSTRAP_COMEBACK_RSP_SENT;
+	} else {
+		dut->peer_info.bs_state = NAN_BOOTSTRAPPING_DONE;
+		dut->peer_info.selected_bootstrap_method =
+			(int) strtol(pairing_bootstrapmethod, NULL, 0);
+	}
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"NAN Bootsrapping Indication Response sent");
+
+	return 0;
+}
+
+#endif /* WFA_CERT_NANR4 */
+
+
+int sigma_nan_handle_followup_method(struct sigma_dut *dut,
+				     struct sigma_conn *conn,
+				     struct sigma_cmd *cmd)
+{
+#ifdef WFA_CERT_NANR4
+	const char *followup_type = get_param(cmd, "followuptype");
+	const char *pairing_bootstrapmethod =
+		get_param(cmd, "Pairing_bootstrapmethod");
+	const char *nan_bootstrapping_status =
+		get_param(cmd, "NanBootstrappingStatus");
+
+	if (followup_type &&
+	    (pairing_bootstrapmethod || nan_bootstrapping_status)) {
+		if (strcasecmp(followup_type, "request") == 0)
+			return sigma_nan_bootstrapping_request(dut, conn, cmd);
+		return sigma_nan_bootstrapping_indication_response(dut, conn,
+								   cmd);
+	}
+#endif /* WFA_CERT_NANR4 */
+
+	return sigma_nan_transmit_followup(dut, conn, cmd);
+}
+
+
 /* NotifyResponse invoked to notify the status of the Request */
 void nan_notify_response(transaction_id id, NanResponseMsg *rsp_data)
 {
@@ -2531,6 +2739,54 @@ static void ndp_event_data_confirm(NanDataPathConfirmInd *event)
 }
 
 
+#ifdef WFA_CERT_NANR4
+
+/* Events callback */
+void nan_event_bootstrapping_request_ind(NanBootstrappingRequestInd *event)
+{
+	sigma_dut_print(global_dut, DUT_MSG_INFO,
+			"Bootstrapping request Ind, peer: " MAC_ADDR_STR,
+			MAC_ADDR_ARRAY(event->peer_disc_mac_addr));
+	memcpy(global_dut->peer_info.peer_mac_addr, event->peer_disc_mac_addr,
+	       NAN_MAC_ADDR_LEN);
+	global_dut->peer_info.bs_state = NAN_BOOTSTRAP_REQ_RECVD;
+	global_dut->dev_info.role = SECURE_NAN_BOOTSTRAPPING_RESPONDER;
+	global_dut->peer_info.role = SECURE_NAN_BOOTSTRAPPING_INITIATOR;
+	global_dut->peer_info.supported_bootstrap_methods =
+		event->request_bootstrapping_method;
+}
+
+
+/* Events callback */
+void nan_event_bootstrapping_confirm_ind(NanBootstrappingConfirmInd *event)
+{
+	sigma_dut_print(global_dut, DUT_MSG_INFO,
+			"Bootstrapping Confirm Indication received, status %u",
+			event->rsp_code);
+	if (global_dut->dev_info.role == SECURE_NAN_BOOTSTRAPPING_INITIATOR) {
+		if (event->rsp_code == NAN_BOOTSTRAPPING_REQUEST_ACCEPT) {
+			global_dut->peer_info.bs_state = NAN_BOOTSTRAPPING_DONE;
+			return;
+		}
+
+		if (event->rsp_code == NAN_BOOTSTRAPPING_REQUEST_COMEBACK) {
+			global_dut->peer_info.bs_state =
+				NAN_BOOTSTRAP_COMEBACK_RSP_RECVD;
+
+			if (event->cookie_length > NAN_MAX_COOKIE_LEN)
+				event->cookie_length = NAN_MAX_COOKIE_LEN;
+
+			global_dut->peer_info.cookie_len = event->cookie_length;
+			memcpy(global_dut->peer_info.cookie, event->cookie,
+			       event->cookie_length);
+			return;
+		}
+	}
+}
+
+#endif /* WFA_CERT_NANR4 */
+
+
 static NanCallbackHandler callbackHandler = {
 	.NotifyResponse = nan_notify_response,
 	.EventPublishReplied = nan_event_publish_replied,
@@ -2752,7 +3008,8 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 				send_resp(dut, conn, SIGMA_COMPLETE, "NULL");
 			}
 			if (strcasecmp(method_type, "Followup") == 0) {
-				sigma_nan_transmit_followup(dut, conn, cmd);
+				sigma_nan_handle_followup_method(dut, conn,
+								 cmd);
 				send_resp(dut, conn, SIGMA_COMPLETE, "NULL");
 			}
 			if (strcasecmp(method_type, "DataRequest") == 0) {
