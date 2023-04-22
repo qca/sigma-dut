@@ -706,6 +706,17 @@ static int sigma_nan_subscribe_request(struct sigma_dut *dut,
 #if NAN_CERT_VERSION >= 3
 	const char *awake_dw_interval = get_param(cmd, "awakeDWint");
 #endif
+
+#ifdef WFA_CERT_NANR4
+	const char *npk_nik_cache = get_param(cmd, "NPKNIKCache");
+	const char *pairing_setup = get_param(cmd, "PairingSetupEnabled");
+	const char *bootstrap_method =
+		get_param(cmd, "Pairing_bootstrapmethod");
+	const char *cipher_suite = get_param(cmd, "CipherSuiteIdList");
+	const char *gtk_protection = get_param(cmd, "GTKProtection");
+	const char *cipher_capabilities = get_param(cmd, "CipherCapabilities");
+#endif /* WFA_CERT_NANR4 */
+
 	NanSubscribeRequest req;
 	NanConfigRequest config_req;
 	int filter_len_rx = 0, filter_len_tx = 0;
@@ -763,6 +774,24 @@ static int sigma_nan_subscribe_request(struct sigma_dut *dut,
 	/* Check this once again if config can be called here (TBD) */
 	if (discrange_ltd)
 		req.rssi_threshold_flag = atoi(discrange_ltd);
+
+#ifdef WFA_CERT_NANR4
+	if (cipher_suite) {
+		if (!strchr(cipher_suite, ':')) {
+			req.cipher_type = atoi(cipher_suite);
+		} else {
+			char *saveptr = NULL;
+			char *ptr = strtok_r((char *) cipher_suite, ":",
+					     &saveptr);
+
+			while (ptr) {
+				req.cipher_type |= BIT(atoi(ptr) - 1);
+				ptr = strtok_r(NULL, ":", &saveptr);
+			}
+		}
+	}
+	sigma_dut_print(dut, DUT_MSG_INFO, "cipher type %d", req.cipher_type);
+#endif /* WFA_CERT_NANR4 */
 
 	if (include_bit) {
 		int include_bit_val = atoi(include_bit);
@@ -874,6 +903,46 @@ static int sigma_nan_subscribe_request(struct sigma_dut *dut,
 		}
 	}
 #endif
+
+#ifdef WFA_CERT_NANR4
+	if (gtk_protection)
+		req.sdea_params.gtk_protection = atoi(gtk_protection);
+
+	if (cipher_capabilities)
+		req.cipher_capabilities = strtoul(cipher_capabilities, NULL, 0);
+
+	if (pairing_setup) {
+		req.nan_pairing_config.enable_pairing_setup =
+			atoi(pairing_setup);
+		dut->dev_info.pairing_setup =
+			atoi(pairing_setup) ? true : false;
+		if (npk_nik_cache) {
+			req.nan_pairing_config.enable_pairing_cache =
+				atoi(npk_nik_cache);
+			dut->dev_info.npk_nik_caching =
+				atoi(npk_nik_cache) ? true : false;
+		}
+		req.sdea_params.security_cfg = NAN_DP_CONFIG_SECURITY;
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"%s: pairing_setup: %d, enable NIK cache: %d",
+				__func__, dut->dev_info.pairing_setup,
+				dut->dev_info.npk_nik_caching);
+	}
+	if (bootstrap_method) {
+		req.nan_pairing_config.enable_pairing_setup = 1;
+		dut->dev_info.pairing_setup = true;
+		req.nan_pairing_config.enable_pairing_cache = 1;
+		dut->dev_info.npk_nik_caching = true;
+		req.sdea_params.security_cfg = NAN_DP_CONFIG_SECURITY;
+		req.nan_pairing_config.supported_bootstrapping_methods =
+			strtoul(bootstrap_method, NULL, 0);
+		dut->dev_info.bootstrapping_methods =
+			req.nan_pairing_config.supported_bootstrapping_methods;
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"%s: NAN Bootstrapping Method: %d", __func__,
+				dut->dev_info.bootstrapping_methods);
+	}
+#endif /* WFA_CERT_NANR4 */
 
 	ret = nan_subscribe_request(0, dut->wifi_hal_iface_handle, &req);
 	if (ret != WIFI_SUCCESS) {
@@ -1528,6 +1597,13 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 #ifdef WFA_CERT_NANR4
 	const char *fsd_gas = get_param(cmd, "FsdGas");
 	const char *fsd_req = get_param(cmd, "FsdReq");
+	const char *npk_nik_cache = get_param(cmd, "NPKNIKCache");
+	const char *pairing_setup = get_param(cmd, "PairingSetupEnabled");
+	const char *bootstrap_method =
+		get_param(cmd, "Pairing_bootstrapmethod");
+	const char *cipher_suite = get_param(cmd, "CipherSuiteIdList");
+	const char *gtk_protection = get_param(cmd, "GTKProtection");
+	const char *cipher_capabilities = get_param(cmd, "CipherCapabilities");
 #endif /* WFA_CERT_NANR4 */
 	NanPublishRequest req;
 	NanConfigRequest config_req;
@@ -1600,6 +1676,24 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 
 	if (discrange_ltd)
 		req.rssi_threshold_flag = atoi(discrange_ltd);
+
+#ifdef WFA_CERT_NANR4
+	if (cipher_suite) {
+		if (!strchr(cipher_suite, ':')) {
+			req.cipher_type = atoi(cipher_suite);
+		} else {
+			char *saveptr = NULL;
+			char *ptr = strtok_r((char *) cipher_suite, ":",
+					     &saveptr);
+
+			while (ptr) {
+				req.cipher_type |= BIT(atoi(ptr) - 1);
+				ptr = strtok_r(NULL, ":", &saveptr);
+			}
+		}
+	}
+	sigma_dut_print(dut, DUT_MSG_INFO, "cipher type %d", req.cipher_type);
+#endif /* WFA_CERT_NANR4 */
 
 	memset(input_rx, 0, sizeof(input_rx));
 	memset(input_tx, 0, sizeof(input_tx));
@@ -1826,6 +1920,41 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 					 cfg_debug, tlv_len + sizeof(u32));
 	}
 #endif
+
+#ifdef WFA_CERT_NANR4
+	if (gtk_protection)
+		req.sdea_params.gtk_protection = atoi(gtk_protection);
+
+	if (cipher_capabilities)
+		req.cipher_capabilities = strtoul(cipher_capabilities, NULL, 0);
+
+	if (pairing_setup) {
+		req.nan_pairing_config.enable_pairing_setup =
+			atoi(pairing_setup);
+		dut->dev_info.pairing_setup =
+			atoi(pairing_setup) ? true : false;
+		if (npk_nik_cache) {
+			req.nan_pairing_config.enable_pairing_cache =
+				atoi(npk_nik_cache);
+			dut->dev_info.npk_nik_caching =
+				atoi(npk_nik_cache) ? true : false;
+		}
+		req.sdea_params.security_cfg = NAN_DP_CONFIG_SECURITY;
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"%s: pairing_setup: %d, enable NIK cache: %d",
+				__func__, dut->dev_info.pairing_setup,
+				dut->dev_info.npk_nik_caching);
+	}
+	if (bootstrap_method) {
+		req.nan_pairing_config.supported_bootstrapping_methods =
+			strtoul(bootstrap_method, NULL, 0);
+		dut->dev_info.bootstrapping_methods =
+			req.nan_pairing_config.supported_bootstrapping_methods;
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"%s: NAN Bootstrapping Method: %d", __func__,
+				dut->dev_info.bootstrapping_methods);
+	}
+#endif /* WFA_CERT_NANR4 */
 
 	ret = nan_publish_request(0, dut->wifi_hal_iface_handle, &req);
 	if (ret != WIFI_SUCCESS)
@@ -2507,6 +2636,13 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *band = get_param(cmd, "band");
 	const char *data_ch_freq = get_param(cmd, "DataChnlFreq");
 	const char *disc_mac_addr = get_param(cmd, "DiscoveryMacAddress");
+#ifdef WFA_CERT_NANR4
+	const char *npk_nik_cache = get_param(cmd, "NPKNIKCache");
+	const char *pairing_setup = get_param(cmd, "PairingSetupEnabled");
+	const char *bootstrap_method =
+		get_param(cmd, "Pairing_bootstrapmethod");
+	const char *nira = get_param(cmd, "NIRA");
+#endif /* WFA_CERT_NANR4 */
 	char resp_buf[100];
 	wifi_error ret;
 
@@ -2669,6 +2805,30 @@ int nan_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 			send_resp(dut, conn, SIGMA_COMPLETE, resp_buf);
 		}
 	}
+
+#ifdef WFA_CERT_NANR4
+	if (pairing_setup)
+		dut->dev_info.pairing_setup =
+			atoi(pairing_setup) ? true : false;
+	if (npk_nik_cache)
+		dut->dev_info.npk_nik_caching =
+			atoi(npk_nik_cache) ? true : false;
+	if (bootstrap_method)
+		dut->dev_info.bootstrapping_methods =
+			strtoul(bootstrap_method, NULL, 0);
+
+	if (nira && strcasecmp(nira, "present") == 0)
+		dut->dev_info.pairing_verification = true;
+
+	if (pairing_setup || npk_nik_cache || bootstrap_method || nira) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"%s: pairing_setup: %d, enable NIK cache: %d, Bootstrapping Method: %d, NIRA: %d",
+				__func__, dut->dev_info.pairing_setup,
+				dut->dev_info.npk_nik_caching,
+				dut->dev_info.bootstrapping_methods,
+				dut->dev_info.pairing_verification);
+	}
+#endif /* WFA_CERT_NANR4 */
 
 	return 0;
 }
