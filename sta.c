@@ -9031,6 +9031,19 @@ static int sta_set_eht_beamformee_ss_320(struct sigma_dut *dut,
 }
 
 
+static int sta_set_mlo_str_tx(struct sigma_dut *dut, const char *intf, int cfg)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf, QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_MLO_STR_TX,
+		cfg);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR, "NL80211_SUPPORT is not defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static int sta_set_eht_emlsr_padding_delay(struct sigma_dut *dut,
 					 const char *intf, u8 val)
 {
@@ -12151,6 +12164,11 @@ cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 				STA_SET_EHT_MLO_MAX_SIMULTANEOUS_LINKS, 1);
 			sta_config_params(dut, intf,
 					  STA_SET_EHT_MLO_MAX_NUM_LINKS, 2);
+			/* Configure STR Tx for testbed. The configuration
+			 * gets reset with disconnection.
+			 */
+			if (dut->device_type == STA_testbed)
+				sta_set_mlo_str_tx(dut, intf, 1);
 		} else if (strcasecmp(val, "EMLSR") == 0) {
 			sta_config_params(dut, intf, STA_SET_EHT_MLO_MODE,
 					  QCA_WLAN_EHT_EMLSR);
