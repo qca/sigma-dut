@@ -61,6 +61,7 @@ struct capi_loc_cmd {
 	unsigned int locCivic;
 	unsigned int lci;
 	unsigned int ntb;
+	unsigned int tb;
 	unsigned int ftm_bw_rtt;
 	unsigned int freq;
 };
@@ -779,6 +780,8 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 {
 	FILE *xml;
 	unsigned int bw, preamble;
+	unsigned int tmrtype = 0;
+	unsigned int is_rtt_bg_node = 0;
 
 	xml = fopen(LOC_XML_FILE_PATH, "w");
 	if (!xml) {
@@ -826,6 +829,12 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 #define LOC_R2_CAPI_DEFAULT_FTMS_PER_BURST 25
 #define LOC_R2_CAPI_DEFAULT_BURST_DUR 10
 
+	if (loc_cmd->ntb) {
+		tmrtype = 1;
+	} else if (loc_cmd->tb) {
+		tmrtype = 2;
+		is_rtt_bg_node = 1;
+	}
 	fprintf(xml, "<body>\n");
 	fprintf(xml, "  <ranging>\n");
 	fprintf(xml, "    <ap>\n");
@@ -842,11 +851,15 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 	fprintf(xml, "    <paramControl>%u</paramControl>\n", 0);
 	fprintf(xml, "    <ptsftimer>%u</ptsftimer>\n", 0);
 	fprintf(xml, "    <frequency>%u</frequency>\n", loc_cmd->freq);
-	fprintf(xml, "    <tmrtype>%u</tmrtype>\n", 1);
+	fprintf(xml, "    <tmrtype>%u</tmrtype>\n", tmrtype);
 	fprintf(xml, "    <sectype>%u</sectype>\n", 1);
 	fprintf(xml, "    <tmrMinDelta>%u</tmrMinDelta>\n", 2500);
 	fprintf(xml, "    <tmrMaxDelta>%u</tmrMaxDelta>\n", 300);
 	fprintf(xml, "    <I2RFbPolicy>%u</I2RFbPolicy>\n", dut->i2rlmr_iftmr);
+	fprintf(xml, "    <isRttBgNode>%u</isRttBgNode>\n", is_rtt_bg_node);
+	fprintf(xml, "    <tbPeriodicity>%u</tbPeriodicity>\n", 4);
+	fprintf(xml, "    <tbDuration>%u</tbDuration>\n", 80);
+	fprintf(xml, "    <tbMaxSessionExpiry>%u</tbMaxSessionExpiry>\n", 5);
 	fprintf(xml, "    <mac>%s</mac>\n", dst_mac);
 	fprintf(xml, "    </ap>\n");
 	fprintf(xml, "  </ranging>\n");
@@ -936,6 +949,7 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *interface = get_param(cmd, "interface");
 	const char *dest_mac = get_param(cmd, "destmac");
 	const char *ntb = get_param(cmd, "NTB");
+	const char *tb = get_param(cmd, "TB");
 	const char *ftm_bw_rtt = get_param(cmd, "FormatBWRanging");
 	struct capi_loc_cmd loc_cmd;
 
@@ -981,18 +995,25 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 		return 0;
 	}
 
-	if (!ntb) {
+	if (!ntb && !tb) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s - Incomplete command in LOCR2 CAPI request",
 				__func__);
 		send_resp(dut, conn, SIGMA_ERROR,
-			  "ErrMsg,Incomplete Loc CAPI command - missing NTB");
+			  "ErrMsg,Incomplete Loc CAPI command - missing TMR Type(NTB or TB)");
 		return 0;
 	}
 
-	sscanf(ntb, "%u", &loc_cmd.ntb);
-	sigma_dut_print(dut, DUT_MSG_INFO, "%s - ntb: %u",
-			__func__, loc_cmd.ntb);
+	if (ntb) {
+		sscanf(ntb, "%u", &loc_cmd.ntb);
+		sigma_dut_print(dut, DUT_MSG_INFO, "%s - ntb: %u",
+				__func__, loc_cmd.ntb);
+	} else {
+		sscanf(tb, "%u", &loc_cmd.tb);
+		sigma_dut_print(dut, DUT_MSG_INFO, "%s - tb: %u",
+				__func__, loc_cmd.tb);
+	}
+
 	sscanf(ftm_bw_rtt, "%u", &loc_cmd.ftm_bw_rtt);
 	sigma_dut_print(dut, DUT_MSG_INFO, "%s - ftmbw: %u",
 			__func__, loc_cmd.ftm_bw_rtt);
