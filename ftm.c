@@ -699,7 +699,7 @@ lowi_cmd_sta_reset_ptksa_cache(struct sigma_dut *dut, struct sigma_conn *conn,
 			       struct sigma_cmd *cmd)
 {
 	const char *intf = get_param(cmd, "Interface");
-	char buf[1024], bssid[20], req[200], *pos;
+	char buf[1024], bssid[18], req[200], *pos;
 
 	memset(req, 0, sizeof(req));
 	memset(buf, 0, sizeof(buf));
@@ -719,7 +719,7 @@ lowi_cmd_sta_reset_ptksa_cache(struct sigma_dut *dut, struct sigma_conn *conn,
 			break;
 		pos++;
 
-		strlcpy(bssid, pos, 17);
+		strlcpy(bssid, pos, sizeof(bssid));
 		snprintf(req, sizeof(req), "PASN_DEAUTH bssid=%s", bssid);
 		wpa_command(intf, req);
 	}
