@@ -6630,7 +6630,10 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 #endif /* MIRACAST */
 
 	if (val &&
-	    (strcasecmp(val, "MBO") == 0 || strcasecmp(val, "HE") == 0)) {
+	    (strcasecmp(val, "MBO") == 0 || strcasecmp(val, "HE") == 0 ||
+	     strcasecmp(val, "EHT") == 0)) {
+		bool eht = strcasecmp(val, "EHT") == 0;
+
 		val = get_param(cmd, "Cellular_Data_Cap");
 		if (val &&
 		    mbo_set_cellular_data_capa(dut, conn, intf, atoi(val)) == 0)
@@ -6652,7 +6655,9 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 		if (val && mbo_set_roaming(dut, conn, intf, val) == 0)
 			return 0;
 
-		return 1;
+		if (!eht)
+			return 1;
+		val = get_param(cmd, "Program");
 	}
 
 	if (val && strcasecmp(val, "OCE") == 0)
