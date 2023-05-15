@@ -1134,6 +1134,7 @@ struct sigma_dut {
 	int dhcp_client_running;
 	int i2rlmr_iftmr;
 	int i2rlmrpolicy;
+	int rnm_mfp;
 	struct device_pairing_info dev_info;
 	struct peer_pairing_info peer_info;
 };

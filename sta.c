@@ -16788,6 +16788,22 @@ cmd_sta_set_rfeature_qm(const char *intf, struct sigma_dut *dut,
 }
 
 
+static enum sigma_cmd_result
+cmd_sta_set_rfeature_loc_r2(const char *intf, struct sigma_dut *dut,
+			    struct sigma_conn *conn, struct sigma_cmd *cmd)
+{
+	const char *rnm_mfp = get_param(cmd, "RNM_MFP");
+
+	if (rnm_mfp) {
+		dut->rnm_mfp = atoi(rnm_mfp);
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"rnm_mfp value is %d", dut->rnm_mfp);
+	}
+
+	return SUCCESS_SEND_STATUS;
+}
+
+
 static enum sigma_cmd_result cmd_sta_set_rfeature(struct sigma_dut *dut,
 						  struct sigma_conn *conn,
 						  struct sigma_cmd *cmd)
@@ -16837,6 +16853,9 @@ static enum sigma_cmd_result cmd_sta_set_rfeature(struct sigma_dut *dut,
 		return cmd_sta_set_rfeature_wpa3(intf, dut, conn, cmd);
 	if (strcasecmp(prog, "QM") == 0)
 		return cmd_sta_set_rfeature_qm(intf, dut, conn, cmd);
+
+	if (strcasecmp(prog, "LOCR2") == 0)
+		return cmd_sta_set_rfeature_loc_r2(intf, dut, conn, cmd);
 
 	send_resp(dut, conn, SIGMA_ERROR, "errorCode,Unsupported Prog");
 	return 0;
