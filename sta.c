@@ -15003,6 +15003,52 @@ cmd_sta_send_frame_scs(struct sigma_dut *dut, struct sigma_conn *conn,
 
 			pos += len;
 			rem_len -= len;
+
+			/* Optional QoS Charateristics parameters */
+			val = get_param_fmt(cmd,
+					    "QoSChar_ServiceStartTime_%d",
+					    num_of_scs_desc);
+			if (val) {
+				len = snprintf(pos, rem_len,
+					       " service_start_time=%d",
+					       atoi(val));
+				if (len < 0 || len >= rem_len)
+					goto fail;
+
+				pos += len;
+				rem_len -= len;
+			}
+
+			val = get_param_fmt(cmd,
+					    "QoSChar_ServiceStartTime_LinkID_%d",
+					    num_of_scs_desc);
+			if (val) {
+				len = snprintf(pos, rem_len,
+					       " service_start_time_link_id=%d",
+					       atoi(val));
+				if (len < 0 || len >= rem_len)
+					goto fail;
+
+				pos += len;
+				rem_len -= len;
+			}
+
+			val = get_param_fmt(cmd,
+					    "QoSChar_MSDUDeliveryInfo_%d",
+					    num_of_scs_desc);
+			if (val) {
+				if (strlen(val) != 4)
+					goto fail;
+				len = snprintf(pos, rem_len,
+					       " msdu_delivery_info=%d",
+					       (int) strtol(val + 2, NULL,
+							    0x10));
+				if (len < 0 || len >= rem_len)
+					goto fail;
+
+				pos += len;
+				rem_len -= len;
+			}
 		}
 
 scs_desc_end:
