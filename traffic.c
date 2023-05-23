@@ -86,6 +86,10 @@ static enum sigma_cmd_result cmd_traffic_send_ping(struct sigma_dut *dut,
 			return STATUS_SENT;
 		}
 		broadcast = true;
+		snprintf(buf, sizeof(buf),
+			 "ip route add 255.255.255.255 dev %s",
+			 get_station_ifname(dut));
+		run_system(dut, buf);
 	}
 
 	val = get_param(cmd, "frameRate");
