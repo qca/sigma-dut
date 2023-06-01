@@ -7672,6 +7672,7 @@ cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 	val = get_param(cmd, "Band");
 	if (val) {
 		if (strcmp(val, "2.4") == 0 || strcmp(val, "5") == 0 ||
+		    strcmp(val, "24G") == 0 || strcmp(val, "5G") == 0 ||
 		    strcmp(val, "6G") == 0) {
 			/* STA supports all bands by default */
 		} else {
