@@ -174,6 +174,10 @@ static enum sigma_cmd_result cmd_traffic_agent_config(struct sigma_dut *dut,
 			return ERROR_SEND_STATUS;
 	}
 
+	val = get_param(cmd, "dscp");
+	if (val)
+		s->tos = (int) strtol(val, NULL, 10);
+
 	dut->stream_id++;
 	dut->num_streams++;
 
@@ -337,6 +341,11 @@ static int set_socket_prio(struct sigma_stream *s)
 {
 	int tos = 0x00;
 
+	if (s->tos) {
+		tos = s->tos;
+		goto set_tos;
+	}
+
 	switch (s->tc) {
 	case SIGMA_TC_VOICE:
 		if (s->user_priority_set) {
@@ -384,6 +393,7 @@ static int set_socket_prio(struct sigma_stream *s)
 		break;
 	}
 
+set_tos:
 	if (setsockopt(s->sock, IPPROTO_IP, IP_TOS, &tos, sizeof(tos)) < 0) {
 		perror("setsockopt");
 		return -1;

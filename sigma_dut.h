@@ -275,6 +275,7 @@ struct sigma_stream {
 	char test_name[9]; /* test case name */
 	int can_quit;
 	int reset;
+	int tos;
 };
 
 #endif /* CONFIG_TRAFFIC_AGENT */
