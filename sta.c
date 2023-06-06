@@ -9001,6 +9001,22 @@ static int sta_set_eht_mcs(struct sigma_dut *dut, const char *intf, uint8_t mcs)
 #endif /* NL80211_SUPPORT */
 
 
+static int sta_set_inactive_period(struct sigma_dut *dut,
+				   const char *intf, int val)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_FORCE_MLO_POWER_SAVE_BCN_PERIOD,
+		val);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"EHT inactivate link cannot be set without NL80211_SUPPORT defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static int sta_set_action_tx_in_he_tb_ppdu(struct sigma_dut *dut,
 					   const char *intf, int enable)
 {
@@ -15959,6 +15975,28 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 		sta_set_eht_mlo_active_tx_links(dut, intf,
 						num_links, link_addr);
 	}
+
+	val = get_param(cmd, "InactiveAllMultiLinks");
+	if (val) {
+		if (atoi(val) == 1) {
+			val = get_param(cmd, "InactivePeriod");
+			if (!val) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "errorCode,InactivePeriod not set");
+				return STATUS_SENT_ERROR;
+			}
+
+			if (sta_set_inactive_period(dut, intf, atoi(val))) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,Failed to set InactivePeriod");
+				return STATUS_SENT_ERROR;
+			}
+		} else {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"InactiveAllMultiLinks is not 1");
+		}
+	}
+
 	val = get_param(cmd, "GI");
 	if (val) {
 		int fix_rate_sgi;
