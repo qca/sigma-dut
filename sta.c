@@ -2260,6 +2260,67 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 	return id;
 }
 
+static int sta_set_eht_mlo_active_tx_links(struct sigma_dut *dut,
+					   const char *intf, uint8_t num_links,
+					   uint8_t link_addr[2][6])
+{
+#ifdef NL80211_SUPPORT
+	struct nl_msg *msg;
+	struct nlattr *params, *attr;
+	int ret, i;
+	int ifindex;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Index for interface %s failed",
+				__func__, intf);
+		return -1;
+	}
+
+	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
+				    NL80211_CMD_VENDOR)) ||
+	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			QCA_NL80211_VENDOR_SUBCMD_SET_WIFI_CONFIGURATION)) {
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	if (!(params = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA)) ||
+	    !(attr = nla_nest_start(
+		      msg, QCA_WLAN_VENDOR_ATTR_CONFIG_EHT_MLO_ACTIVE_LINKS))) {
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	for (i = 0; i < num_links; i++) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"link_mac[%d]: %02x:%02x:%02x:%02x:%02x:%02x",
+				i, link_addr[i][0], link_addr[i][1],
+				link_addr[i][2], link_addr[i][3],
+				link_addr[i][4], link_addr[i][5]);
+		nla_put(msg, NL80211_ATTR_MAC, ETH_ALEN, &link_addr[i][0]);
+
+	}
+	nla_nest_end(msg, attr);
+	nla_nest_end(msg, params);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in send_and_recv_msgs, ret=%d",
+				__func__, ret);
+	}
+
+	return ret;
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR, "NL80211_SUPPORT is not defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
 
 static int wcn_set_ignore_h2e_rsnxe(struct sigma_dut *dut, const char *intf,
 				    uint8_t cfg)
@@ -15862,6 +15923,42 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 		free(token);
 	}
 
+	val = get_param(cmd, "ActiveTxMultiLinks");
+	if (val) {
+		char value[50];
+		char *result = NULL;
+		char *saveptr;
+		uint8_t num_links = 0;
+		uint8_t link_addr[2][6];
+
+		strlcpy(value, val, sizeof(value));
+		result = strtok_r(value, " ", &saveptr);
+		if (!result) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Link address not specified");
+			return STATUS_SENT_ERROR;
+		}
+
+		while (result && num_links < 2) {
+			if (hwaddr_aton(result, &link_addr[num_links][0]) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "errorCode,Invalid link address");
+				return STATUS_SENT_ERROR;
+			}
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"link_mac[%d]: %02x:%02x:%02x:%02x:%02x:%02x",
+					num_links, link_addr[num_links][0],
+					link_addr[num_links][1],
+					link_addr[num_links][2],
+					link_addr[num_links][3],
+					link_addr[num_links][4],
+					link_addr[num_links][5]);
+			num_links++;
+			result = strtok_r(NULL, " ", &saveptr);
+		}
+		sta_set_eht_mlo_active_tx_links(dut, intf,
+						num_links, link_addr);
+	}
 	val = get_param(cmd, "GI");
 	if (val) {
 		int fix_rate_sgi;
