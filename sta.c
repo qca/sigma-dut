@@ -8416,7 +8416,7 @@ static enum sigma_cmd_result cmd_sta_reassoc(struct sigma_dut *dut,
 			goto close_mon_conn;
 		}
 		res = snprintf(buf, sizeof(buf), "FASTREASSOC %s %d",
-			       bssid, chan);
+			       bssid, is_6ghz_freq(freq) ? freq : chan);
 		if (res < 0 || res >= (int) sizeof(buf) ||
 		    wcn_driver_cmd(intf, buf) < 0) {
 			send_resp(dut, conn, SIGMA_ERROR,

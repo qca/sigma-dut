@@ -1416,5 +1416,6 @@ int set_ipv6_addr(struct sigma_dut *dut, const char *ip, const char *mask,
 		  const char *ifname);
 void kill_pid(struct sigma_dut *dut, const char *pid_file);
 int get_ip_addr(const char *ifname, int ipv6, char *buf, size_t len);
+bool is_6ghz_freq(int freq);
 
 #endif /* SIGMA_DUT_H */

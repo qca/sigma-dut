@@ -1204,3 +1204,15 @@ void kill_pid(struct sigma_dut *dut, const char *pid_file)
 	unlink(pid_file);
 	sleep(1);
 }
+
+
+bool is_6ghz_freq(int freq)
+{
+	if (freq == 5935)
+		return true;
+
+	if (freq < 5950 || freq > 7115)
+		return false;
+
+	return true;
+}
