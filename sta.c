@@ -11919,6 +11919,8 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 	}
 
 	val = get_param(cmd, "TWTSchedSTASupport");
+	if (!val)
+		val = get_param(cmd, "BroadcastTWT");
 	if (val) {
 		int set_val;
 
