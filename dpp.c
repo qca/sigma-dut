@@ -8,6 +8,9 @@
 
 #include "sigma_dut.h"
 #include <sys/wait.h>
+#ifdef ANDROID_MDNS
+#include <cutils/properties.h>
+#endif /* ANDROID_MDNS */
 #include "wpa_ctrl.h"
 #include "wpa_helpers.h"
 
@@ -17,6 +20,33 @@ extern char *sigma_cert_path;
 #ifdef ANDROID
 char *dpp_qrcode_file = "/sdcard/wpadebug_qrdata.txt";
 #endif /* ANDROID */
+
+
+#ifdef ANDROID_MDNS
+static int android_start_mdnsd(struct sigma_dut *dut)
+{
+	char value[PROPERTY_VALUE_MAX];
+
+	if (property_get("init.svc.mdnsd", value, "") == strlen("running") &&
+	    strncmp(value, "running", strlen("running")) == 0) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "mDNS service is running");
+		return 0;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Start mDNS service");
+	property_set("ctl.start", "mdnsd");
+	sleep(5);
+
+	if (property_get("init.svc.mdnsd", value, "") == strlen("running") &&
+	    strncmp(value, "running", strlen("running")) == 0) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "mDNS service is running");
+		return 0;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Failed to start mDNS service");
+	return -1;
+}
+#endif /* ANDROID_MDNS */
 
 
 static const char * dpp_mdns_role_txt(enum dpp_mdns_role role)
@@ -35,18 +65,280 @@ static const char * dpp_mdns_role_txt(enum dpp_mdns_role role)
 }
 
 
+#ifdef ANDROID_MDNS
+
+static void DNSSD_API
+addrinfo_reply(DNSServiceRef sdref, DNSServiceFlags flags,
+	       uint32_t interfaceIndex, DNSServiceErrorType errorCode,
+	       const char *hostname, const struct sockaddr *address,
+	       uint32_t ttl, void *context)
+{
+	struct sigma_dut *dut = context;
+
+	if (errorCode) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"addrinfo_reply: Error %d on ifindex %d",
+				errorCode, interfaceIndex);
+		return;
+	}
+
+	if (address && address->sa_family == AF_INET) {
+		const unsigned char *b = (const unsigned char *)
+			&((struct sockaddr_in *)address)->sin_addr;
+
+		snprintf(dut->mdns_discover.ipaddr,
+			 sizeof(dut->mdns_discover.ipaddr),
+			 "%d.%d.%d.%d",
+			 b[0], b[1], b[2], b[3]);
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"addrinfo_reply: host_ipaddr: %s",
+				dut->mdns_discover.ipaddr);
+		return;
+	}
+}
+
+
+static void DNSSD_API
+resolve_reply(DNSServiceRef sdref, const DNSServiceFlags flags,
+	      uint32_t ifIndex, DNSServiceErrorType errorCode,
+	      const char *fullname, const char *hosttarget,
+	      uint16_t opaqueport, uint16_t txtLen,
+	      const unsigned char *txtRecord, void *context)
+{
+	struct sigma_dut *dut = context;
+	union { uint16_t s; unsigned char b[2]; } port = { opaqueport };
+	uint16_t PortAsNumber = ((uint16_t) port.b[0]) << 8 | port.b[1];
+	uint8_t bskeyhash_len;
+	char *bskeyhash;
+
+	if (errorCode) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"resolve_reply: Error code %d reported",
+				errorCode);
+		return;
+	}
+
+	dut->mdns_discover.port = PortAsNumber;
+	dut->mdns_discover.host_name = strdup(hosttarget);
+	if (!dut->mdns_discover.host_name)
+		return;
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"resolve_reply: host_name: %s, port: %d",
+			dut->mdns_discover.host_name, dut->mdns_discover.port);
+
+	if (!txtLen || !txtRecord) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"resolve_reply: No records");
+		return;
+	}
+
+	bskeyhash = dut->mdnssd.txt_get_value(txtLen, txtRecord, "bskeyhash",
+					      &bskeyhash_len);
+	if (bskeyhash && bskeyhash_len) {
+		dut->mdns_discover.bskeyhash = malloc(bskeyhash_len + 1);
+		if (!dut->mdns_discover.bskeyhash)
+			return;
+
+		memcpy(dut->mdns_discover.bskeyhash, bskeyhash, bskeyhash_len);
+		dut->mdns_discover.bskeyhash[bskeyhash_len] = '\0';
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"resolve_reply: bskeyhash %s",
+				dut->mdns_discover.bskeyhash);
+	}
+}
+
+
+static void DNSSD_API
+browse_reply(DNSServiceRef sdref, const DNSServiceFlags flags,
+	     uint32_t ifIndex, DNSServiceErrorType errorCode,
+	     const char *replyName, const char *replyType,
+	     const char *replyDomain, void *context)
+{
+	struct sigma_dut *dut = context;
+
+	if (errorCode) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"browse_reply: Error code %d reported",
+				errorCode);
+		return;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"browse_reply: ifindex:%d, service name %s, service tpe %s, service domain %s",
+			ifIndex, replyName, replyType, replyDomain);
+
+	/* Store only the first result */
+	if (dut->mdns_discover.name)
+		return;
+
+	if (!(flags & kDNSServiceFlagsAdd))
+		return;
+
+	dut->mdns_discover.ifindex = ifIndex;
+
+	dut->mdns_discover.name = strdup(replyName);
+	if (!dut->mdns_discover.name)
+		return;
+
+	dut->mdns_discover.type = strdup(replyType);
+	if (!dut->mdns_discover.type)
+		return;
+
+	dut->mdns_discover.domain = strdup(replyDomain);
+	if (!dut->mdns_discover.domain)
+		return;
+}
+
+
+static void mdns_process_results(struct sigma_dut *dut, DNSServiceRef *service)
+{
+	struct timeval stop, now, timeout;
+	fd_set input;
+	int fd = dut->mdnssd.service_socket_fd(*service);
+
+	FD_ZERO(&input);
+	FD_SET(fd, &input);
+	timeout.tv_sec  = 0;
+	timeout.tv_usec = 500000;
+
+	gettimeofday(&stop, NULL);
+	stop.tv_sec += 1;
+
+	while (1) {
+		if (select(fd + 1, &input, NULL, NULL, &timeout) < 0)
+			continue;
+
+		if (FD_ISSET(fd, &input))
+			dut->mdnssd.service_process_result(*service);
+
+		gettimeofday(&now, NULL);
+		if (now.tv_sec > stop.tv_sec ||
+		    (now.tv_sec == stop.tv_sec && now.tv_usec >= stop.tv_usec))
+			break;
+	}
+}
+
+#endif /* ANDROID_MDNS */
+
+
 static int dpp_mdns_discover(struct sigma_dut *dut, enum dpp_mdns_role role,
 			     char *addr, size_t addr_size, unsigned int *port,
 			     unsigned char *hash)
 {
+#ifdef ANDROID_MDNS
+	DNSServiceRef service;
+	char service_type[100];
+	char interface_name[IFNAMSIZ];
+	int err = 0;
+#else /* ANDROID_MDNS */
 	char cmd[200], buf[10000], *pos, *pos2, *pos3;
-	char *ifname = NULL, *ipaddr = NULL, *bskeyhash = NULL;
 	size_t len;
 	FILE *f;
+#endif /* ANDROID_MDNS */
+	char *ifname = NULL, *ipaddr = NULL, *bskeyhash = NULL;
 
 	if (port)
 		*port = 0;
 
+#ifdef ANDROID_MDNS
+	if (!dut->mdnssd_so) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "libmdnssd not loaded");
+		return -1;
+	}
+
+	if (android_start_mdnsd(dut))
+		return -1;
+
+	memset(&dut->mdns_discover, 0, sizeof(dut->mdns_discover));
+	snprintf(service_type, sizeof(service_type), "_dpp._tcp,_%s",
+		 dpp_mdns_role_txt(role));
+	err = dut->mdnssd.service_browse(&service, 0, 0, service_type, "",
+					 browse_reply, dut);
+	if (err != kDNSServiceErr_NoError) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s browse failed with error %d",
+				dut->mdns_discover.type, err);
+		err = -1;
+		goto out;
+	}
+
+	mdns_process_results(dut, &service);
+	if (!dut->mdns_discover.name ||
+	    !dut->mdns_discover.domain ||
+	    !dut->mdns_discover.type) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Service type %s not found",
+				dut->mdns_discover.type);
+		err = -1;
+		goto out;
+	}
+	dut->mdnssd.service_deallocate(service);
+
+	err = dut->mdnssd.service_resolve(&service, 0,
+					  dut->mdns_discover.ifindex,
+					  dut->mdns_discover.name,
+					  dut->mdns_discover.type,
+					  dut->mdns_discover.domain,
+					  resolve_reply, dut);
+	if (err != kDNSServiceErr_NoError) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "%s/%s resolve failed with error %d",
+				dut->mdns_discover.name,
+				dut->mdns_discover.domain, err);
+		err = -1;
+		goto out;
+	}
+
+	mdns_process_results(dut, &service);
+	if (!dut->mdns_discover.host_name) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "%s/%s host name not found",
+				dut->mdns_discover.name,
+				dut->mdns_discover.domain);
+		err = -1;
+		goto out;
+	}
+
+	dut->mdnssd.service_deallocate(service);
+
+	err = dut->mdnssd.get_addr_info(&service,
+					kDNSServiceFlagsReturnIntermediates,
+					dut->mdns_discover.ifindex,
+					kDNSServiceProtocol_IPv4,
+					dut->mdns_discover.host_name,
+					addrinfo_reply, dut);
+	if (err != kDNSServiceErr_NoError) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"get addr info failed for %s with error %d",
+				dut->mdns_discover.host_name, err);
+		err = -1;
+		goto out;
+	}
+
+	mdns_process_results(dut, &service);
+	if (dut->mdns_discover.ipaddr[0] == '\0') {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Could not fetch IP address for %s",
+				dut->mdns_discover.host_name);
+		err = -1;
+		goto out;
+	}
+
+	dut->mdnssd.service_deallocate(service);
+	service = NULL;
+
+	if (!if_indextoname(dut->mdns_discover.ifindex, interface_name)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Could not get interface name of %d",
+				dut->mdns_discover.ifindex);
+		err = -1;
+		goto out;
+	}
+
+	ifname = interface_name;
+	ipaddr = dut->mdns_discover.ipaddr;
+	bskeyhash = dut->mdns_discover.bskeyhash;
+	if (port)
+		*port = dut->mdns_discover.port;
+#else /* ANDROID_MDNS */
 	snprintf(cmd, sizeof(cmd), "avahi-browse _%s._sub._dpp._tcp -r -t -p",
 		 dpp_mdns_role_txt(role));
 	sigma_dut_print(dut, DUT_MSG_DEBUG, "Run: %s", cmd);
@@ -151,6 +443,7 @@ static int dpp_mdns_discover(struct sigma_dut *dut, enum dpp_mdns_role role,
 
 	if (!ipaddr)
 		return -1;
+#endif /* ANDROID_MDNS */
 	sigma_dut_print(dut, DUT_MSG_INFO, "Discovered (mDNS) service at %s@%s",
 			ipaddr, ifname);
 	if (bskeyhash && hash) {
@@ -172,7 +465,21 @@ static int dpp_mdns_discover(struct sigma_dut *dut, enum dpp_mdns_role role,
 	}
 	strlcpy(addr, ipaddr, addr_size);
 
+#ifdef ANDROID_MDNS
+out:
+	free(dut->mdns_discover.name);
+	free(dut->mdns_discover.type);
+	free(dut->mdns_discover.domain);
+	free(dut->mdns_discover.host_name);
+	free(dut->mdns_discover.bskeyhash);
+	memset(&dut->mdns_discover, 0, sizeof(dut->mdns_discover));
+	if (service)
+		dut->mdnssd.service_deallocate(service);
+
+	return err;
+#else /* ANDROID_MDNS */
 	return 0;
+#endif
 }
 
 
@@ -4067,16 +4374,43 @@ out:
 }
 
 
+#ifdef ANDROID_MDNS
+static void mdns_callback(DNSServiceRef ref, DNSServiceFlags flags,
+			  DNSServiceErrorType errorCode, const char *name,
+			  const char *regtype, const char *domain,
+			  void *context)
+{
+	struct sigma_dut *dut = context;
+
+	if (errorCode != kDNSServiceErr_NoError)
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"mDNS service register failed error %d",
+				errorCode);
+	else
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"mDNS service register success");
+}
+#endif /* ANDROID_MDNS */
+
+
 #define AVAHI_SERVICE "/etc/avahi/services/sigma_dut-dpp.service"
 
 int dpp_mdns_start(struct sigma_dut *dut, enum dpp_mdns_role role)
 {
-	FILE *f;
 	const char *org = "Qualcomm DPP testing";
 	const char *location = "Somewhere in the test network";
 	const char *bskeyhash = NULL;
 	const char *ifname = get_station_ifname(dut);
 	char buf[2000];
+	int opclass, chan;
+#ifdef ANDROID_MDNS
+	TXTRecordRef dpp_txt;
+	char service_name[100];
+	char service_type[100];
+	int error;
+#else /* ANDROID_MDNS */
+	FILE *f;
+#endif /* ANDROID_MDNS */
 
 	if (sigma_dut_is_ap(dut)) {
 		if (!dut->hostapd_ifname) {
@@ -4128,6 +4462,72 @@ int dpp_mdns_start(struct sigma_dut *dut, enum dpp_mdns_role role)
 		bskeyhash = buf;
 	}
 
+	if (role == DPP_MDNS_RELAY) {
+		chan = dut->ap_channel;
+		if (!chan)
+			chan = 11;
+		if (chan >= 1 && chan <= 13)
+			opclass = 81;
+		else if (chan >= 36 && chan <= 48)
+			opclass = 115;
+		else if (chan >= 52 && chan <= 64)
+			opclass = 118;
+		else if (chan >= 100 && chan <= 144)
+			opclass = 121;
+		else if (chan >= 149 && chan <= 177)
+			opclass = 125;
+		else
+			opclass = 0;
+	}
+
+#ifdef ANDROID_MDNS
+	if (!dut->mdnssd_so) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "libmdnssd not loaded");
+		return -1;
+	}
+
+	if (android_start_mdnsd(dut))
+		return -1;
+
+	if (dut->mdns_service) {
+		dut->mdnssd.service_deallocate(dut->mdns_service);
+		dut->mdns_service = NULL;
+	}
+	snprintf(service_name, sizeof(service_name), "mdns_%s_service",
+		 dpp_mdns_role_txt(role));
+	snprintf(service_type, sizeof(service_type), "_dpp._tcp,_%s",
+		 dpp_mdns_role_txt(role));
+	dut->mdnssd.txt_create(&dpp_txt, 0, NULL);
+	dut->mdnssd.txt_set_value(&dpp_txt, "txtversion", 1, "1");
+	dut->mdnssd.txt_set_value(&dpp_txt, "organization",
+				  (uint8_t) strlen(org), org);
+	dut->mdnssd.txt_set_value(&dpp_txt, "location",
+				  (uint8_t) strlen(location), location);
+	if (bskeyhash)
+		dut->mdnssd.txt_set_value(&dpp_txt, "bskeyhash",
+				 (uint8_t) strlen(bskeyhash), bskeyhash);
+	if (role == DPP_MDNS_RELAY) {
+		char chan_info[100];
+
+		snprintf(chan_info, sizeof(chan_info), "%d/%d", opclass, chan);
+		dut->mdnssd.txt_set_value(&dpp_txt, "channellist",
+					  (uint8_t) strlen(chan_info),
+					  chan_info);
+	}
+
+	error = dut->mdnssd.service_register(
+			&dut->mdns_service, 0, 0, service_name, service_type,
+			NULL, NULL, htons(8908),
+			dut->mdnssd.txt_get_length(&dpp_txt),
+			dut->mdnssd.txt_get_bytes(&dpp_txt), mdns_callback,
+			dut);
+	dut->mdnssd.txt_deallocate(&dpp_txt);
+	if (error != kDNSServiceErr_NoError) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to register mDNS service");
+		return -1;
+	}
+#else /* ANDROID_MDNS */
 	f = fopen(AVAHI_SERVICE, "w");
 	if (!f) {
 		sigma_dut_print(dut, DUT_MSG_INFO,
@@ -4151,32 +4551,14 @@ int dpp_mdns_start(struct sigma_dut *dut, enum dpp_mdns_role role)
 	if (bskeyhash)
 		fprintf(f, "    <txt-record>bskeyhash=%s</txt-record>\n",
 			bskeyhash);
-	if (role == DPP_MDNS_RELAY) {
-		int opclass, chan;
-
-		chan = dut->ap_channel;
-		if (!chan)
-			chan = 11;
-		if (chan >= 1 && chan <= 13)
-			opclass = 81;
-		else if (chan >= 36 && chan <= 48)
-			opclass = 115;
-		else if (chan >= 52 && chan <= 64)
-			opclass = 118;
-		else if (chan >= 100 && chan <= 144)
-			opclass = 121;
-		else if (chan >= 149 && chan <= 177)
-			opclass = 125;
-		else
-			opclass = 0;
-
+	if (role == DPP_MDNS_RELAY)
 		fprintf(f, "    <txt-record>channellist=%d/%d</txt-record>\n",
 			opclass, chan);
-	}
 	fprintf(f, "  </service>\n");
 	fprintf(f, "</service-group>\n");
 
 	fclose(f);
+#endif /* ANDROID_MDNS */
 
 	sigma_dut_print(dut, DUT_MSG_INFO, "Started DPP mDNS advertisement");
 	dut->dpp_mdns = role;
@@ -4189,11 +4571,19 @@ void dpp_mdns_stop(struct sigma_dut *dut)
 {
 	dut->dpp_mdns = DPP_MDNS_NOT_RUNNING;
 
+#ifdef ANDROID_MDNS
+	if (dut->mdns_service) {
+		dut->mdnssd.service_deallocate(dut->mdns_service);
+		dut->mdns_service = NULL;
+	}
+	property_set("ctl.stop", "mdnsd");
+#else /* ANDROID_MDNS */
 	if (file_exists(AVAHI_SERVICE)) {
 		sigma_dut_print(dut, DUT_MSG_INFO,
 				"Stopping DPP mDNS service advertisement");
 		unlink(AVAHI_SERVICE);
 	}
+#endif /* ANDROID_MDNS */
 }
 
 
@@ -4257,6 +4647,11 @@ static enum sigma_cmd_result dpp_set_mdns_advertise(struct sigma_dut *dut,
 
 static int dpp_check_mdns_discovery_result(struct sigma_dut *dut)
 {
+#ifdef ANDROID_MDNS
+	if (android_start_mdnsd(dut))
+		return -1;
+#endif /* ANDROID_MDNS */
+
 	if (sigma_dut_is_ap(dut) && dut->ap_dpp_conf_addr &&
 	    strcasecmp(dut->ap_dpp_conf_addr, "mDNS") == 0 &&
 	    dpp_mdns_discover_relay_params(dut) < 0) {

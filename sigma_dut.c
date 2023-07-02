@@ -12,6 +12,9 @@
 #include <signal.h>
 #include <netinet/tcp.h>
 #endif /* __linux__ */
+#ifdef ANDROID_MDNS
+#include <dlfcn.h>
+#endif /* ANDROID_MDNS */
 #include "wpa_ctrl.h"
 #include "wpa_helpers.h"
 #include "miracast.h"
@@ -904,6 +907,12 @@ static void deinit_sigma_dut(struct sigma_dut *dut)
 	dut->station_ifname_5g = NULL;
 	stop_dscp_policy_mon_thread(dut);
 	free_dscp_policy_table(dut);
+#ifdef ANDROID_MDNS
+	if (dut->mdnssd_so) {
+		dlclose(dut->mdnssd_so);
+		dut->mdnssd_so = NULL;
+	}
+#endif /* ANDROID_MDNS */
 }
 
 
@@ -1295,6 +1304,9 @@ int main(int argc, char *argv[])
 #ifdef MIRACAST
 	miracast_init(&sigma_dut);
 #endif /* MIRACAST */
+#ifdef ANDROID_MDNS
+	mdnssd_init(&sigma_dut);
+#endif /* ANDROID_MDNS */
 	if (local_cmd)
 		return run_local_cmd(port, local_cmd);
 

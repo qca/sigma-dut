@@ -85,6 +85,12 @@ OBJS += nan.c
 CFLAGS += -DANDROID_NAN
 CFLAGS += -DANDROID_WIFI_HAL
 endif
+ifneq ($(wildcard external/mdnsresponder/mDNSShared/dns_sd.h),)
+CFLAGS += -DANDROID_MDNS
+LOCAL_C_INCLUDES += external/mdnsresponder/mDNSShared
+OBJS += dnssd.c
+LOCAL_SHARED_LIBRARIES += libdl
+endif
 endif
 CFLAGS += -Wno-unused-parameter
 LOCAL_C_INCLUDES += system/security/keystore/include/keystore

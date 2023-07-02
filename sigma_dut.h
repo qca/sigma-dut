@@ -14,6 +14,9 @@
 #define _GNU_SOURCE	1
 #endif
 
+#ifdef ANDROID_MDNS
+#include "dns_sd.h"
+#endif /* ANDROID_MDNS */
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -472,6 +475,37 @@ struct peer_pairing_info {
 	enum nan_akm akm;
 	bool is_paired;
 };
+
+#ifdef ANDROID_MDNS
+struct mdnssd_apis {
+	__typeof__(DNSServiceCreateConnection) *service_create_connection;
+	__typeof__(DNSServiceRefSockFD) *service_socket_fd;
+	__typeof__(DNSServiceProcessResult) *service_process_result;
+	__typeof__(DNSServiceRegister) *service_register;
+	__typeof__(DNSServiceRefDeallocate) *service_deallocate;
+	__typeof__(DNSServiceBrowse) *service_browse;
+	__typeof__(DNSServiceResolve) *service_resolve;
+	__typeof__(DNSServiceGetAddrInfo) *get_addr_info;
+	__typeof__(TXTRecordCreate) *txt_create;
+	__typeof__(TXTRecordSetValue) *txt_set_value;
+	__typeof__(TXTRecordDeallocate) *txt_deallocate;
+	__typeof__(TXTRecordContainsKey) *txt_contains_key;
+	__typeof__(TXTRecordGetValuePtr) *txt_get_value;
+	__typeof__(TXTRecordGetLength) *txt_get_length;
+	__typeof__(TXTRecordGetBytesPtr) *txt_get_bytes;
+};
+
+struct mdnss_discovery_info {
+	char *type;
+	char *name;
+	char *domain;
+	char *host_name;
+	char *bskeyhash;
+	char ipaddr[100];
+	uint16_t port;
+	uint32_t ifindex;
+};
+#endif /* ANDROID_MDNS */
 
 struct sigma_dut {
 	const char *main_ifname;
@@ -1137,6 +1171,12 @@ struct sigma_dut {
 	int rnm_mfp;
 	struct device_pairing_info dev_info;
 	struct peer_pairing_info peer_info;
+#ifdef ANDROID_MDNS
+	DNSServiceRef mdns_service;
+	void *mdnssd_so;
+	struct mdnssd_apis mdnssd;
+	struct mdnss_discovery_info mdns_discover;
+#endif /* ANDROID_MDNS */
 };
 
 
@@ -1418,5 +1458,8 @@ int set_ipv6_addr(struct sigma_dut *dut, const char *ip, const char *mask,
 void kill_pid(struct sigma_dut *dut, const char *pid_file);
 int get_ip_addr(const char *ifname, int ipv6, char *buf, size_t len);
 bool is_6ghz_freq(int freq);
+
+/* dnssd.c */
+int mdnssd_init(struct sigma_dut *dut);
 
 #endif /* SIGMA_DUT_H */
