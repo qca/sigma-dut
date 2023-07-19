@@ -278,6 +278,103 @@ void ath_set_cts_width(struct sigma_dut *dut, const char *ifname,
 }
 
 
+/**
+ * enum qca_ap_helper_config_params - This helper enum defines
+ * the config parameters which can be delivered to the AP mode driver using
+ * the vendor nl80211 path.
+ */
+enum qca_ap_helper_config_params {
+	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_DYNAMIC_BW */
+	AP_SET_DYN_BW,
+};
+
+
+static int ap_config_params(struct sigma_dut *dut, const char *intf,
+			    enum qca_ap_helper_config_params config_cmd,
+			    int value)
+{
+#ifdef NL80211_SUPPORT
+	struct nl_msg *msg;
+	int ret;
+	struct nlattr *params;
+	int ifindex;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Interface %s does not exist",
+				__func__, intf);
+		return -1;
+	}
+
+	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
+				    NL80211_CMD_VENDOR)) ||
+	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			QCA_NL80211_VENDOR_SUBCMD_SET_WIFI_CONFIGURATION) ||
+	    !(params = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA)))
+		goto fail;
+
+	switch (config_cmd) {
+	case AP_SET_DYN_BW:
+		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_DYNAMIC_BW,
+			       value))
+			goto fail;
+		break;
+	}
+	nla_nest_end(msg, params);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in send_and_recv_msgs, ret=%d",
+				__func__, ret);
+		return ret;
+	}
+
+	return 0;
+
+fail:
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"%s: err in adding vendor_cmd and vendor_data",
+			__func__);
+	nlmsg_free(msg);
+#endif /* NL80211_SUPPORT */
+	return -1;
+}
+
+
+void wcn_config_dyn_bw_sig(struct sigma_dut *dut, const char *ifname,
+						   const char *val)
+{
+	int set_val;
+	int res;
+
+	if (strcasecmp(val, "enable") == 0) {
+		dut->ap_dyn_bw_sig = VALUE_ENABLED;
+		set_val = 1;
+	} else if (strcasecmp(val, "disable") == 0) {
+		dut->ap_dyn_bw_sig = VALUE_DISABLED;
+		set_val = 0;
+	} else {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Unsupported DYN_BW_SGL");
+		return;
+	}
+
+	res = ap_config_params(dut, ifname, AP_SET_DYN_BW, set_val);
+	if (res) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Set DYN_BW_SGL using NL failed - try iwpriv");
+		if (run_iwpriv(dut, ifname, "cwmenable %d", set_val) != 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"iwpriv cwmenable %d failed",
+					set_val);
+		}
+	}
+}
+
+
 void ath_config_dyn_bw_sig(struct sigma_dut *dut, const char *ifname,
 			   const char *val)
 {
@@ -1270,7 +1367,7 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 			break;
 		case DRIVER_WCN:
 		case DRIVER_LINUX_WCN:
-			ath_config_dyn_bw_sig(dut, ifname, val);
+			wcn_config_dyn_bw_sig(dut, ifname, val);
 			break;
 		default:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
