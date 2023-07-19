@@ -286,6 +286,9 @@ void ath_set_cts_width(struct sigma_dut *dut, const char *ifname,
 enum qca_ap_helper_config_params {
 	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_DYNAMIC_BW */
 	AP_SET_DYN_BW,
+
+	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_LDPC */
+	AP_SET_LDPC,
 };
 
 
@@ -320,6 +323,10 @@ static int ap_config_params(struct sigma_dut *dut, const char *intf,
 	case AP_SET_DYN_BW:
 		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_DYNAMIC_BW,
 			       value))
+			goto fail;
+		break;
+	case AP_SET_LDPC:
+		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_LDPC, value))
 			goto fail;
 		break;
 	}
@@ -401,9 +408,25 @@ void ath_config_dyn_bw_sig(struct sigma_dut *dut, const char *ifname,
 
 static void wcn_config_ap_ldpc(struct sigma_dut *dut, const char *ifname)
 {
-	if (dut->ap_ldpc == VALUE_NOT_SET)
+	int set_val;
+	int res;
+
+	if (dut->ap_ldpc == VALUE_ENABLED)
+		set_val = 1;
+	else if (dut->ap_ldpc == VALUE_DISABLED)
+		set_val = 0;
+	else
 		return;
-	run_iwpriv(dut, ifname, "ldpc %d", dut->ap_ldpc != VALUE_DISABLED);
+
+	res = ap_config_params(dut, ifname, AP_SET_LDPC, set_val);
+	if (res) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Setting of LDPC using NL failed - try iwpriv");
+		if (run_iwpriv(dut, ifname, "lpdc %d", set_val) != 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"iwpriv ldpc %d failed", set_val);
+		}
+	}
 }
 
 
