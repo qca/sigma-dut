@@ -17889,6 +17889,22 @@ static enum sigma_cmd_result cmd_sta_add_credential(struct sigma_dut *dut,
 }
 
 
+static int sta_set_mld_id_mlo_probe_req(struct sigma_dut *dut,
+					const char *intf, int val)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_MLD_ID_ML_PROBE_REQ,
+		val);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"MLD ID in ML Probe Request cannot be set without NL80211_SUPPORT defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static enum sigma_cmd_result cmd_sta_scan(struct sigma_dut *dut,
 					  struct sigma_conn *conn,
 					  struct sigma_cmd *cmd)
@@ -17941,6 +17957,33 @@ static enum sigma_cmd_result cmd_sta_scan(struct sigma_dut *dut,
 
 	if (get_param(cmd, "RxMac"))
 		sta_set_scan_unicast_probe(dut, intf, 1);
+
+	val = get_param(cmd, "MLOscan");
+	if (val &&
+	    (get_enable_disable(val) || strcasecmp(val, "true") == 0)) {
+		const char *mld_id;
+		int mld_id_val = -1;
+
+		mld_id = get_param(cmd, "MLD_ID");
+		if (mld_id)
+			mld_id_val = atoi(mld_id);
+		if (mld_id_val >= 0) {
+			if (sta_set_mld_id_mlo_probe_req(dut, intf,
+							 mld_id_val)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,sta_scan failed setting MLD_ID for MLO probe request");
+				return STATUS_SENT_ERROR;
+			}
+		} else if (mld_id) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,sta_scan failed setting MLD_ID for MLO probe request - Invalid MLD_ID");
+			return STATUS_SENT_ERROR;
+		}
+	} else if (val) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,sta_scan failed enabling MLO probe request - Invalid MLOscan");
+		return STATUS_SENT_ERROR;
+	}
 
 	bssid = get_param(cmd, "Bssid");
 	ssid = get_param(cmd, "Ssid");
