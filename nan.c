@@ -2687,8 +2687,6 @@ int sigma_nan_bootstrapping_indication_response(struct sigma_dut *dut,
 		dut->peer_info.bs_state = NAN_BOOTSTRAP_COMEBACK_RSP_SENT;
 	} else {
 		dut->peer_info.bs_state = NAN_BOOTSTRAPPING_DONE;
-		dut->peer_info.selected_bootstrap_method =
-			(int) strtol(pairing_bootstrapmethod, NULL, 0);
 	}
 	sigma_dut_print(dut, DUT_MSG_DEBUG,
 			"NAN Bootsrapping Indication Response sent");
