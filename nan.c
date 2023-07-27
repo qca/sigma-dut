@@ -3550,8 +3550,7 @@ int nan_cmd_sta_get_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 	u32 sched_update_channel_freq;
 #endif
 #ifdef WFA_CERT_NANR4
-	int i;
-	char *temp;
+	int i, num, pos;
 	char string[100];
 	wifi_error ret;
 #endif /* WFA_CERT_NANR4 */
@@ -3666,10 +3665,17 @@ int nan_cmd_sta_get_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 			sigma_dut_print(dut, DUT_MSG_ERROR, "Request failed");
 			return -1;
 		}
-		temp = string;
-		for (i = 0; i < msg.tk_len; i++)
-			temp += sprintf(temp, "%02x", msg.tk[i]);
-		string[msg.tk_len * 2] = '\0';
+		pos = 0;
+		for (i = 0; i < msg.tk_len; i++) {
+			num = snprintf(&(string[pos]), sizeof(string) - pos,
+				       "%02x", msg.tk[i]);
+			if (num < 0 || num >= sizeof(string) - pos) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "Invalid TK");
+				return STATUS_SENT_ERROR;
+			}
+			pos += num;
+		}
 		snprintf(resp_buf, sizeof(resp_buf), "TK,%s", string);
 	} else if (strcasecmp(parameter, "PMKID") == 0) {
 		NanPairingPmkid msg;
@@ -3687,10 +3693,17 @@ int nan_cmd_sta_get_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 			sigma_dut_print(dut, DUT_MSG_ERROR, "Request failed");
 			return -1;
 		}
-		temp = string;
-		for (i = 0; i < msg.pmkid_len; i++)
-			temp += sprintf(temp, "%02x", msg.pmkid[i]);
-		string[msg.pmkid_len * 2] = '\0';
+		pos = 0;
+		for (i = 0; i < msg.pmkid_len; i++) {
+			num = snprintf(&(string[pos]), sizeof(string) - pos,
+				       "%02x", msg.pmkid[i]);
+			if (num < 0 || num >= sizeof(string) - pos) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "Invalid PMKID");
+				return STATUS_SENT_ERROR;
+			}
+			pos += num;
+		}
 		snprintf(resp_buf, sizeof(resp_buf), "PMKID,%s", string);
 #endif /* WFA_CERT_NANR4 */
 	} else {
