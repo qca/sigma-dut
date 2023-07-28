@@ -5222,7 +5222,7 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 
 		if ((dut->program == PROGRAM_WPA3 &&
 		     dut->sta_associate_wait_connect) ||
-		    dut->program == PROGRAM_QM ||
+		    dut->program == PROGRAM_QM || ap_link_mac ||
 		    (dut->dhcp_client_running && dut->client_privacy)) {
 			ctrl = open_wpa_mon(get_station_ifname(dut));
 			if (!ctrl)
@@ -5378,6 +5378,13 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 					break;
 				}
 				start_dscp_policy_mon_thread(dut);
+			}
+			if (ap_link_mac &&
+			    set_network(intf, dut->infra_network_id, "bssid",
+					"any") < 0) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Failed to set bssid to any after connecting with AP link MAC");
+				ret = ERROR_SEND_STATUS;
 			}
 			break;
 		}
