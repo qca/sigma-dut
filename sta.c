@@ -8332,16 +8332,6 @@ static enum sigma_cmd_result cmd_sta_reassoc(struct sigma_dut *dut,
 	if (freq_val)
 		freq = atoi(freq_val);
 
-	if (wifi_chip_type != DRIVER_WCN && wifi_chip_type != DRIVER_AR6003) {
-		/* The current network may be from sta_associate or
-		 * sta_hs2_associate
-		 */
-		if (set_network(intf, dut->infra_network_id, "bssid", bssid) <
-		    0 ||
-		    set_network(intf, 0, "bssid", bssid) < 0)
-			return ERROR_SEND_STATUS;
-	}
-
 	ctrl = open_wpa_mon(intf);
 	if (ctrl == NULL) {
 		sigma_dut_print(dut, DUT_MSG_ERROR, "Failed to open "
@@ -8359,6 +8349,16 @@ static enum sigma_cmd_result cmd_sta_reassoc(struct sigma_dut *dut,
 		sigma_dut_print(dut, DUT_MSG_DEBUG,
 				"sta_reassoc: Use FT-over-DS");
 		ft_ds = 1;
+	}
+
+	/* The current network may be from sta_associate or sta_hs2_associate */
+	if ((wifi_chip_type != DRIVER_WCN ||
+	     (dut->device_mode == MODE_11BE && !fastreassoc)) &&
+	    wifi_chip_type != DRIVER_AR6003 &&
+	    (set_network(intf, dut->infra_network_id, "bssid", bssid) < 0 ||
+	     set_network(intf, 0, "bssid", bssid) < 0)) {
+		status = ERROR_SEND_STATUS;
+		goto close_mon_conn;
 	}
 
 	if (dut->rsne_override) {
