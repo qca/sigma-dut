@@ -4001,6 +4001,12 @@ enum qca_sta_helper_config_params {
 
 	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_EMLSR_MODE_SWITCH */
 	STA_SET_EMLSR_MODE_SWITCH,
+
+	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_EPCS_CAPABILITY */
+	STA_SET_EPCS_CAPABILITY,
+
+	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_EPCS_FUNCTION */
+	STA_SET_EPCS_FUNCTION,
 };
 
 
@@ -4125,6 +4131,16 @@ static int sta_config_params(struct sigma_dut *dut, const char *intf,
 	case STA_SET_EMLSR_MODE_SWITCH:
 		if (nla_put_u8(msg,
 			       QCA_WLAN_VENDOR_ATTR_CONFIG_EMLSR_MODE_SWITCH,
+			       value))
+			goto fail;
+		break;
+	case STA_SET_EPCS_CAPABILITY:
+		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_EPCS_CAPABILITY,
+			       value))
+			goto fail;
+		break;
+	case STA_SET_EPCS_FUNCTION:
+		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_EPCS_FUNCTION,
 			       value))
 			goto fail;
 		break;
@@ -12335,6 +12351,11 @@ cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 			sta_set_eht_om_ctrl_supp(dut, intf, 0);
 	}
 
+	val = get_param(cmd, "EPCS");
+	if (val)
+		sta_config_params(dut, intf, STA_SET_EPCS_CAPABILITY,
+				  get_enable_disable(val) ? 1 : 0);
+
 	return cmd_sta_set_wireless_vht(dut, conn, cmd);
 }
 
@@ -16268,6 +16289,24 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 	val = get_param(cmd, "Cellular_Data_Cap");
 	if (val && mbo_set_cellular_data_capa(dut, conn, intf, atoi(val)) == 0)
 		return STATUS_SENT;
+
+	val = get_param(cmd, "EPCS_Setup");
+	if (val) {
+		int epcs_function;
+
+		if (strcasecmp(val, "Request") == 0) {
+			epcs_function = 1;
+		} else if (strcasecmp(val, "Teardown") == 0) {
+			epcs_function = 0;
+		} else {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Unsupported EPCS setup value '%s'",
+					val);
+			return INVALID_SEND_STATUS;
+		}
+		sta_config_params(dut, intf, STA_SET_EPCS_FUNCTION,
+				  epcs_function);
+	}
 
 	return SUCCESS_SEND_STATUS;
 
