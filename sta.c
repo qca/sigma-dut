@@ -2385,7 +2385,11 @@ static enum sigma_cmd_result cmd_sta_set_psk(struct sigma_dut *dut,
 			if (set_network(ifname, id, "key_mgmt", "FT-SAE") < 0)
 				return -2;
 		} else if (!akm) {
-			if (set_network(ifname, id, "key_mgmt", "SAE") < 0)
+			const char *key_mgmt = "SAE";
+
+			if (dut->device_mode == MODE_11BE)
+				key_mgmt = "SAE-EXT-KEY SAE";
+			if (set_network(ifname, id, "key_mgmt", key_mgmt) < 0)
 				return -2;
 		}
 		if (wpa_command(ifname, "SET sae_groups ") != 0) {
