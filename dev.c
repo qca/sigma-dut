@@ -532,10 +532,12 @@ static enum sigma_cmd_result cmd_dev_start_test(struct sigma_dut *dut,
 						struct sigma_cmd *cmd)
 {
 	const char *val;
-	char buf[250];
 	char dir[200];
 	FILE *supp_log;
+#ifndef ANDROID
 	int res;
+	char buf[250];
+#endif /* !ANDROID */
 
 	val = get_param(cmd, "Runtime_ID");
 	if (!(val && is_runtime_id_valid(dut, val)))
