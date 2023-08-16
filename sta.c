@@ -2205,7 +2205,7 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 			return 0;
 		}
 	} else if (dut->device_mode == MODE_11BE) {
-		if (set_network(ifname, id, "group", "GCMP-256") < 0)
+		if (set_network(ifname, id, "group", "GCMP-256 CCMP") < 0)
 			return -2;
 	}
 
