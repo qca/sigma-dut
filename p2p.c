@@ -753,8 +753,20 @@ static enum sigma_cmd_result cmd_sta_set_p2p(struct sigma_dut *dut,
 			dut->noa_count = atoi(noa_count);
 
 		if (noa_dur || noa_int || noa_count) {
-			int start;
+			int start = 0;
 			const char *ifname;
+
+			snprintf(buf, sizeof(buf),
+				 "DRIVER P2P_SET_NOA %d %d %d %d",
+				 dut->noa_count, start,
+				 dut->noa_duration, dut->noa_interval);
+			ifname = get_group_ifname(dut, intf);
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Set GO NoA for interface %s", ifname);
+
+			if (wpa_command(ifname, buf) == 0)
+				goto noa_done;
+
 			if (dut->noa_count == 0 && dut->noa_duration == 0)
 				start = 0;
 			else if (dut->noa_duration > 102) /* likely non-periodic
@@ -765,9 +777,6 @@ static enum sigma_cmd_result cmd_sta_set_p2p(struct sigma_dut *dut,
 			snprintf(buf, sizeof(buf), "P2P_SET noa %d,%d,%d",
 				dut->noa_count, start,
 				dut->noa_duration);
-			ifname = get_group_ifname(dut, intf);
-			sigma_dut_print(dut, DUT_MSG_INFO,
-					"Set GO NoA for interface %s", ifname);
 			if (wpa_command(ifname, buf) < 0) {
 				send_resp(dut, conn, SIGMA_ERROR,
 					  "errorCode,Use of NoA as GO not supported");
@@ -775,6 +784,7 @@ static enum sigma_cmd_result cmd_sta_set_p2p(struct sigma_dut *dut,
 			}
 		}
 	}
+noa_done:
 
 	val = get_param(cmd, "Concurrency");
 	if (val) {
