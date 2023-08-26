@@ -1868,6 +1868,8 @@ static int add_network_common(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *ssid = get_param(cmd, "ssid");
 	int id;
 	const char *val;
+	char buf[100];
+	u8 mac_addr[ETH_ALEN];
 
 	if (ssid == NULL)
 		return -1;
@@ -1893,13 +1895,25 @@ static int add_network_common(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (!val)
 		val = get_param(cmd, "prog");
 	if (val && strcasecmp(val, "hs2") == 0) {
-		char buf[100];
 		snprintf(buf, sizeof(buf), "ENABLE_NETWORK %d no-connect", id);
 		wpa_command(ifname, buf);
 
 		val = get_param(cmd, "prefer");
 		if (val && atoi(val) > 0)
 			set_network(ifname, id, "priority", "1");
+	}
+
+	if (dut->client_privacy && dut->device_type == STA_dut &&
+	    random_mac_addr(mac_addr) == 0) {
+		snprintf(buf, sizeof(buf), MACSTR, MAC2STR(mac_addr));
+		/*
+		 * Ignore SET_NETWORK failures since wpa_supplicant may not have
+		 * support for per-ESS pre-generated MAC address configuration.
+		 * The mac_addr=3 setting is updated only if the pre-generated
+		 * address can be set.
+		 */
+		if (set_network(ifname, id, "mac_value", buf) >= 0)
+			set_network(ifname, id, "mac_addr", "3");
 	}
 
 	return id;

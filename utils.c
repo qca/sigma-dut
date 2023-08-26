@@ -1108,6 +1108,16 @@ int random_get_bytes(char *buf, size_t len)
 }
 
 
+int random_mac_addr(u8 *addr)
+{
+	if (random_get_bytes((char *) addr, ETH_ALEN) < 0)
+		return -1;
+	addr[0] &= 0xfe; /* unicast */
+	addr[0] |= 0x02; /* locally administered */
+	return 0;
+}
+
+
 int get_enable_disable(const char *val)
 {
 	if (strcasecmp(val, "enable") == 0 ||

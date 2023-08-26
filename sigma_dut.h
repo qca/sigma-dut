@@ -89,6 +89,11 @@
 #define ETH_P_ARP 0x0806
 #endif
 
+#ifndef MAC2STR
+#define MAC2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
+#define MACSTR "%02x:%02x:%02x:%02x:%02x:%02x"
+#endif
+
 #define IPV6_ADDR_LEN 16
 
 struct sigma_dut;
@@ -1376,6 +1381,7 @@ int get_wps_forced_version(struct sigma_dut *dut, const char *str);
 int base64_encode(const char *src, size_t len, char *out, size_t out_len);
 unsigned char * base64_decode(const char *src, size_t len, size_t *out_len);
 int random_get_bytes(char *buf, size_t len);
+int random_mac_addr(u8 *addr);
 int get_enable_disable(const char *val);
 int wcn_driver_cmd(const char *ifname, char *buf);
 
