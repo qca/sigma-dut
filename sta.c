@@ -12442,6 +12442,9 @@ sta_set_wireless_wpa3(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 	}
 
+	if (dut->device_mode == MODE_11BE)
+		return cmd_sta_set_wireless_eht(dut, conn, cmd);
+
 	return cmd_sta_set_wireless_common(intf, dut, conn, cmd);
 }
 
