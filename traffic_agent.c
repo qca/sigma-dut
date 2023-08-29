@@ -12,6 +12,10 @@
 
 #define TG_MAX_CLIENTS_CONNECTIONS 1
 
+/* Limited bit rate generator related constant or threshold values */
+  /* 25 Mbps per stream */
+#define WFA_SEND_FIX_BITRATE_MAX             25 * 1024 * 1024
+
 
 static enum sigma_cmd_result cmd_traffic_agent_config(struct sigma_dut *dut,
 						      struct sigma_conn *conn,
@@ -49,6 +53,8 @@ static enum sigma_cmd_result cmd_traffic_agent_config(struct sigma_dut *dut,
 		s->profile = SIGMA_PROFILE_START_SYNC;
 	else if (strcasecmp(val, "Uapsd") == 0)
 		s->profile = SIGMA_PROFILE_UAPSD;
+	else if (strcasecmp(val, "Burst") == 0)
+		s->profile = SIGMA_PROFILE_BURST;
 	else {
 		send_resp(dut, conn, SIGMA_INVALID, "errorCode,Unsupported "
 			  "profile");
@@ -142,6 +148,27 @@ static enum sigma_cmd_result cmd_traffic_agent_config(struct sigma_dut *dut,
 				"Traffic agent: U-APSD console tagname %s",
 				s->test_name);
 	}
+
+	val = get_param(cmd, "DSCP");
+	if (val) {
+		s->dscp = atoi(val);
+		if (s->dscp < 0 || s->dscp > 63) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Invalid DSCP value");
+			return STATUS_SENT;
+		}
+		s->use_dscp = true;
+	} else {
+		s->use_dscp = false;
+	}
+
+	val = get_param(cmd, "burstFragments");
+	if (val)
+		s->no_of_pkts_burst = atoi(val);
+
+	val = get_param(cmd, "burstPeriodicity");
+	if (val)
+		s->burst_periodicity = atoi(val);
 
 	if (dut->throughput_pktsize && s->frame_rate == 0 && s->sender &&
 	    dut->throughput_pktsize != s->payload_size &&
@@ -405,6 +432,8 @@ set_tos:
 
 static int open_socket(struct sigma_dut *dut, struct sigma_stream *s)
 {
+	int tos = 0;
+
 	switch (s->profile) {
 	case SIGMA_PROFILE_FILE_TRANSFER:
 		return open_socket_file_transfer(dut, s);
@@ -418,6 +447,17 @@ static int open_socket(struct sigma_dut *dut, struct sigma_stream *s)
 		return open_socket_file_transfer(dut, s);
 	case SIGMA_PROFILE_UAPSD:
 		return open_socket_file_transfer(dut, s);
+	case SIGMA_PROFILE_BURST:
+		if (open_socket_file_transfer(dut, s) < 0)
+			return -1;
+		tos = s->dscp << 2;
+		if (s->use_dscp &&
+		    setsockopt(s->sock, IPPROTO_IP, IP_TOS, &tos,
+			       sizeof(tos)) < 0) {
+			perror("setsockopt");
+			return -1;
+		}
+		return 0;
 	case SIGMA_PROFILE_START_SYNC:
 		sigma_dut_print(dut, DUT_MSG_INFO, "Traffic stream profile %d "
 				"not yet supported", s->profile);
@@ -575,6 +615,195 @@ static void send_file(struct sigma_stream *s)
 }
 
 
+static int itime_diff(struct timeval *t1, struct timeval *t2)
+{
+	int sec = t2->tv_sec - t1->tv_sec;
+	int usec = t2->tv_usec - t1->tv_usec;
+
+	if (sec < 0)
+		return 0;
+
+	if (sec == 0) {
+		if (usec >= 0)
+			return usec;
+		return 0;
+	}
+
+	if (usec < 0) {
+		sec--;
+		usec += 1000000;
+	}
+
+	return sec * 1000000 + usec;
+
+}
+
+
+static int send_burst(struct sigma_stream *s)
+{
+	char *pkt = NULL;
+	int bytes_sent, rate;
+	int over_time_cnt = 0, duration = 0, over_send = 0;
+	/* sleep mil-sec per sending */
+	int sleep_total = 0, extra_time_spend_on_sending = 0;
+	int counter = 0, i; /* frame data sending count */
+	int difftime;
+	struct timeval before, after, stime;
+	struct timeval stop;
+	int run_loop = 1;
+
+	if (!s || s->burst_periodicity == 0 || s->duration == 0 ||
+	    s->payload_size < 20) {
+		sigma_dut_print(s->dut, DUT_MSG_DEBUG,
+				"send_burst usage error, burstPeriod=%d or duration=%d",
+				s->burst_periodicity, s->duration);
+		return -1;
+	}
+
+	sigma_dut_print(s->dut, DUT_MSG_DEBUG, "send_burst: payload_size=%d",
+			s->payload_size);
+
+	/* Calculate the requested bitrate */
+	rate = s->payload_size * s->no_of_pkts_burst *
+		(1000 / s->burst_periodicity) * 8;
+	if (rate > WFA_SEND_FIX_BITRATE_MAX) {
+		sigma_dut_print(s->dut, DUT_MSG_DEBUG,
+				"send_burst over maximum bitrate, req bitrate=%d",
+				rate);
+		return -1;
+	}
+	/* Allocate sending buffer  */
+	pkt = malloc(s->payload_size);
+	if (!pkt) {
+		sigma_dut_print(s->dut, DUT_MSG_ERROR,
+				"send_burst malloc error");
+		return -1;
+	}
+	memset(pkt, 0, s->payload_size);
+	/* Fill in the header */
+	strlcpy(pkt, "1345678", s->payload_size);
+
+	gettimeofday(&stop, NULL);
+	stop.tv_sec += s->duration;
+
+	while (run_loop) {
+		gettimeofday(&before, NULL);
+		/* Send data per second loop */
+		for (i = 0; i < s->no_of_pkts_burst; i++) {
+			counter++;
+			/* Fill in the counter */
+			WPA_PUT_BE32(&pkt[8], counter);
+
+			/* Fill the timestamp to the header. */
+			gettimeofday(&stime, NULL);
+			WPA_PUT_BE32(&pkt[12], stime.tv_sec);
+			WPA_PUT_BE32(&pkt[16], stime.tv_usec);
+
+			bytes_sent = send(s->sock, pkt, s->payload_size, 0);
+			if (bytes_sent >= 0) {
+				s->tx_frames++;
+				s->tx_payload_bytes += bytes_sent;
+			} else {
+				int err = errno;
+
+				counter--;
+				sleep_total++;
+				i--;
+
+				if (err)
+					sigma_dut_print(s->dut, DUT_MSG_DEBUG,
+							"send_burst error = %d",
+							err);
+				switch (err) {
+				case EAGAIN:
+				case ENOBUFS:
+					usleep(100);
+					break;
+				case ECONNRESET:
+				case EPIPE:
+					s->stop = 1;
+					break;
+				}
+			}
+		} /* for loop per burst sending */
+		duration++;
+
+		/* Calculate second rest part need to sleep */
+		gettimeofday(&after, NULL);
+		difftime = itime_diff(&before, &after);
+		if (difftime < 0 || difftime >= s->burst_periodicity * 1000) {
+			/* Over time used, no sleep, go back to send */
+			over_time_cnt++;
+			if (difftime > s->burst_periodicity * 1000)
+				extra_time_spend_on_sending +=
+					difftime - s->burst_periodicity * 1000;
+			usleep(500);
+			sleep_total++;
+			continue;
+		}
+
+		if (after.tv_sec > stop.tv_sec ||
+		    (after.tv_sec == stop.tv_sec &&
+		     after.tv_usec >= stop.tv_usec))
+			break;
+
+		/* difftime < 1 sec case, use sleep to catch up time
+		 * as 1 sec per sending
+		 */
+		/* check with accumulated extra time spend on previous
+		 * sending, difftime < 1 sec case
+		 */
+		if (extra_time_spend_on_sending > 0) {
+			if (extra_time_spend_on_sending >
+			    s->burst_periodicity * 1000 - difftime) {
+				/* reduce sleep time to catch up
+				 * over all on time sending */
+				extra_time_spend_on_sending -=
+					s->burst_periodicity * 1000 - difftime;
+				usleep(500);
+				sleep_total++;
+				continue;
+			} else { /* usec used to */
+				difftime += extra_time_spend_on_sending;
+				extra_time_spend_on_sending = 0;
+			}
+		}
+
+		difftime /= 1000; /* convert to mil-sec */
+
+		if (s->burst_periodicity - difftime > 0) {
+			/* only sleep if there is extrac time with in the
+			 * second did not spend on sending */
+			usleep((s->burst_periodicity - difftime) * 1000);
+			sleep_total += s->burst_periodicity - difftime;
+		}
+
+		if (s->duration * 1000 < duration * s->burst_periodicity) {
+			over_send++;
+			/* This should not happen */
+			if (over_send > 1000) {
+				sigma_dut_print(s->dut, DUT_MSG_DEBUG,
+						"duration: %d, Loop: %d",
+						duration, run_loop);
+				break;
+			}
+		}
+	}
+
+	free(pkt);
+
+	extra_time_spend_on_sending /= 1000;
+	sigma_dut_print(s->dut, DUT_MSG_DEBUG,
+			"send_burst Count=%i txFrames=%i totalByteSent=%lli sleep_total=%d msec extra_time_spend_on_sending=%d over_time_cnt=%d over_send=%i BurstFrag=%d BurstPeriod=%d duration=%i",
+			counter, s->tx_frames,
+			s->tx_payload_bytes, sleep_total,
+			extra_time_spend_on_sending, over_time_cnt, over_send,
+			s->no_of_pkts_burst, s->burst_periodicity, duration);
+
+	return 0;
+}
+
+
 static void send_transaction(struct sigma_stream *s)
 {
 	char *pkt, *rpkt;
@@ -698,6 +927,9 @@ static void * send_thread(void *ctx)
 		break;
 	case SIGMA_PROFILE_UAPSD:
 		send_uapsd_console(s);
+		break;
+	case SIGMA_PROFILE_BURST:
+		send_burst(s);
 		break;
 	}
 
@@ -1146,6 +1378,9 @@ static void * receive_thread(void *ctx)
 		break;
 	case SIGMA_PROFILE_UAPSD:
 		receive_uapsd(s);
+		break;
+	case SIGMA_PROFILE_BURST:
+		receive_file(s);
 		break;
 	}
 

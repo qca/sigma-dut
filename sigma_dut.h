@@ -217,7 +217,8 @@ struct sigma_stream {
 		SIGMA_PROFILE_IPTV,
 		SIGMA_PROFILE_TRANSACTION,
 		SIGMA_PROFILE_START_SYNC,
-		SIGMA_PROFILE_UAPSD
+		SIGMA_PROFILE_UAPSD,
+		SIGMA_PROFILE_BURST,
 	} profile;
 	int sender;
 	struct in_addr dst;
@@ -245,6 +246,11 @@ struct sigma_stream {
 	int stop;
 	int ta_send_in_progress;
 	int trans_proto;
+
+	int no_of_pkts_burst;
+	int burst_periodicity;
+	int dscp;
+	bool use_dscp;
 
 	/* Statistics */
 	int tx_act_frames; /*
