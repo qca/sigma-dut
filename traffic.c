@@ -430,8 +430,9 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 	struct hostent *host_addr;
 	char ip_addr[INET6_ADDRSTRLEN];
 	bool iperf_v2 = false;
-	char iperf_result_file[50], iperf_pid_file[50];
+	char iperf_result_file[50], iperf_pid_file[50], latency_str[50];
 	int res;
+	char iperf_cmd[300];
 
 	val = get_param(cmd, "iperfversion");
 	if (val && atoi(val) == 2)
@@ -513,7 +514,7 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 		fps = rate / (atoi(val) * 8);
 		/* Use --isochronous to allow lower burst size. */
 		ret = snprintf(burst_size_str, sizeof(burst_size_str),
-			       " --isochronous=%d:%d,0", fps, rate);
+			       " --isochronous=%d:%d,0 -w 2M", fps, rate);
 		if (ret < 0 || ret >= sizeof(burst_size_str))
 			return ERROR_SEND_STATUS;
 
@@ -594,6 +595,33 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 	if (val)
 		reverse = atoi(val);
 
+	latency_str[0] = '\0';
+	val = get_param(cmd, "latency");
+	if (!iperf_v2 && val) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode, Iperf3 doesn't support latency params");
+		return STATUS_SENT_ERROR;
+	}
+	if (val && atoi(val)) {
+		const char *lower_ci, *upper_ci;
+
+		val = get_param(cmd, "LowerCI");
+		lower_ci = val ? val : "95";
+
+		val = get_param(cmd, "UpperCI");
+		upper_ci = val ? val : "99.9";
+
+		if (server)
+			res = snprintf(latency_str, sizeof(latency_str),
+				       " --realtime --histograms=1m,1000000,%s,%s ",
+				       lower_ci, upper_ci);
+		else
+			res = snprintf(latency_str, sizeof(latency_str),
+				       " --realtime --trip-times ");
+		if (res < 0 || res >= sizeof(latency_str))
+			return ERROR_SEND_STATUS;
+	}
+
 	tos[0] = '\0';
 	val = get_param(cmd, "DSCP");
 	if (val) {
@@ -628,14 +656,6 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 	unlink(concat_sigma_tmpdir(dut, iperf_pid_file, iperf,
 				   sizeof(iperf)));
 
-	f = fopen(concat_sigma_tmpdir(dut, "/sigma_dut-iperf.sh", iperf,
-				      sizeof(iperf)), "w");
-	if (!f) {
-		send_resp(dut, conn, SIGMA_ERROR,
-			  "errorCode,Can not write sigma_dut-iperf.sh");
-		return STATUS_SENT;
-	}
-
 	if (server) {
 		/* write server side command to shell file */
 		if (ipv6 && dst && (strncmp(dst, "ff", 2) == 0)) {
@@ -650,12 +670,10 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 			buf[0] = '\0';
 		}
 
-		fprintf(f, "#!" SHELL "\n"
-			"iperf%s -s %s %s %s %s > %s%s &\n"
-			"echo $! > %s%s\n",
+		res = snprintf(iperf_cmd, sizeof(iperf_cmd),
+			"iperf%s -s %s %s %s %s -i 1 %s > %s%s &\n",
 			iperf_v2 ? "" : "3", port_str, iptype, proto,
-			buf, dut->sigma_tmpdir, iperf_result_file,
-			dut->sigma_tmpdir, iperf_pid_file);
+			buf, latency_str, dut->sigma_tmpdir, iperf_result_file);
 	} else {
 		/* write client side command to shell file */
 		if (!dst)
@@ -670,15 +688,28 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 			iptype = "-V";
 		}
 
-		fprintf(f, "#!" SHELL "\n"
-			"iperf%s -c %s -t %d %s %s%s %s%s%s%s%s > %s%s &\n"
-			"echo $! > %s%s\n",
+		res = snprintf(iperf_cmd, sizeof(iperf_cmd),
+			"iperf%s -c %s -t %d %s %s%s %s%s%s%s%s -i 1 %s > %s%s &\n",
 			iperf_v2 ? "" : "3",
 			buf, duration, iptype, proto, bitrate, port_str,
 			client_port_str, tos, reverse ? " -R" : "",
-			burst_size_str, dut->sigma_tmpdir, iperf_result_file,
-			dut->sigma_tmpdir, iperf_pid_file);
+			burst_size_str, latency_str, dut->sigma_tmpdir,
+			iperf_result_file);
 	}
+	if (res < 0 || res >= sizeof(iperf_cmd))
+		return ERROR_SEND_STATUS;
+
+	f = fopen(concat_sigma_tmpdir(dut, "/sigma_dut-iperf.sh", iperf,
+				      sizeof(iperf)), "w");
+	if (!f) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Can not write sigma_dut-iperf.sh");
+		return STATUS_SENT;
+	}
+
+	fprintf(f, "#!" SHELL "\n%s"
+		"echo $! > %s%s\n",
+		iperf_cmd, dut->sigma_tmpdir, iperf_pid_file);
 
 	fclose(f);
 
@@ -690,7 +721,8 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 		return STATUS_SENT;
 	}
 
-	sigma_dut_print(dut, DUT_MSG_DEBUG, "Starting iperf");
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Starting iperf. cmd: %s",
+			iperf_cmd);
 	if (system(concat_sigma_tmpdir(dut, "/sigma_dut-iperf.sh", iperf,
 				       sizeof(iperf))) != 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR, "Failed to start iperf");
@@ -711,7 +743,7 @@ static enum sigma_cmd_result cmd_traffic_stop_iperf(struct sigma_dut *dut,
 {
 	int pid;
 	FILE *f;
-	char buf[100], summary_buf[100], iperf[100];
+	char buf[1024], summary_buf[1024], iperf[100], histogram_buf[1024];
 	float bandwidth, totalbytes, factor;
 	char *pos;
 	long l_bandwidth, l_totalbytes;
@@ -721,6 +753,8 @@ static enum sigma_cmd_result cmd_traffic_stop_iperf(struct sigma_dut *dut,
 	DIR *dir;
 	struct dirent *entry;
 	int res, server;
+	bool latency_expected = false;
+	char *latency;
 
 	val = get_param(cmd, "mode");
 	server = val && strcasecmp(val, "server") == 0;
@@ -798,13 +832,14 @@ static enum sigma_cmd_result cmd_traffic_stop_iperf(struct sigma_dut *dut,
 
 	/* parse iperf output which is stored in sigma_dut-iperf-res* */
 	summary_buf[0] = '\0';
+	histogram_buf[0] = '\0';
 	f = fopen(concat_sigma_tmpdir(dut, iperf_result_file, iperf,
 				      sizeof(iperf)), "r");
 	if (!f) {
 		sigma_dut_print(dut, DUT_MSG_DEBUG,
 				"No iperf result file found");
 		send_resp(dut, conn, SIGMA_COMPLETE,
-			  "bandwidth,0,totalbytes,0");
+			  "bandwidth,0,totalbytes,0,latency,0");
 		return STATUS_SENT;
 	}
 
@@ -816,21 +851,40 @@ static enum sigma_cmd_result cmd_traffic_stop_iperf(struct sigma_dut *dut,
 		if (pos)
 			*pos = '\0';
 		sigma_dut_print(dut, DUT_MSG_DEBUG, "iperf: %s", buf);
+		pos = strstr(buf, "out-of-order");
+		if (pos)
+			continue;
+
 		pos = strstr(buf, " sec  ");
 		if (pos)
 			strlcpy(summary_buf, buf, sizeof(summary_buf));
+
+		pos = strstr(buf, "clients should use --trip-times");
+		if (pos)
+			latency_expected = true;
+
+		if (latency_expected) {
+			pos = strstr(buf, "%=");
+			if (pos)
+				strlcpy(histogram_buf, buf,
+					sizeof(histogram_buf));
+		}
 	}
 
 	fclose(f);
 	unlink(concat_sigma_tmpdir(dut, iperf_result_file, iperf,
 				   sizeof(iperf)));
 
+	res = snprintf(buf, sizeof(buf), "bandwidth,0,totalbytes,0%s",
+		       latency_expected ? ",latency,0" : "");
+	if (res < 0 || res >= sizeof(buf))
+		return ERROR_SEND_STATUS;
+
 	pos = strstr(summary_buf, "Bytes");
 	if (!pos || pos == summary_buf) {
 		sigma_dut_print(dut, DUT_MSG_DEBUG,
-				"Can not parse iperf results");
-		send_resp(dut, conn, SIGMA_COMPLETE,
-			  "bandwidth,0,totalbytes,0");
+				"Can not parse iperf results: Bytes");
+		send_resp(dut, conn, SIGMA_COMPLETE, buf);
 		return STATUS_SENT;
 	}
 
@@ -855,9 +909,8 @@ static enum sigma_cmd_result cmd_traffic_stop_iperf(struct sigma_dut *dut,
 	pos = strstr(summary_buf, "bits/sec");
 	if (!pos || pos == summary_buf) {
 		sigma_dut_print(dut, DUT_MSG_DEBUG,
-				"Can not parse iperf results");
-		send_resp(dut, conn, SIGMA_COMPLETE,
-			  "bandwidth,0,totalbytes,0");
+				"Can not parse iperf results: bits/sec");
+		send_resp(dut, conn, SIGMA_COMPLETE, buf);
 		return STATUS_SENT;
 	}
 
@@ -879,8 +932,35 @@ static enum sigma_cmd_result cmd_traffic_stop_iperf(struct sigma_dut *dut,
 		bandwidth = 0;
 	l_bandwidth = bandwidth * factor;
 
-	snprintf(buf, sizeof(buf), "bandwidth,%lu,totalbytes,%lu",
-		 l_bandwidth, l_totalbytes);
+	if (latency_expected) {
+		pos = strstr(histogram_buf, "%=");
+		if (!pos || pos == histogram_buf) {
+			/* Not a fatal error. */
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"Skip iperf results for latency.");
+			latency = "NA";
+		} else {
+			latency = pos + 2;
+			pos = strstr(latency, ",");
+			if (!pos || pos == latency) {
+				sigma_dut_print(dut, DUT_MSG_DEBUG,
+						"Can not parse iperf results: latency");
+				send_resp(dut, conn, SIGMA_COMPLETE, buf);
+				return STATUS_SENT_ERROR;
+			}
+			pos[0] = '\0';
+		}
+		res = snprintf(buf, sizeof(buf),
+			       "bandwidth,%lu,totalbytes,%lu,latency,%s",
+			       l_bandwidth, l_totalbytes, latency);
+	} else {
+		res = snprintf(buf, sizeof(buf),
+			       "bandwidth,%lu,totalbytes,%lu",
+			       l_bandwidth, l_totalbytes);
+	}
+	if (res < 0 || res >= sizeof(buf))
+		return ERROR_SEND_STATUS;
+
 	send_resp(dut, conn, SIGMA_COMPLETE, buf);
 	return STATUS_SENT;
 }
