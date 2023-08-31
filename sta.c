@@ -10223,6 +10223,42 @@ static int sta_set_client_privacy(struct sigma_dut *dut,
 }
 
 
+static void kill_iperf(struct sigma_dut *dut)
+{
+	DIR *dir;
+	FILE *f;
+	int pid, res;
+	struct dirent *entry;
+	char buf[200];
+
+	dir = opendir(dut->sigma_tmpdir);
+	if (!dir)
+		return;
+
+	while ((entry = readdir(dir))) {
+		res = snprintf(buf, sizeof(buf), "%s/%s", dut->sigma_tmpdir,
+			       entry->d_name);
+		if (res < 0 || res >= sizeof(buf))
+			continue;
+
+		if (strncmp(entry->d_name, "sigma_dut-iperf-res-", 20) == 0)
+			unlink(buf);
+
+		if (strncmp(entry->d_name, "sigma_dut-iperf-pid-", 20) == 0) {
+			f = fopen(buf, "r");
+			if (!f)
+				continue;
+			if (fscanf(f, "%d", &pid) == 1 && pid > 0)
+				kill(pid, SIGINT);
+
+			unlink(buf);
+			fclose(f);
+		}
+	}
+	closedir(dir);
+}
+
+
 static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 						   struct sigma_conn *conn,
 						   struct sigma_cmd *cmd)
@@ -10298,6 +10334,8 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	if (dut->program == PROGRAM_NAN)
 		nan_cmd_sta_reset_default(dut, conn, cmd);
 #endif /* ANDROID_NAN */
+
+	kill_iperf(dut);
 
 	if ((dut->program == PROGRAM_LOC || dut->program == PROGRAM_LOCR2) &&
 	    lowi_cmd_sta_reset_default(dut, conn, cmd) < 0)
