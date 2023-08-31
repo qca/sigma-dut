@@ -424,8 +424,8 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 	FILE *f;
 	int server, ipv6 = 0;
 	char *pos;
-	int dscp, reverse = 0;
-	char tos[20], client_port_str[100], bitrate[20];
+	int dscp, reverse = 0, rate;
+	char tos[20], client_port_str[100], bitrate[30], burst_size_str[50];
 	struct hostent *host_addr;
 	char ip_addr[INET6_ADDRSTRLEN];
 	bool iperf_v2 = false;
@@ -475,12 +475,47 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 		proto = "-u";
 	}
 
+	rate = 1024 * 1024 * 1024; /* default rate: 1 Gbps */
 	bitrate[0] = '\0';
 	val = get_param(cmd, "bitrate");
 	if (val) {
 		int ret = snprintf(bitrate, sizeof(bitrate), " -b %s", val);
+		size_t len;
+		char rate_factor;
+
 		if (ret < 0 || ret >= sizeof(bitrate))
 			return ERROR_SEND_STATUS;
+
+		rate = atoi(val);
+		len = strlen(val);
+		rate_factor = len > 0 ? val[len - 1] : 0;
+		if (rate_factor == 'G')
+			rate *= 1024 * 1024 * 1024;
+		else if (rate_factor == 'M')
+			rate *= 1024 * 1024;
+		else if (rate_factor == 'K')
+			rate *= 1024;
+	}
+
+	burst_size_str[0] = '\0';
+	val = get_param(cmd, "burstsize");
+	if (!iperf_v2 && val) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Invalid Iperf3 option BurstSize");
+		return ERROR_SEND_STATUS;
+	}
+	if (val && atoi(val) > 0) {
+		int fps, ret;
+
+		fps = rate / (atoi(val) * 8);
+		/* Use --isochronous to allow lower burst size. */
+		ret = snprintf(burst_size_str, sizeof(burst_size_str),
+			       " --isochronous=%d:%d,0", fps, rate);
+		if (ret < 0 || ret >= sizeof(burst_size_str))
+			return ERROR_SEND_STATUS;
+
+		/* Isochronous and bitrate don't get configured together */
+		bitrate[0] = '\0';
 	}
 
 	dst = get_param(cmd, "destination");
@@ -625,13 +660,13 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 		}
 
 		fprintf(f, "#!" SHELL "\n"
-			"iperf%s -c %s -t %d %s %s%s %s%s%s%s > %s"
+			"iperf%s -c %s -t %d %s %s%s %s%s%s%s%s > %s"
 			"/sigma_dut-iperf &\n"
 			"echo $! > %s/sigma_dut-iperf-pid\n",
 			iperf_v2 ? "" : "3",
 			buf, duration, iptype, proto, bitrate, port_str,
 			client_port_str, tos, reverse ? " -R" : "",
-			dut->sigma_tmpdir, dut->sigma_tmpdir);
+			burst_size_str, dut->sigma_tmpdir, dut->sigma_tmpdir);
 	}
 
 	fclose(f);
