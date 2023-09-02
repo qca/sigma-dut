@@ -9908,7 +9908,7 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 #endif /* NL80211_SUPPORT */
 
 	if (dut->program == PROGRAM_HE || dut->program == PROGRAM_EHT ||
-	    dut->device_mode == MODE_11BE) {
+	    dut->device_mode == MODE_11BE || dut->program == PROGRAM_QM) {
 		/* resetting phymode to auto in case of HE program */
 		sta_set_phymode(dut, intf, "auto");
 
@@ -10165,7 +10165,8 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 		}
 	}
 
-	if (dut->program == PROGRAM_EHT || dut->device_mode == MODE_11BE) {
+	if (dut->program == PROGRAM_EHT || dut->device_mode == MODE_11BE ||
+	    dut->program == PROGRAM_QM) {
 		/* Reset the device EHT capabilities to its default supported
 		 * configuration. */
 		sta_set_eht_testbed_def(dut, intf, 0);
