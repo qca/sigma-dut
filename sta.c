@@ -17064,6 +17064,18 @@ cmd_sta_set_rfeature_qm(const char *intf, struct sigma_dut *dut,
 		return SUCCESS_SEND_STATUS;
 	}
 
+	val = get_param(cmd, "TxSUPPDU");
+	if (val) {
+		if (sta_set_tx_su_ppdu_cfg(dut, intf,
+					   get_enable_disable(val))) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set Tx SU PPDU config");
+			return STATUS_SENT_ERROR;
+		}
+
+		return SUCCESS_SEND_STATUS;
+	}
+
 	send_resp(dut, conn, SIGMA_ERROR,
 		  "errorCode,Unsupported QM rfeature");
 	return STATUS_SENT_ERROR;
