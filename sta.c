@@ -12281,10 +12281,10 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 		if (strcasecmp(val, "gt512") == 0)
 			buf_size = 1024;
 		else if (strcasecmp(val, "gt256") == 0 ||
-			 strcasecmp(val, "eq512"))
+			 strcasecmp(val, "eq512") == 0)
 			buf_size = 512;
 		else if (strcasecmp(val, "gt64") == 0 ||
-			 strcasecmp(val, "eq256"))
+			 strcasecmp(val, "eq256") == 0)
 			buf_size = 256;
 		else
 			buf_size = 64;
@@ -12303,10 +12303,10 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 		if (strcasecmp(val, "gt512") == 0)
 			buf_size = 1024;
 		else if (strcasecmp(val, "gt256") == 0 ||
-			 strcasecmp(val, "eq512"))
+			 strcasecmp(val, "eq512") == 0)
 			buf_size = 512;
 		else if (strcasecmp(val, "gt64") == 0 ||
-			 strcasecmp(val, "eq256"))
+			 strcasecmp(val, "eq256") == 0)
 			buf_size = 256;
 		else
 			buf_size = 64;
