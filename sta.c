@@ -4025,6 +4025,10 @@ enum qca_sta_helper_config_params {
 
 	/* For the attribute QCA_WLAN_VENDOR_ATTR_CONFIG_EPCS_FUNCTION */
 	STA_SET_EPCS_FUNCTION,
+
+	/* For the attribute
+	 * QCA_WLAN_VENDOR_ATTR_CONFIG_TTLM_NEGOTIATION_SUPPORT */
+	STA_SET_T2LM_NEG_SUPPORT,
 };
 
 
@@ -4159,6 +4163,12 @@ static int sta_config_params(struct sigma_dut *dut, const char *intf,
 		break;
 	case STA_SET_EPCS_FUNCTION:
 		if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_EPCS_FUNCTION,
+			       value))
+			goto fail;
+		break;
+	case STA_SET_T2LM_NEG_SUPPORT:
+		if (nla_put_u8(msg,
+			       QCA_WLAN_VENDOR_ATTR_CONFIG_TTLM_NEGOTIATION_SUPPORT,
 			       value))
 			goto fail;
 		break;
@@ -12431,6 +12441,22 @@ cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (val)
 		sta_config_params(dut, intf, STA_SET_EPCS_CAPABILITY,
 				  get_enable_disable(val) ? 1 : 0);
+
+	val = get_param(cmd, "T2LM_Negotiation_Support");
+	if (val) {
+		enum qca_wlan_ttlm_negotiation_support cfg_val;
+
+		if (atoi(val) == 1) {
+			cfg_val = QCA_WLAN_TTLM_SAME_LINK_SET;
+		} else if (atoi(val) == 3) {
+			cfg_val = QCA_WLAN_TTLM_SAME_DIFF_LINK_SET;
+		} else {
+			cfg_val = QCA_WLAN_TTLM_DISABLE;
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"T2LM cfg is disabled");
+		}
+		sta_config_params(dut, intf, STA_SET_T2LM_NEG_SUPPORT, cfg_val);
+	}
 
 	return cmd_sta_set_wireless_vht(dut, conn, cmd);
 }
