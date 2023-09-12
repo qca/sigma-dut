@@ -1189,6 +1189,7 @@ struct sigma_dut {
 	struct mdnssd_apis mdnssd;
 	struct mdnss_discovery_info mdns_discover;
 #endif /* ANDROID_MDNS */
+	char host_name[100];
 };
 
 
@@ -1471,6 +1472,10 @@ int set_ipv6_addr(struct sigma_dut *dut, const char *ip, const char *mask,
 void kill_pid(struct sigma_dut *dut, const char *pid_file);
 int get_ip_addr(const char *ifname, int ipv6, char *buf, size_t len);
 bool is_6ghz_freq(int freq);
+
+enum sigma_cmd_result dev_start_test_log(struct sigma_dut *dut,
+					 struct sigma_conn *conn,
+					 struct sigma_cmd *cmd);
 
 /* dnssd.c */
 int mdnssd_init(struct sigma_dut *dut);

@@ -10341,6 +10341,9 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 		break;
 	}
 
+	if (get_param(cmd, "Runtime_ID"))
+		dev_start_test_log(dut, conn, cmd);
+
 #ifdef ANDROID_NAN
 	if (dut->program == PROGRAM_NAN)
 		nan_cmd_sta_reset_default(dut, conn, cmd);

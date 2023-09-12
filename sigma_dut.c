@@ -833,6 +833,26 @@ static int get_nl80211_config_enable_option(struct sigma_dut *dut)
 }
 
 
+static void set_host_name(struct sigma_dut *dut)
+{
+	FILE *f;
+	size_t len;
+
+	strlcpy(dut->host_name, "no_name", sizeof(dut->host_name));
+	f = popen("hostname", "r");
+	if (!f)
+		return;
+
+	len = fread(dut->host_name, 1, sizeof(dut->host_name) - 1, f);
+	pclose(f);
+
+	if (len == 0)
+		return;
+
+	dut->host_name[len - 1] = '\0';
+}
+
+
 static void set_defaults(struct sigma_dut *dut)
 {
 	dut->debug_level = DUT_MSG_INFO;
@@ -860,6 +880,7 @@ static void set_defaults(struct sigma_dut *dut)
 	dut->dscp_use_iptables = 1;
 #endif /* ANDROID */
 	dut->autoconnect_default = 1;
+	set_host_name(dut);
 }
 
 

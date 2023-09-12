@@ -8,6 +8,9 @@
 
 #include "sigma_dut.h"
 #include <ctype.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <sys/stat.h>
 #include "miracast.h"
 #include <sys/wait.h>
 #include "wpa_ctrl.h"
@@ -524,12 +527,12 @@ static int build_log_dir(struct sigma_dut *dut, char *dir, size_t dir_size)
 
 /* User has to redirect wpa_supplicant logs to the following file. */
 #ifndef WPA_SUPPLICANT_LOG_FILE
-#define WPA_SUPPLICANT_LOG_FILE "/var/log/supplicant_log/wpa_log.txt"
+#define WPA_SUPPLICANT_LOG_FILE "/var/log/supplicant.log"
 #endif /* WPA_SUPPLICANT_LOG_FILE */
 
-static enum sigma_cmd_result cmd_dev_start_test(struct sigma_dut *dut,
-						struct sigma_conn *conn,
-						struct sigma_cmd *cmd)
+enum sigma_cmd_result dev_start_test_log(struct sigma_dut *dut,
+					 struct sigma_conn *conn,
+					 struct sigma_cmd *cmd)
 {
 	const char *val;
 	char dir[200];
@@ -595,13 +598,18 @@ static enum sigma_cmd_result cmd_dev_start_test(struct sigma_dut *dut,
 					buf);
 	}
 
-	run_system_wrapper(dut, "killall -9 cnss_diag_lite");
-	run_system_wrapper(dut,
-			   "cnss_diag_lite -c -x 31 > %s/cnss_diag_id_%s.txt &",
-			   dir, dut->dev_start_test_runtime_id);
+	run_system_wrapper(dut, "rm -rf /usr/local/bin/wlan_logs/*");
 #endif /* ANDROID */
 
 	return SUCCESS_SEND_STATUS;
+}
+
+
+static enum sigma_cmd_result cmd_dev_start_test(struct sigma_dut *dut,
+						struct sigma_conn *conn,
+						struct sigma_cmd *cmd)
+{
+	return dev_start_test_log(dut, conn, cmd);
 }
 
 
@@ -732,7 +740,100 @@ exit:
 #endif /* !ANDROID */
 
 
-static enum sigma_cmd_result cmd_dev_stop_test(struct sigma_dut *dut,
+#ifdef ANDROID
+#define SHELL "/system/bin/sh"
+#else /* ANDROID */
+#define SHELL "/bin/sh"
+#endif /* ANDROID */
+
+
+static enum sigma_cmd_result ftp_send(struct sigma_dut *dut,
+				      struct sigma_conn *conn,
+				      struct sigma_cmd *cmd,
+				      const char *dir, const char *out_file)
+{
+	const char *val;
+	const char *ftp_ip;
+	const char *ftp_uname, *ftp_pwd;
+	int ftp_port = 21;
+	char src_dir[200];
+	FILE *f;
+	int res;
+
+	val = get_param(cmd, "Runtime_ID");
+	if (!val || strcmp(val, dut->dev_start_test_runtime_id) != 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Invalid runtime id");
+		return ERROR_SEND_STATUS;
+	}
+
+	ftp_ip = get_param(cmd, "FTP_IP");
+	if (!ftp_ip) {
+		ftp_ip = inet_ntoa(conn->addr.sin_addr);
+		if (!ftp_ip) {
+			sigma_dut_print(dut, DUT_MSG_ERROR, "Invalid ftp ip");
+			return ERROR_SEND_STATUS;
+		}
+	}
+
+	val = get_param(cmd, "FTP_Port");
+	if (val) {
+		ftp_port = atoi(val);
+		sigma_dut_print(dut, DUT_MSG_INFO, "ftp_port: %d", ftp_port);
+	}
+
+	ftp_uname = get_param(cmd, "FTP_Uname");
+	ftp_pwd = get_param(cmd, "FTP_Pwd");
+	res = snprintf(src_dir, sizeof(src_dir), "%s/..", dir);
+	if (res < 0 || res >= sizeof(src_dir))
+		return ERROR_SEND_STATUS;
+
+	/* Create the ftp shell script which can be called */
+	f = fopen("ftp.sh", "w");
+	if (!f) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Unable to create ftp.sh file");
+		return ERROR_SEND_STATUS;
+	}
+
+	fprintf(f, "#!" SHELL "\n\n"
+		"ftp -in <<EOF\n"
+		"open %s %d\n"
+		"user %s %s\n"
+		"pwd \n"
+		"lcd %s \n"
+		"put %s\n"
+		"ls \n"
+		"EOF\n",
+		ftp_ip,
+		ftp_port ? ftp_port : 21,
+		ftp_uname ? ftp_uname : "anonymous",
+		ftp_pwd ? ftp_pwd : "anonymous",
+		src_dir, out_file);
+	fclose(f);
+
+	if (chmod("ftp.sh", S_IRUSR | S_IWUSR | S_IXUSR) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Failed to chmod ftp.sh");
+		unlink("ftp.sh");
+		return ERROR_SEND_STATUS;
+	}
+
+	if (system("cat ftp.sh") != 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Failed to cat ftp.sh");
+	}
+
+	if (system("./ftp.sh > output.txt") != 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "Failed to run ftp.sh");
+		unlink("ftp.sh");
+		return ERROR_SEND_STATUS;
+	}
+
+	unlink("ftp.sh");
+
+	return SUCCESS_SEND_STATUS;
+}
+
+
+static enum sigma_cmd_result dev_stop_test_log(struct sigma_dut *dut,
 					       struct sigma_conn *conn,
 					       struct sigma_cmd *cmd)
 {
@@ -761,6 +862,7 @@ static enum sigma_cmd_result cmd_dev_stop_test(struct sigma_dut *dut,
 	/* Copy all cnss_diag logs to dir */
 	run_system_wrapper(dut, "cp -a /data/vendor/wifi/wlan_logs/* %s", dir);
 #else /* ANDROID */
+	run_system_wrapper(dut, "cp -a /usr/local/bin/wlan_logs/* %s", dir);
 	if (dut->log_file_fd) {
 		fclose(dut->log_file_fd);
 		dut->log_file_fd = NULL;
@@ -770,10 +872,11 @@ static enum sigma_cmd_result cmd_dev_stop_test(struct sigma_dut *dut,
 				"Failed to save wpa_supplicant log");
 #endif /* ANDROID */
 
-	res = snprintf(out_file, sizeof(out_file), "%s_%s_%s.tar.gz",
+	res = snprintf(out_file, sizeof(out_file), "%s_%s_%s_%s.tar.gz",
 		       dut->vendor_name,
 		       dut->model_name ? dut->model_name : "Unknown",
-		       dut->dev_start_test_runtime_id);
+		       dut->dev_start_test_runtime_id,
+		       dut->host_name);
 	if (res < 0 || res >= sizeof(out_file))
 	    return ERROR_SEND_STATUS;
 
@@ -786,9 +889,10 @@ static enum sigma_cmd_result cmd_dev_stop_test(struct sigma_dut *dut,
 
 	val = get_param(cmd, "destpath");
 	if (!(val && is_destpath_valid(dut, val))) {
-		sigma_dut_print(dut, DUT_MSG_DEBUG, "Invalid path for TFTP %s",
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Invalid path for TFTP %s; try using ftp transfer",
 				val);
-		return ERROR_SEND_STATUS;
+		goto ftp_transfer;
 	}
 
 	res = snprintf(buf, sizeof(buf), "tftp %s -c put %s/%s %s/%s",
@@ -799,15 +903,43 @@ static enum sigma_cmd_result cmd_dev_stop_test(struct sigma_dut *dut,
 	if (run_system_wrapper(dut, buf) < 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"TFTP file transfer failed: %s", buf);
-		return ERROR_SEND_STATUS;
+		/* Send using FTP since TFTP failed */
+		goto ftp_transfer;
 	}
 	sigma_dut_print(dut, DUT_MSG_DEBUG, "TFTP file transfer: %s", buf);
 	snprintf(buf, sizeof(buf), "filename,%s", out_file);
 	send_resp(dut, conn, SIGMA_COMPLETE, buf);
+	goto cleanup;
+
+ftp_transfer:
+	res = ftp_send(dut, conn, cmd, dir, out_file);
+	if (res != SUCCESS_SEND_STATUS) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"FTP file transfer failed.");
+		return ERROR_SEND_STATUS;
+	}
+
+cleanup:
 	run_system_wrapper(dut, "rm -f %s/../%s", dir, out_file);
 	run_system_wrapper(dut, "rm -rf %s", dir);
 
 	return SUCCESS_SEND_STATUS;
+}
+
+
+static enum sigma_cmd_result cmd_dev_stop_test(struct sigma_dut *dut,
+					       struct sigma_conn *conn,
+					       struct sigma_cmd *cmd)
+{
+	return dev_stop_test_log(dut, conn, cmd);
+}
+
+
+static enum sigma_cmd_result cmd_dev_upload_log(struct sigma_dut *dut,
+						struct sigma_conn *conn,
+						struct sigma_cmd *cmd)
+{
+	return dev_stop_test_log(dut, conn, cmd);
 }
 
 
@@ -863,6 +995,7 @@ void dev_register_cmds(void)
 	sigma_dut_reg_cmd("dev_configure_ie", req_intf, cmd_dev_configure_ie);
 	sigma_dut_reg_cmd("dev_start_test", NULL, cmd_dev_start_test);
 	sigma_dut_reg_cmd("dev_stop_test", NULL, cmd_dev_stop_test);
+	sigma_dut_reg_cmd("dev_upload_log", NULL, cmd_dev_upload_log);
 	sigma_dut_reg_cmd("dev_get_log", NULL, cmd_dev_get_log);
 	sigma_dut_reg_cmd("dev_ble_action", req_role_svcname,
 			  cmd_dev_ble_action);
