@@ -958,6 +958,12 @@ static int sigma_nan_subscribe_request(struct sigma_dut *dut,
 				"%s: NAN Bootstrapping Method: %d", __func__,
 				dut->dev_info.bootstrapping_methods);
 	}
+
+	if (dut->dev_info.npk_nik_caching && dut->dev_info.nik_valid) {
+		req.nan_pairing_config.enable_pairing_verification = 1;
+		memcpy(req.nan_identity_key, dut->dev_info.nik,
+		       sizeof(req.nan_identity_key));
+	}
 #endif /* WFA_CERT_NANR4 */
 
 	ret = nan_subscribe_request(0, dut->wifi_hal_iface_handle, &req);
@@ -1809,9 +1815,6 @@ void nan_event_pairing_confirm(NanPairingConfirmInd *event)
 	if (event->rsp_code == NAN_PAIRING_REQUEST_ACCEPT) {
 		sigma_dut_print(global_dut, DUT_MSG_INFO,
 				"Pairing Confirm Success");
-		memcpy(global_dut->dev_info.nik,
-		       event->npk_security_association.local_nan_identity_key,
-		       NAN_IDENTITY_KEY_LEN);
 		memcpy(global_dut->peer_info.nik,
 		       event->npk_security_association.peer_nan_identity_key,
 		       NAN_IDENTITY_KEY_LEN);
@@ -1885,6 +1888,10 @@ int sigma_nan_pairing_verification(struct sigma_dut *dut,
 
 	if (dut->dev_info.npk_nik_caching || dut->peer_info.npk_nik_caching)
 		req.enable_pairing_cache = true;
+
+	if (dut->dev_info.npk_nik_caching && dut->dev_info.nik_valid)
+		memcpy(req.nan_identity_key, dut->dev_info.nik,
+		       sizeof(req.nan_identity_key));
 
 	sigma_dut_print(dut, DUT_MSG_INFO,
 			"Pairing Verification Request params: npk_nik_cache %d, peer MAC: "
@@ -2291,6 +2298,12 @@ int sigma_nan_publish_request(struct sigma_dut *dut, struct sigma_conn *conn,
 		sigma_dut_print(dut, DUT_MSG_INFO,
 				"%s: NAN Bootstrapping Method: %d", __func__,
 				dut->dev_info.bootstrapping_methods);
+	}
+
+	if (dut->dev_info.npk_nik_caching && dut->dev_info.nik_valid) {
+		req.nan_pairing_config.enable_pairing_verification = 1;
+		memcpy(req.nan_identity_key, dut->dev_info.nik,
+		       sizeof(req.nan_identity_key));
 	}
 
 	if (s3_capabilities) {
@@ -3254,6 +3267,10 @@ void nan_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 #ifdef WFA_CERT_NANR4
 	memset(&dut->dev_info, 0, sizeof(struct device_pairing_info));
 	memset(&dut->peer_info, 0, sizeof(struct peer_pairing_info));
+
+	if (random_get_bytes(dut->dev_info.nik, NAN_NIK_LEN) == 0)
+		dut->dev_info.nik_valid = true;
+
 #endif /* WFA_CERT_NANR4 */
 }
 
