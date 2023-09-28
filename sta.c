@@ -2071,7 +2071,7 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *val;
 	int id;
 	int cipher_set = 0;
-	int owe;
+	int owe, sae;
 	int suite_b = 0;
 
 	id = add_network_common(dut, conn, ifname, cmd);
@@ -2080,6 +2080,7 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 
 	val = get_param(cmd, "Type");
 	owe = val && strcasecmp(val, "OWE") == 0;
+	sae = val && strcasecmp(val, "SAE") == 0;
 
 	val = get_param(cmd, "keyMgmtType");
 	if (!val && owe)
@@ -2172,6 +2173,10 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 		cipher_set = 1;
 		if (set_network(ifname, id, "pairwise", "GCMP-256") < 0)
 			return -2;
+	} else if (sae) {
+		cipher_set = 1;
+		if (set_network(ifname, id, "pairwise", "GCMP-256 CCMP") < 0)
+			return -2;
 	}
 
 	if (!cipher_set && !owe) {
@@ -2209,7 +2214,7 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 				  "errorCode,Unrecognized GroupCipher value");
 			return 0;
 		}
-	} else if (dut->device_mode == MODE_11BE) {
+	} else if (dut->device_mode == MODE_11BE || sae) {
 		if (set_network(ifname, id, "group", "GCMP-256 CCMP") < 0)
 			return -2;
 	}
@@ -2239,6 +2244,11 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 				  "errorCode,Failed to set GroupMgntCipher");
 			return 0;
 		}
+	} else if (sae && set_network(ifname, id, "group_mgmt",
+				      "BIP-GMAC-256 AES-128-CMAC") < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Failed to set GroupMgntCipher");
+		return 0;
 	}
 
 	val = get_param(cmd, "AKMSuiteType");
