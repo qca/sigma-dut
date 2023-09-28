@@ -2199,6 +2199,11 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 		} else if (strcasecmp(val, "AES-CCMP-128") == 0) {
 			if (set_network(ifname, id, "group", "CCMP") < 0)
 				return -2;
+		} else if (strcasecmp(val, "AES-CCMP-128 AES-GCMP-256") == 0 ||
+			   strcasecmp(val, "AES-GCMP-256 AES-CCMP-128") == 0) {
+			if (set_network(ifname, id, "group",
+					"GCMP-256 CCMP") < 0)
+				return -2;
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Unrecognized GroupCipher value");
@@ -2221,6 +2226,9 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 			cipher = "BIP-GMAC-128";
 		} else if (strcasecmp(val, "BIP-CMAC-128") == 0) {
 			cipher = "AES-128-CMAC";
+		} else if (strcasecmp(val, "BIP-GMAC-256 BIP-CMAC-128") == 0 ||
+			   strcasecmp(val, "BIP-CMAC-128 BIP-GMAC-256") == 0) {
+			cipher = "BIP-GMAC-256 AES-128-CMAC";
 		} else {
 			send_resp(dut, conn, SIGMA_INVALID,
 				  "errorCode,Unsupported GroupMgntCipher");
