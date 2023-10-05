@@ -3683,6 +3683,7 @@ int nan_cmd_sta_get_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 			return -1;
 		}
 		pos = 0;
+		string[0] = '\0';
 		for (i = 0; i < msg.tk_len; i++) {
 			num = snprintf(&(string[pos]), sizeof(string) - pos,
 				       "%02x", msg.tk[i]);
@@ -3711,6 +3712,7 @@ int nan_cmd_sta_get_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 			return -1;
 		}
 		pos = 0;
+		string[0] = '\0';
 		for (i = 0; i < msg.pmkid_len; i++) {
 			num = snprintf(&(string[pos]), sizeof(string) - pos,
 				       "%02x", msg.pmkid[i]);
