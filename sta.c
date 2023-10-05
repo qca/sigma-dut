@@ -2350,6 +2350,69 @@ static int sta_set_eht_mlo_active_tx_links(struct sigma_dut *dut,
 }
 
 
+static int sta_set_eht_mlo_link_powersave(struct sigma_dut *dut,
+					  const char *intf, uint8_t num_links,
+					  uint8_t link_id[2])
+{
+#ifdef NL80211_SUPPORT
+	struct nl_msg *msg;
+	struct nlattr *params, *attr;
+	int ret, i;
+	int ifindex;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Index for interface %s failed",
+				__func__, intf);
+		return -1;
+	}
+
+	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
+				    NL80211_CMD_VENDOR)) ||
+	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			QCA_NL80211_VENDOR_SUBCMD_WIFI_TEST_CONFIGURATION))
+		goto fail;
+
+	params = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA);
+	if (!params)
+		goto fail;
+
+	attr = nla_nest_start(
+		msg,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_MLO_LINK_POWER_SAVE);
+	if (!attr)
+		goto fail;
+
+	for (i = 0; i < num_links; i++) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"link_id[%d]: %d", i, link_id[i]);
+		if (nla_put_u8(msg, i + 1, link_id[i]))
+			goto fail;
+	}
+	nla_nest_end(msg, attr);
+	nla_nest_end(msg, params);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in send_and_recv_msgs, ret=%d",
+				__func__, ret);
+	}
+
+	return ret;
+fail:
+	nlmsg_free(msg);
+	return -1;
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR, "NL80211_SUPPORT is not defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static int wcn_set_ignore_h2e_rsnxe(struct sigma_dut *dut, const char *intf,
 				    uint8_t cfg)
 {
@@ -16587,11 +16650,12 @@ cmd_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 }
 
 
-static int cmd_sta_set_power_save_he(const char *intf, struct sigma_dut *dut,
+static int cmd_sta_set_power_save_wcn(const char *intf, struct sigma_dut *dut,
 				     struct sigma_conn *conn,
 				     struct sigma_cmd *cmd)
 {
 	const char *val;
+	const char *link_mac = get_param(cmd, "LinkMAC");
 
 	val = get_param(cmd, "powersave");
 	if (val) {
@@ -16605,6 +16669,42 @@ static int cmd_sta_set_power_save_he(const char *intf, struct sigma_dut *dut,
 			sigma_dut_print(dut, DUT_MSG_ERROR,
 					"Unsupported power save config");
 			return -1;
+		}
+		if (link_mac && ps == 1) {
+			char value[50];
+			char *result = NULL;
+			char *saveptr;
+			uint8_t num_links = 0;
+			char link[3];
+			uint8_t link_id[2];
+
+			strlcpy(value, link_mac, sizeof(value));
+			result = strtok_r(value, " ", &saveptr);
+			if (!result) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "errorCode,Link address not specified");
+				return STATUS_SENT_ERROR;
+			}
+
+			while (result && num_links < 2) {
+				sigma_dut_print(dut, DUT_MSG_DEBUG,
+						"STA link_addr %s", result);
+				if (get_mlo_link_id_link_mac(
+					    dut, get_station_ifname(dut),
+					    result, link, sizeof(link)) < 0) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"get link_id failed");
+					return -1;
+				}
+
+				link_id[num_links++] = atoi(link);
+				result = strtok_r(NULL, " ", &saveptr);
+			}
+
+			if (sta_set_eht_mlo_link_powersave(dut, intf,
+							   num_links, link_id))
+				return 0;
+			return 1;
 		}
 		if (set_power_save_wcn(dut, intf, ps) < 0)
 			return 0;
@@ -17233,9 +17333,8 @@ static enum sigma_cmd_result cmd_sta_set_pwrsave(struct sigma_dut *dut,
 		 */
 		if (powersave && strcasecmp(powersave, "unscheduled") == 0)
 			res = set_ps(intf, dut, 1);
-	} else if (prog && get_driver_type(dut) == DRIVER_WCN &&
-		   strcasecmp(prog, "HE") == 0) {
-		return cmd_sta_set_power_save_he(intf, dut, conn, cmd);
+	} else if (get_driver_type(dut) == DRIVER_WCN) {
+		return cmd_sta_set_power_save_wcn(intf, dut, conn, cmd);
 	} else {
 		if (mode == NULL)
 			return -1;

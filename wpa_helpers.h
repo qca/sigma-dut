@@ -33,6 +33,9 @@ void remove_wpa_networks(const char *ifname);
 int get_mlo_link_mac_ap_link(struct sigma_dut *dut, const char *ifname,
 			     const char *ap_link_addr,
 			     char *obuf, size_t obuf_size);
+int get_mlo_link_id_link_mac(struct sigma_dut *dut, const char *ifname,
+			     const char *link_addr,
+			     char *obuf, size_t obuf_size);
 struct wpa_ctrl * open_wpa_mon(const char *ifname);
 struct wpa_ctrl * open_hapd_mon(const char *ifname);
 int wait_ip_addr(struct sigma_dut *dut, const char *ifname, int timeout);
