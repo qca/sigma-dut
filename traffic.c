@@ -527,7 +527,7 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 	if (pos) {
 		*pos++ = '\0';
 		ifname = pos;
-	} else if (dut->ndpe) {
+	} else if (dut->ndpe || dut->program == PROGRAM_NAN) {
 		ifname = "nan0";
 	} else {
 		ifname = get_station_ifname(dut);
