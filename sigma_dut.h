@@ -1190,6 +1190,7 @@ struct sigma_dut {
 	struct mdnss_discovery_info mdns_discover;
 #endif /* ANDROID_MDNS */
 	char host_name[100];
+	int sta_roaming_disabled;
 };
 
 

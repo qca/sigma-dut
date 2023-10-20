@@ -5484,7 +5484,7 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 				}
 				start_dscp_policy_mon_thread(dut);
 			}
-			if (ap_link_mac &&
+			if (ap_link_mac && !dut->sta_roaming_disabled &&
 			    set_network(intf, dut->infra_network_id, "bssid",
 					"any") < 0) {
 				sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -6262,6 +6262,7 @@ static int mbo_set_roaming(struct sigma_dut *dut, struct sigma_conn *conn,
 				  "ErrorCode,Failed to disable roaming");
 			return 0;
 		}
+		dut->sta_roaming_disabled = 1;
 		return 1;
 	}
 
@@ -6271,6 +6272,7 @@ static int mbo_set_roaming(struct sigma_dut *dut, struct sigma_conn *conn,
 				  "ErrorCode,Failed to enable roaming");
 			return 0;
 		}
+		dut->sta_roaming_disabled = 0;
 		return 1;
 	}
 
@@ -10566,6 +10568,7 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 		wpa_command(get_station_ifname(dut), "SET interworking 0");
 	}
 
+	dut->sta_roaming_disabled = 0;
 	if (dut->program == PROGRAM_MBO || dut->program == PROGRAM_HE ||
 	    dut->program == PROGRAM_EHT) {
 		free(dut->non_pref_ch_list);
