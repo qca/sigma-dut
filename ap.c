@@ -614,6 +614,7 @@ static int run_hostapd_cli(struct sigma_dut *dut, char *buf)
 	const char *bin;
 	enum driver_type drv = get_driver_type(dut);
 	char *sigma_hapd_file = sigma_hapd_ctrl;
+	const char *ifname = get_hostapd_ifname(dut);
 
 	if (file_exists("hostapd_cli"))
 		bin = "./hostapd_cli";
@@ -634,10 +635,11 @@ static int run_hostapd_cli(struct sigma_dut *dut, char *buf)
 	}
 
 	if (sigma_hapd_file)
-		snprintf(command, sizeof(command), "%s -p %s %s",
-			 bin, sigma_hapd_file, buf);
+		snprintf(command, sizeof(command), "%s -p %s -i %s %s",
+			 bin, sigma_hapd_file, ifname, buf);
 	else
-		snprintf(command, sizeof(command), "%s %s", bin, buf);
+		snprintf(command, sizeof(command), "%s -i %s %s", bin, ifname,
+			 buf);
 	return run_system(dut, command);
 }
 
