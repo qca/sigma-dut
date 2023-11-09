@@ -699,6 +699,7 @@ struct sigma_dut {
 		AP2_OSEN,
 		AP2_WPA2_PSK,
 		AP2_WPA2_OWE,
+		AP2_WPA2_EAP,
 	} ap_tag_key_mgmt[MAX_WLAN_TAGS - 1];
 	int ap_add_sha256;
 	int ap_add_sha384;
