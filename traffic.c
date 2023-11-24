@@ -792,6 +792,8 @@ static enum sigma_cmd_result cmd_traffic_stop_iperf(struct sigma_dut *dut,
 					 20) == 0)
 				res = snprintf(iperf_pid_file, max_fname,
 					       "/%s", entry->d_name);
+			else
+				continue;
 
 			if (res < 0 || res >= max_fname)
 				return ERROR_SEND_STATUS;
