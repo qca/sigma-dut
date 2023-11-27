@@ -652,7 +652,7 @@ static int send_burst(struct sigma_stream *s)
 	struct timeval stop;
 	int run_loop = 1;
 
-	if (!s || s->burst_periodicity == 0 || s->duration == 0 ||
+	if (s->burst_periodicity == 0 || s->duration == 0 ||
 	    s->payload_size < 20) {
 		sigma_dut_print(s->dut, DUT_MSG_DEBUG,
 				"send_burst usage error, burstPeriod=%d or duration=%d",
