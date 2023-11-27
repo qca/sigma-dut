@@ -596,6 +596,7 @@ int get_mlo_link_id_link_mac(struct sigma_dut *dut, const char *ifname,
 	char buf[4096];
 	char *param;
 	size_t flen, flen2;
+	char *saveptr = NULL;
 
 	if (get_wpa_mlo_status(ifname, buf, sizeof(buf))) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -605,7 +606,7 @@ int get_mlo_link_id_link_mac(struct sigma_dut *dut, const char *ifname,
 
 	flen = strlen("sta_link_addr");
 	flen2 = strlen("link_id");
-	param = strtok(buf, "\n");
+	param = strtok_r(buf, "\n", &saveptr);
 	while (param) {
 		if (strncasecmp(param, "link_id", flen2) == 0)
 			strlcpy(obuf, &param[flen2 + 1], obuf_size);
@@ -618,7 +619,7 @@ int get_mlo_link_id_link_mac(struct sigma_dut *dut, const char *ifname,
 				return 0;
 			}
 		}
-		param = strtok(NULL, "\n");
+		param = strtok_r(NULL, "\n", &saveptr);
 	}
 	sigma_dut_print(dut, DUT_MSG_ERROR, "link id not found");
 
