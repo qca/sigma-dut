@@ -459,21 +459,12 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 		}
 	}
 
-	if (iperf_v2)
-		iptype = ipv6 ? "-V" : "";
-
 	port_str[0] = '\0';
 	val = get_param(cmd, "port");
 	if (val) {
 		dst_port = atoi(val);
 		snprintf(port_str, sizeof(port_str), "-p %d", dst_port);
 	}
-
-	proto = "";
-	val = get_param(cmd, "transproto");
-	/* proto -u is not applicable for iperf3 server */
-	if (val && strcasecmp(val, "udp") == 0  && !(!iperf_v2 && server))
-		proto = "-u";
 
 	rate = 1024 * 1024 * 1024; /* default rate: 1 Gbps */
 	bitrate[0] = '\0';
@@ -652,12 +643,23 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 	unlink(concat_sigma_tmpdir(dut, iperf_pid_file, iperf,
 				   sizeof(iperf)));
 
+	/* open IPv6 multicast socket using iperf v2 */
+	if (ipv6 && dst && (strncmp(dst, "ff", 2) == 0))
+		iperf_v2 = true;
+
+	if (iperf_v2)
+		iptype = ipv6 ? "-V" : "";
+
+	proto = "";
+	val = get_param(cmd, "transproto");
+	/* proto -u is not applicable for iperf3 server */
+	if (val && strcasecmp(val, "udp") == 0  && !(!iperf_v2 && server))
+		proto = "-u";
+
 	if (server) {
 		/* write server side command to shell file */
 		if (ipv6 && dst && (strncmp(dst, "ff", 2) == 0)) {
 			/* open IPv6 multicast server socket using iperf */
-			iperf_v2 = true;
-			iptype = "-V";
 			snprintf(buf, sizeof(buf), "-B %s%%%s", dst, ifname);
 		} else if (dst) {
 			/* open IPv4 multicast server socket using iperf3 */
@@ -678,11 +680,6 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 			snprintf(buf, sizeof(buf), "%s%%%s", dst, ifname);
 		else
 			snprintf(buf, sizeof(buf), "%s", dst);
-
-		if (ipv6 && (strncmp(dst, "ff", 2) == 0)) {
-			iperf_v2 = true;
-			iptype = "-V";
-		}
 
 		res = snprintf(iperf_cmd, sizeof(iperf_cmd),
 			"iperf%s -c %s -t %d %s %s%s %s%s%s%s%s -i 1 %s > %s%s &\n",
