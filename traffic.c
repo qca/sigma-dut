@@ -471,13 +471,9 @@ static enum sigma_cmd_result cmd_traffic_start_iperf(struct sigma_dut *dut,
 
 	proto = "";
 	val = get_param(cmd, "transproto");
-	if (server && !iperf_v2 && val && strcasecmp(val, "tcp") != 0) {
-		send_resp(dut, conn, SIGMA_ERROR,
-			  "errorCode,Invalid Iperf3 option transproto in server mode");
-		return ERROR_SEND_STATUS;
-	} else if (val && strcasecmp(val, "udp") == 0) {
+	/* proto -u is not applicable for iperf3 server */
+	if (val && strcasecmp(val, "udp") == 0  && !(!iperf_v2 && server))
 		proto = "-u";
-	}
 
 	rate = 1024 * 1024 * 1024; /* default rate: 1 Gbps */
 	bitrate[0] = '\0';
