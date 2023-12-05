@@ -6640,11 +6640,13 @@ static enum qca_wlan_vendor_phy_mode get_qca_vendor_phymode(const char *val)
 		return QCA_WLAN_VENDOR_PHY_MODE_11NA_HT40;
 	}
 
-	if (strcmp(val, "11ax") == 0 ||
-		   strcmp(val, "auto") == 0) {
-		/* IEEE80211_MODE_AUTO */
+	/* QCA_WLAN_VENDOR_PHY_MODE_11AX_HE160 */
+	if (strcmp(val, "11ax") == 0)
+		return QCA_WLAN_VENDOR_PHY_MODE_11AX_HE160;
+
+	/* IEEE80211_MODE_AUTO */
+	if (strcmp(val, "auto") == 0)
 		return QCA_WLAN_VENDOR_PHY_MODE_AUTO;
-	}
 
 	return -1;
 }
