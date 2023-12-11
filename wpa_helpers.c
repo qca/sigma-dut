@@ -627,6 +627,45 @@ int get_mlo_link_id_link_mac(struct sigma_dut *dut, const char *ifname,
 }
 
 
+int get_connected_mlo_link_ids(struct sigma_dut *dut, const char *ifname)
+{
+	char buf[4096];
+	char *param;
+	size_t flen;
+	char *saveptr = NULL;
+	int links_bitmask = 0;
+
+	if (get_wpa_status(ifname, "wpa_state", buf, sizeof(buf)) < 0 ||
+	    strncmp(buf, "COMPLETED", 9) != 0) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "%s: Not connected",
+				__func__);
+		return 0;
+	}
+
+	if (get_wpa_mlo_status(ifname, buf, sizeof(buf))) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "%s: Non-MLO connection",
+				__func__);
+		return 0;
+	}
+
+	flen = strlen("link_id");
+	param = strtok_r(buf, "\n", &saveptr);
+	while (param) {
+		if (strncasecmp(param, "link_id", flen) == 0) {
+			int link_id = atoi(&param[flen + 1]);
+
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"Found connected link ID %d", link_id);
+			links_bitmask |= BIT(link_id);
+		}
+
+		param = strtok_r(NULL, "\n", &saveptr);
+	}
+
+	return links_bitmask;
+}
+
+
 static int get_wpa_ctrl_status_field(const char *path, const char *ifname,
 				     const char *cmd, const char *field,
 				     char *obuf, size_t obuf_size)

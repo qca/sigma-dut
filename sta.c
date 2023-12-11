@@ -9764,10 +9764,10 @@ static int sta_set_punctured_preamble_rx(struct sigma_dut *dut,
 }
 
 
-static int wcn_set_he_tx_rate(struct sigma_dut *dut, const char *intf,
-			      u16 tx_rate, u8 nss)
+#ifdef NL80211_SUPPORT
+static int wcn_set_link_tx_rate(struct sigma_dut *dut, const char *intf,
+				int link_id, u16 tx_rate, u8 nss)
 {
- #ifdef NL80211_SUPPORT
 	struct nlattr *attr;
 	struct nlattr *attr1;
 	int ifindex, ret;
@@ -9784,6 +9784,8 @@ static int wcn_set_he_tx_rate(struct sigma_dut *dut, const char *intf,
 
 	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
 				    NL80211_CMD_SET_TX_BITRATE_MASK)) ||
+	    (link_id != -1 &&
+	     nla_put_u8(msg, NL80211_ATTR_MLO_LINK_ID, link_id)) ||
 	    !(attr = nla_nest_start(msg, NL80211_ATTR_TX_RATES))) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: NL80211_CMD_SET_TX_BITRATE_MASK msg failed",
@@ -9856,15 +9858,45 @@ static int wcn_set_he_tx_rate(struct sigma_dut *dut, const char *intf,
 				__func__, ret);
 	}
 	return ret;
+
+}
+#endif /* NL80211_SUPPORT */
+
+
+static int wcn_set_he_tx_rate(struct sigma_dut *dut, const char *intf,
+			      u16 tx_rate, u8 nss)
+{
+#ifdef NL80211_SUPPORT
+	int links_bitmask, ret, i;
+
+	links_bitmask = get_connected_mlo_link_ids(dut, intf);
+	if (links_bitmask == 0)
+		return wcn_set_link_tx_rate(dut, intf, -1, tx_rate, nss);
+
+	for (i = 0; i < MAX_NUM_MLO_LINKS; i++) {
+		if (!(links_bitmask & BIT(i)))
+			continue;
+
+		ret = wcn_set_link_tx_rate(dut, intf, i, tx_rate, nss);
+		if (ret) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to send TX rate for link ID %d",
+					i);
+			return ret;
+		}
+	}
+
+	return 0;
 #else /* NL80211_SUPPORT */
 	return -1;
 #endif /* NL80211_SUPPORT */
 }
 
 
-int wcn_set_he_gi(struct sigma_dut *dut, const char *intf, u8 gi_val)
+#ifdef NL80211_SUPPORT
+static int wcn_set_link_gi(struct sigma_dut *dut, const char *intf, int link_id,
+			   u8 gi_val)
 {
- #ifdef NL80211_SUPPORT
 	struct nlattr *attr;
 	struct nlattr *attr1;
 	int ifindex, ret;
@@ -9880,6 +9912,8 @@ int wcn_set_he_gi(struct sigma_dut *dut, const char *intf, u8 gi_val)
 
 	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
 				    NL80211_CMD_SET_TX_BITRATE_MASK)) ||
+	    (link_id != -1 &&
+	     nla_put_u8(msg, NL80211_ATTR_MLO_LINK_ID, link_id)) ||
 	    !(attr = nla_nest_start(msg, NL80211_ATTR_TX_RATES))) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: NL80211_CMD_SET_TX_BITRATE_MASK msg failed",
@@ -9921,6 +9955,32 @@ int wcn_set_he_gi(struct sigma_dut *dut, const char *intf, u8 gi_val)
 				__func__, ret);
 	}
 	return ret;
+}
+#endif /* NL80211_SUPPORT */
+
+
+int wcn_set_he_gi(struct sigma_dut *dut, const char *intf, u8 gi_val)
+{
+#ifdef NL80211_SUPPORT
+	int links_bitmask, ret, i;
+
+	links_bitmask = get_connected_mlo_link_ids(dut, intf);
+	if (links_bitmask == 0)
+		return wcn_set_link_gi(dut, intf, -1, gi_val);
+
+	for (i = 0; i < MAX_NUM_MLO_LINKS; i++) {
+		if (!(links_bitmask & BIT(i)))
+			continue;
+
+		ret = wcn_set_link_gi(dut, intf, i, gi_val);
+		if (ret) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to send GI for link ID %d", i);
+			return ret;
+		}
+	}
+
+	return 0;
 #else /* NL80211_SUPPORT */
 	return -1;
 #endif /* NL80211_SUPPORT */
