@@ -165,7 +165,7 @@ static enum sigma_cmd_result cmd_ap_ca_version(struct sigma_dut *dut,
 }
 
 
-static void kill_hostapd_process_pid(struct sigma_dut *dut)
+void kill_hostapd_process_pid(struct sigma_dut *dut)
 {
 	FILE *f;
 	int pid, res;

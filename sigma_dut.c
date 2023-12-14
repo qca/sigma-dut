@@ -587,8 +587,12 @@ static void handle_term(int sig)
 {
 	struct sigma_dut *dut = &sigma_dut;
 
+	printf("handle_term(sig=%d)\n", sig);
 	if (dut->sta_2g_started || dut->sta_5g_started)
 		stop_sta_mode(dut);
+	if (dut->hostapd_running && dut->use_hostapd_pid_file)
+		kill_hostapd_process_pid(dut);
+
 	stop_loop = 1;
 	stop_event_thread();
 	printf("sigma_dut terminating\n");

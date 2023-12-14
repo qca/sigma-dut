@@ -1314,6 +1314,7 @@ int ap_wps_registration(struct sigma_dut *dut, struct sigma_conn *conn,
 			struct sigma_cmd *cmd);
 const char * get_hostapd_ifname(struct sigma_dut *dut);
 void get_wiphy_capabilities(struct sigma_dut *dut);
+void kill_hostapd_process_pid(struct sigma_dut *dut);
 
 /* sta.c */
 void sta_register_cmds(void);
