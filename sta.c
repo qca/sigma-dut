@@ -6229,6 +6229,23 @@ static void wcn_sta_set_stbc(struct sigma_dut *dut, const char *intf,
 }
 
 
+static void wcn_sta_set_ldpc(struct sigma_dut *dut, const char *intf, int ldpc)
+{
+	int ret;
+
+#ifdef NL80211_SUPPORT
+	ret = sta_config_params(dut, intf, STA_SET_LDPC, ldpc);
+	if (!ret)
+		return;
+	sigma_dut_print(dut, DUT_MSG_ERROR, "set ldpc nl cmd failed");
+#endif /* NL80211_SUPPORT */
+
+	ret = run_iwpriv(dut, intf, "ldpc %d", ldpc);
+	if (ret)
+		sigma_dut_print(dut, DUT_MSG_ERROR, "iwpriv ldpc failed");
+}
+
+
 static int mbo_set_cellular_data_capa(struct sigma_dut *dut,
 				      struct sigma_conn *conn,
 				      const char *intf, int capa)
@@ -10080,11 +10097,7 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 		}
 
 		/* reset the LDPC setting */
-		snprintf(buf, sizeof(buf), "iwpriv %s ldpc 1", intf);
-		if (system(buf) != 0) {
-			sigma_dut_print(dut, DUT_MSG_ERROR,
-					"iwpriv %s ldpc 1 failed", intf);
-		}
+		wcn_sta_set_ldpc(dut, intf, 1);
 
 		/* reset the power save setting */
 		set_power_save_wcn(dut, intf, 2);
@@ -11735,7 +11748,6 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *program;
 	int tkip = -1;
 	int wep = -1;
-	int iwpriv_status;
 
 	program = get_param(cmd, "Program");
 	val = get_param(cmd, "SGI80");
@@ -11812,9 +11824,7 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 		int ldpc;
 
 		ldpc = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
-		iwpriv_status = run_iwpriv(dut, intf, "ldpc %d", ldpc);
-		if (iwpriv_status)
-			sta_config_params(dut, intf, STA_SET_LDPC, ldpc);
+		wcn_sta_set_ldpc(dut, intf, ldpc);
 	}
 
 	val = get_param(cmd, "BCC");
@@ -11822,11 +11832,9 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 		int bcc;
 
 		bcc = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
-		/* use LDPC iwpriv itself to set bcc coding, bcc coding
+		/* use LDPC setting itself to set bcc coding, bcc coding
 		 * is mutually exclusive to bcc */
-		iwpriv_status = run_iwpriv(dut, intf, "ldpc %d", !bcc);
-		if (iwpriv_status)
-			sta_config_params(dut, intf, STA_SET_LDPC, !bcc);
+		wcn_sta_set_ldpc(dut, intf, !bcc);
 	}
 
 	val = get_param(cmd, "MaxHE-MCS_1SS_RxMapLTE80");
@@ -16678,8 +16686,7 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 		int ldpc;
 
 		ldpc = strcasecmp(val, "BCCCoding") != 0;
-		if (run_iwpriv(dut, intf, "ldpc %d", ldpc))
-			sta_config_params(dut, intf, STA_SET_LDPC, ldpc);
+		wcn_sta_set_ldpc(dut, intf, ldpc);
 	}
 
 	val = get_param(cmd, "Ch_Pref");
