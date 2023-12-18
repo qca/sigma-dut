@@ -1426,6 +1426,11 @@ static int dpp_wait_tx_status(struct sigma_dut *dut, struct wpa_ctrl *ctrl,
 {
 	char buf[200], tmp[20];
 	int res;
+	const char *events[] = {
+		"DPP-TX-STATUS",
+		"DPP-RX",
+		NULL
+	};
 
 	snprintf(tmp, sizeof(tmp), "type=%d", frame_type);
 	for (;;) {
@@ -1439,8 +1444,7 @@ static int dpp_wait_tx_status(struct sigma_dut *dut, struct wpa_ctrl *ctrl,
 			break;
 	}
 
-	res = get_wpa_cli_event(dut, ctrl, "DPP-TX-STATUS",
-				buf, sizeof(buf));
+	res = get_wpa_cli_events(dut, ctrl, events, buf, sizeof(buf));
 	if (res < 0 || strstr(buf, "result=FAILED") != NULL)
 		return -1;
 
