@@ -6909,6 +6909,12 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 		    dut->device_type == STA_testbed) {
 			sta_set_phymode(dut, intf, val);
 		}
+
+		/* Change the driver phymode to 11AX for QM program if
+		 * requested */
+		if (dut->program == PROGRAM_QM &&
+		    dut->device_mode == MODE_11AX)
+			sta_set_phymode(dut, intf, val);
 	}
 
 	val = get_param(cmd, "wmm");
