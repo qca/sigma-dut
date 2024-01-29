@@ -2155,6 +2155,88 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 	if (val)
 		dut->ap_ocvc = atoi(val);
 
+	val = get_param(cmd, "UnsolicitedProbeResp");
+	if (val) {
+		if (strcasecmp(val, "enable") == 0) {
+			dut->ap_unsolicited_proberesp = VALUE_ENABLED;
+		} else if (strcasecmp(val, "disable") == 0) {
+			dut->ap_unsolicited_proberesp = VALUE_DISABLED;
+		} else {
+			send_resp(dut, conn, SIGMA_INVALID,
+				  "errorCode,Unsupported unsolicited proberesp");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "Cadence_UnsolicitedProbeResp");
+	if (val)
+		dut->ap_cad_unsolicited_proberesp = atoi(val);
+
+	val = get_param(cmd, "ActiveInd_UnsolicitedProbeResp");
+	if (val) {
+		if (strcasecmp(val, "enable") == 0) {
+			dut->ap_activeind_proberesp = VALUE_ENABLED;
+		} else if (strcasecmp(val, "disable") == 0) {
+			dut->ap_activeind_proberesp = VALUE_DISABLED;
+		} else {
+			send_resp(dut, conn, SIGMA_INVALID,
+				  "errorCode,Unsupported active unsolicited proberesp");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "RSNXE");
+	if (val) {
+		if (strcasecmp(val, "exclude") == 0) {
+			dut->ap_6g_legacy_security = VALUE_ENABLED;
+		} else if (strcasecmp(val, "include") == 0) {
+			dut->ap_6g_legacy_security = VALUE_DISABLED;
+		} else {
+			send_resp(dut, conn, SIGMA_INVALID,
+				  "errorCode,Unsupported legacy security");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "FullBW_ULMUMIMO");
+	if (val) {
+		if (strcasecmp(val, "enable") == 0) {
+			dut->ap_fullbw_ulmumimo = VALUE_ENABLED;
+		} else if (strcasecmp(val, "disable") == 0) {
+			dut->ap_fullbw_ulmumimo = VALUE_DISABLED;
+		} else {
+			send_resp(dut, conn, SIGMA_INVALID,
+				  "errorCode,Unsupported full BW ulmumimo");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "TWTInfoFrameRx");
+	if (val) {
+		if (strcasecmp(val, "enable") == 0) {
+			dut->ap_twtinfoframerx = VALUE_ENABLED;
+		} else if (strcasecmp(val, "disable") == 0) {
+			dut->ap_twtinfoframerx = VALUE_DISABLED;
+		} else {
+			send_resp(dut, conn, SIGMA_INVALID,
+				  "errorCode,Unsupported twtinfoframerx");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "OMCtrl_ULMUDataDisableRx");
+	if (val) {
+		if (strcasecmp(val, "enable") == 0) {
+			dut->ap_ulmudata_disablerx = VALUE_ENABLED;
+		} else if (strcasecmp(val, "disable") == 0) {
+			dut->ap_ulmudata_disablerx = VALUE_DISABLED;
+		} else {
+			send_resp(dut, conn, SIGMA_INVALID,
+				  "errorCode,Unsupported ulmudatadisablerx");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
 	return SUCCESS_SEND_STATUS;
 }
 
@@ -4672,6 +4754,9 @@ static int owrt_ap_config_vap(struct sigma_dut *dut)
 	else if (dut->ap_ocvc == 0)
 		owrt_ap_set_vap(dut, vap_count, "ocv", "0");
 
+	if (dut->ap_6g_legacy_security == VALUE_ENABLED)
+		owrt_ap_set_vap(dut, vap_id, "en_6g_sec_comp", "0");
+
 	return 1;
 }
 
@@ -7167,6 +7252,53 @@ static void ath_ap_set_params(struct sigma_dut *dut)
 		 */
 		run_iwpriv(dut, ifname, "he_sr_enable 1");
 	}
+
+	if (dut->ap_unsolicited_proberesp == VALUE_ENABLED) {
+		run_system_wrapper(dut, "cfg80211tool %s bcast_prbrsp_en 1",
+				   ifname);
+		sleep(2);
+	} else if (dut->ap_unsolicited_proberesp == VALUE_DISABLED) {
+		run_system_wrapper(dut, "cfg80211tool %s bcast_prbrsp_en 0",
+				   ifname);
+	}
+
+	if (dut->ap_activeind_proberesp == VALUE_ENABLED)
+		run_system_wrapper(dut,
+				   "cfg80211tool %s rnr_unsolicited_prb_resp_en 1",
+				   basedev);
+	else if (dut->ap_activeind_proberesp == VALUE_DISABLED)
+		run_system_wrapper(dut,
+				   "cfg80211tool %s rnr_unsolicited_prb_resp_en 0",
+				   basedev);
+
+	if (dut->ap_cad_unsolicited_proberesp) {
+		run_system_wrapper(dut, "cfg80211tool %s bcast_prbrsp_en 1 %d",
+				   ifname,
+				   dut->ap_cad_unsolicited_proberesp);
+		sleep(2);
+	}
+
+	if (dut->ap_fullbw_ulmumimo == VALUE_ENABLED) {
+		run_system_wrapper(dut, "cfg80211tool %s he_ul_mimo 1", ifname);
+		run_system_wrapper(dut, "cfg80211tool %s he_full_bw_ulmumimo 1",
+				   ifname);
+	} else if (dut->ap_fullbw_ulmumimo == VALUE_DISABLED) {
+		run_system_wrapper(dut, "cfg80211tool %s he_ul_mimo 0", ifname);
+		run_system_wrapper(dut, "cfg80211tool %s he_full_bw_ulmumimo 0",
+				   ifname);
+	}
+
+	if (dut->ap_twtinfoframerx == VALUE_ENABLED &&
+	    dut->device_type == AP_testbed) {
+		/* Disable UL triggers for testbed AP */
+		run_system_wrapper(dut,
+				   "wifitool %s setUnitTestCmd 0x47 2 333 1",
+				   ifname);
+	}
+
+	if (dut->ap_ulmudata_disablerx == VALUE_ENABLED &&
+	    dut->device_type == AP_testbed)
+		run_iwpriv(dut, ifname, "he_ul_mu_data_dis_rx 1");
 }
 
 
@@ -10481,6 +10613,14 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dpp_mdns_stop(dut);
 	unlink("/tmp/dpp-rest-server.uri");
 	unlink("/tmp/dpp-rest-server.id");
+
+	dut->ap_cad_unsolicited_proberesp = 0;
+	dut->ap_unsolicited_proberesp = VALUE_NOT_SET;
+	dut->ap_activeind_proberesp = VALUE_NOT_SET;
+	dut->ap_6g_legacy_security = VALUE_NOT_SET;
+	dut->ap_fullbw_ulmumimo = VALUE_NOT_SET;
+	dut->ap_twtinfoframerx = VALUE_NOT_SET;
+	dut->ap_ulmudata_disablerx = VALUE_NOT_SET;
 
 	if (is_60g_sigma_dut(dut)) {
 		dut->ap_mode = AP_11ad;

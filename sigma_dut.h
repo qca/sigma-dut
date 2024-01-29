@@ -898,6 +898,7 @@ struct sigma_dut {
 	int he_srctrl_allow;
 
 	int ap_ocvc;
+	int ap_cad_unsolicited_proberesp;
 
 	enum value_not_set_enabled_disabled ap_oce;
 	enum value_not_set_enabled_disabled ap_filsdscv;
@@ -916,6 +917,12 @@ struct sigma_dut {
 	enum value_not_set_enabled_disabled ap_twtresp;
 	enum value_not_set_enabled_disabled he_sounding;
 	enum value_not_set_enabled_disabled he_set_sta_1x1;
+	enum value_not_set_enabled_disabled ap_unsolicited_proberesp;
+	enum value_not_set_enabled_disabled ap_activeind_proberesp;
+	enum value_not_set_enabled_disabled ap_6g_legacy_security;
+	enum value_not_set_enabled_disabled ap_fullbw_ulmumimo;
+	enum value_not_set_enabled_disabled ap_twtinfoframerx;
+	enum value_not_set_enabled_disabled ap_ulmudata_disablerx;
 
 	enum ppdu {
 		PPDU_NOT_SET,
