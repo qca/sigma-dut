@@ -16754,6 +16754,9 @@ static int cmd_sta_set_power_save_wcn(const char *intf, struct sigma_dut *dut,
 	const char *link_mac = get_param(cmd, "LinkMAC");
 
 	val = get_param(cmd, "powersave");
+	if (!val)
+		val = get_param(cmd, "Mode");
+
 	if (val) {
 		int ps;
 
