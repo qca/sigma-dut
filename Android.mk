@@ -70,7 +70,6 @@ LOCAL_C_INCLUDES += \
 	$(LOCAL_PATH) system/core/include/cutils \
 	$(LOCAL_PATH) hardware/libhardware_legacy/include/hardware_legacy \
 	$(LOCAL_PATH) external/libpcap \
-	$(TARGET_OUT_HEADERS)/common/inc \
 	$(LOCAL_PATH) external/libnl/include
 
 LOCAL_SHARED_LIBRARIES := libc libcutils libnl
