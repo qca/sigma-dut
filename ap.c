@@ -603,6 +603,8 @@ static enum ap_mode get_mode(const char *str)
 		return AP_11ad;
 	else if (strcasecmp(str, "11ax") == 0)
 		return AP_11ax;
+	else if (strcasecmp(str, "11be") == 0)
+		return AP_11be;
 	else
 		return AP_inval;
 }
@@ -1054,6 +1056,7 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 		else if (dut->ap_channel >= 36 && dut->ap_channel <= 171)
 			dut->use_5g = 1;
 		break;
+	case AP_11be:
 	case AP_11ad:
 	case AP_inval:
 		break;
@@ -1339,6 +1342,8 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 			dut->ap_chwidth = AP_80;
 		else if (strcasecmp(val, "160") == 0)
 			dut->ap_chwidth = AP_160;
+		else if (strcasecmp(val, "320") == 0)
+			dut->ap_chwidth = AP_320;
 		else if (strcasecmp(val, "80plus80") == 0) {
 			dut->ap_80plus80 = 1;
 			dut->ap_chwidth = AP_80_80;
@@ -3220,6 +3225,15 @@ static int owrt_ap_config_radio(struct sigma_dut *dut)
 			owrt_ap_set_radio(dut, radio_id[0], "htmode", "HT20");
 		}
 		break;
+	case AP_11be:
+		if (dut->ap_channel >= 36) {
+			owrt_ap_set_radio(dut, radio_id[0], "hwmode", "11bea");
+			owrt_ap_set_radio(dut, radio_id[0], "htmode", "EHT80");
+		} else {
+			owrt_ap_set_radio(dut, radio_id[0], "hwmode", "11beg");
+			owrt_ap_set_radio(dut, radio_id[0], "htmode", "EHT20");
+		}
+		break;
 	case AP_inval:
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"MODE NOT SPECIFIED!");
@@ -3267,6 +3281,19 @@ static int owrt_ap_config_radio(struct sigma_dut *dut)
 						  "htmode", "HT20");
 			}
 			break;
+		case AP_11be:
+			if (dut->ap_channel >= 36) {
+				owrt_ap_set_radio(dut, radio_id[1],
+						  "hwmode", "11bea");
+				owrt_ap_set_radio(dut, radio_id[1],
+						  "htmode", "EHT80");
+			} else {
+				owrt_ap_set_radio(dut, radio_id[1],
+						  "hwmode", "11beg");
+				owrt_ap_set_radio(dut, radio_id[1],
+						  "htmode", "EHT20");
+			}
+			break;
 		case AP_inval:
 			sigma_dut_print(dut, DUT_MSG_ERROR,
 					"MODE NOT SPECIFIED!");
@@ -3285,16 +3312,39 @@ static int owrt_ap_config_radio(struct sigma_dut *dut)
 
 	switch (dut->ap_chwidth) {
 		case AP_20:
-			owrt_ap_set_radio(dut, radio_id[0], "htmode", "HT20");
+			if (dut->ap_mode == AP_11be)
+				snprintf(buf, sizeof(buf), "%s", "EHT20");
+			else
+				snprintf(buf, sizeof(buf), "%s", "HT20");
+			owrt_ap_set_radio(dut, radio_id[0], "htmode", buf);
 			break;
 		case AP_40:
-			owrt_ap_set_radio(dut, radio_id[0], "htmode", "HT40");
+			if (dut->ap_mode == AP_11be)
+				snprintf(buf, sizeof(buf), "%s", "EHT40");
+			else
+				snprintf(buf, sizeof(buf), "%s", "HT40");
+			owrt_ap_set_radio(dut, radio_id[0], "htmode", buf);
 			break;
 		case AP_80:
-			owrt_ap_set_radio(dut, radio_id[0], "htmode", "HT80");
+			if (dut->ap_mode == AP_11be)
+				snprintf(buf, sizeof(buf), "%s", "EHT80");
+			else
+				snprintf(buf, sizeof(buf), "%s", "HT80");
+			owrt_ap_set_radio(dut, radio_id[0], "htmode", buf);
 			break;
 		case AP_160:
-			owrt_ap_set_radio(dut, radio_id[0], "htmode", "HT160");
+			if (dut->ap_mode == AP_11be)
+				snprintf(buf, sizeof(buf), "%s", "EHT160");
+			else
+				snprintf(buf, sizeof(buf), "%s", "HT160");
+			owrt_ap_set_radio(dut, radio_id[0], "htmode", buf);
+			break;
+		case AP_320:
+			if (dut->ap_mode == AP_11be)
+				snprintf(buf, sizeof(buf), "%s", "EHT320");
+			else
+				snprintf(buf, sizeof(buf), "%s", "HT320");
+			owrt_ap_set_radio(dut, radio_id[0], "htmode", buf);
 			break;
 		case AP_80_80:
 			owrt_ap_set_radio(dut, radio_id[0], "htmode", "HT80_80");

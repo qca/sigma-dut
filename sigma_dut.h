@@ -637,6 +637,7 @@ struct sigma_dut {
 		AP_11ac,
 		AP_11ad,
 		AP_11ax,
+		AP_11be,
 		AP_inval
 	} ap_mode;
 	int ap_channel;
@@ -672,6 +673,7 @@ struct sigma_dut {
 		AP_40,
 		AP_80,
 		AP_160,
+		AP_320,
 		AP_80_80,
 		AP_AUTO
 	} ap_chwidth;
