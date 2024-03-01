@@ -928,6 +928,7 @@ struct sigma_dut {
 	enum value_not_set_enabled_disabled ap_ulmudata_disablerx;
 	enum value_not_set_enabled_disabled ap_btwt;
 	enum value_not_set_enabled_disabled nontrigger_txbf;
+	enum value_not_set_enabled_disabled ap_preamblepunct;
 
 	enum ppdu {
 		PPDU_NOT_SET,

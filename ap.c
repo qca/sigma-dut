@@ -2276,6 +2276,19 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 		}
 	}
 
+	val = get_param(cmd, "PreamblePunctTx");
+	if (val) {
+		if (strcasecmp(val, "enable") == 0) {
+			dut->ap_preamblepunct = VALUE_ENABLED;
+		} else if (strcasecmp(val, "disable") == 0) {
+			dut->ap_preamblepunct = VALUE_DISABLED;
+		} else {
+			send_resp(dut, conn, SIGMA_INVALID,
+				  "errorCode,Unsupported PreamblePunctTx");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
 	return SUCCESS_SEND_STATUS;
 }
 
@@ -7201,9 +7214,12 @@ static void ath_ap_set_params(struct sigma_dut *dut)
 		run_system_wrapper(dut,
 				   "wifitool %s setUnitTestCmd 0x47 2 29 0",
 				   ifname);
-		/* Enable to sort RU allocation */
-		run_system_wrapper(dut, "wifitool %s setUnitTestCmd 0x4b 2 2 1",
-				   ifname);
+		if (dut->ap_preamblepunct == VALUE_NOT_SET) {
+			/* Enable to sort RU allocation */
+			run_system_wrapper(
+				dut, "wifitool %s setUnitTestCmd 0x4b 2 2 1",
+				ifname);
+		}
 	}
 
 	if (dut->ap_numsounddim) {
@@ -10775,6 +10791,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_btwt = VALUE_NOT_SET;
 	dut->ltf_trig = 0;
 	dut->nontrigger_txbf = VALUE_NOT_SET;
+	dut->ap_preamblepunct = VALUE_NOT_SET;
 
 	if (is_60g_sigma_dut(dut)) {
 		dut->ap_mode = AP_11ad;
