@@ -903,6 +903,7 @@ struct sigma_dut {
 	int ap_cad_unsolicited_proberesp;
 	int ltf_trig;
 	int eht_txmcs;
+	int ap_addba_amsdu;
 
 	enum value_not_set_enabled_disabled ap_oce;
 	enum value_not_set_enabled_disabled ap_filsdscv;

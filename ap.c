@@ -2295,6 +2295,10 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 		dut->eht_txmcs = atoi(val);
 	}
 
+	val = get_param(cmd, "BA_Param_AMSDU_Support");
+	if (val)
+		dut->ap_addba_amsdu = atoi(val);
+
 	return SUCCESS_SEND_STATUS;
 }
 
@@ -7478,6 +7482,17 @@ static void ath_ap_set_params(struct sigma_dut *dut)
 		if (dut->ap_tx_streams)
 			run_iwpriv(dut, ifname, "nss %d", dut->ap_tx_streams);
 	}
+
+	if (dut->ap_addba_amsdu == 0 ||
+	    (dut->ap_amsdu == VALUE_DISABLED && dut->program == PROGRAM_EHT))
+		run_system_wrapper(dut,
+				   "wifitool %s setUnitTestCmd 0x48 2 129 0",
+				   ifname);
+
+	if (dut->ap_amsdu == VALUE_ENABLED && dut->program == PROGRAM_EHT)
+		run_system_wrapper(dut,
+				   "wifitool %s setUnitTestCmd 0x48 2 129 1",
+				   ifname);
 }
 
 
@@ -10805,6 +10820,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->nontrigger_txbf = VALUE_NOT_SET;
 	dut->ap_preamblepunct = VALUE_NOT_SET;
 	dut->eht_txmcs = 0;
+	dut->ap_addba_amsdu = -1;
 
 	if (is_60g_sigma_dut(dut)) {
 		dut->ap_mode = AP_11ad;
