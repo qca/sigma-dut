@@ -2262,6 +2262,12 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 	if (val)
 		subeamformermode = atoi(val);
 
+	val = get_param(cmd, "MUBeamformerMode");
+	if (val) {
+		dut->ap_txBF = 1;
+		dut->ap_mu_txBF = 1;
+	}
+
 	val = get_param(cmd, "NonTrigger_TxBF");
 	if (val) {
 		if (strcasecmp(val, "Enable") == 0) {
@@ -7408,6 +7414,40 @@ static void ath_ap_set_params(struct sigma_dut *dut)
 				   ifname);
 		/* SIFS burst disabled to handle short SP */
 		run_system_wrapper(dut, "wifitool %s setUnitTestCmd 0x47 2 2 1",
+				   ifname);
+	}
+
+	if (dut->program == PROGRAM_EHT && dut->ap_mode == AP_11be) {
+		if (dut->ap_txBF) {
+			run_iwpriv(dut, ifname, "vhtsubfee 1");
+			run_iwpriv(dut, ifname, "vhtsubfer 1");
+			run_iwpriv(dut, ifname, "he_subfer 1");
+			run_iwpriv(dut, ifname, "he_subfee 1");
+			run_iwpriv(dut, ifname, "set_eht_su_bfmr 1");
+			run_iwpriv(dut, ifname, "set_eht_su_bfme 1");
+		}
+		if (dut->ap_mu_txBF) {
+			run_iwpriv(dut, ifname, "vhtmubfer 1");
+			run_iwpriv(dut, ifname, "vhtmubfee 1");
+			run_iwpriv(dut, ifname, "he_mubfer 1");
+			run_iwpriv(dut, ifname, "he_mubfee 1");
+			if (dut->ap_chwidth == AP_80)
+				run_iwpriv(dut, ifname, "set_eht_mu_bfmr 1");
+			else if (dut->ap_chwidth == AP_160)
+				run_iwpriv(dut, ifname, "set_eht_mu_bfmr 3");
+			else if (dut->ap_chwidth == AP_320)
+				run_iwpriv(dut, ifname, "set_eht_mu_bfmr 7");
+			else
+				run_iwpriv(dut, ifname, "set_eht_mu_bfmr 1");
+			run_iwpriv(dut, ifname, "set_eht_mubfee 1");
+		}
+	}
+
+	if (dut->ap_mu_txBF && dut->ap_txBF &&
+	    dut->ap_mbssid == VALUE_DISABLED && dut->program == PROGRAM_EHT) {
+		/* Disable partial sounding sequence */
+		run_system_wrapper(dut,
+				   "wifitool %s setUnitTestCmd 0x47 2 112 0",
 				   ifname);
 	}
 }
