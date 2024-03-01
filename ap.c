@@ -2299,6 +2299,14 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 	if (val)
 		dut->ap_addba_amsdu = atoi(val);
 
+	val = get_param(cmd, "TxEMLOMN");
+	if (val) {
+		if (strcasecmp(val, "Disable") == 0)
+			dut->eht_txemlomn = VALUE_DISABLED;
+		else if (strcasecmp(val, "enable") == 0)
+			dut->eht_txemlomn = VALUE_ENABLED;
+	}
+
 	return SUCCESS_SEND_STATUS;
 }
 
@@ -7493,6 +7501,10 @@ static void ath_ap_set_params(struct sigma_dut *dut)
 		run_system_wrapper(dut,
 				   "wifitool %s setUnitTestCmd 0x48 2 129 1",
 				   ifname);
+
+	if (dut->eht_txemlomn == VALUE_DISABLED)
+		run_system_wrapper(dut, "wifitool %s setUnitTestCmd 13 2 7 1",
+				   ifname);
 }
 
 
@@ -10821,6 +10833,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_preamblepunct = VALUE_NOT_SET;
 	dut->eht_txmcs = 0;
 	dut->ap_addba_amsdu = -1;
+	dut->eht_txemlomn = VALUE_NOT_SET;
 
 	if (is_60g_sigma_dut(dut)) {
 		dut->ap_mode = AP_11ad;
@@ -14391,6 +14404,37 @@ static enum sigma_cmd_result ath_ap_set_rfeature(struct sigma_dut *dut,
 
 	if (dut->ap_btwt == VALUE_ENABLED)
 		ap_send_btwt(dut, cmd, ifname);
+
+	val = get_param(cmd, "EMLInitialControlFrame");
+	if (val) {
+		if (strcasecmp(val, "MURTS") == 0) {
+			if (dut->eht_txemlomn == VALUE_DISABLED &&
+			    dut->device_type == AP_testbed) {
+				run_system_wrapper(dut,
+						   "wifitool %s setUnitTestCmd 0x47 2 545 1",
+						   ifname);
+			} else {
+				run_system_wrapper(dut,
+						   "wifitool %s setUnitTestCmd 0x47 2 545 1",
+						   ifname);
+			}
+		} else if (strcasecmp(val, "BSRP") == 0) {
+			if (dut->eht_txemlomn == VALUE_DISABLED &&
+			    dut->device_type == AP_testbed) {
+				run_system_wrapper(dut,
+						   "wifitool %s setUnitTestCmd 0x47 2 545 0",
+						   ifname);
+			} else {
+				run_system_wrapper(dut,
+						   "wifitool %s setUnitTestCmd 0x47 2 545 0",
+						   ifname);
+			}
+		} else {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Unsupported EMLInitialControlFrame");
+			return STATUS_SENT_ERROR;
+		}
+	}
 
 	return SUCCESS_SEND_STATUS;
 }
