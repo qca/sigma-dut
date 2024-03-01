@@ -858,6 +858,7 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 	unsigned int wlan_tag = 1;
 	const char *ifname = get_main_ifname(dut);
 	char buf[128];
+	int subeamformermode = 0;
 
 	/* Allow program to be overridden if specified in the ap_set_wireless
 	 * to support some 60 GHz test scripts where the program may be 60 GHz
@@ -2254,6 +2255,18 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 			send_resp(dut, conn, SIGMA_INVALID,
 				  "errorCode,Unsupported BroadcastTWT");
 			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "SUBeamformerMode");
+	if (val)
+		subeamformermode = atoi(val);
+
+	val = get_param(cmd, "NonTrigger_TxBF");
+	if (val) {
+		if (strcasecmp(val, "Enable") == 0) {
+			if (subeamformermode == 1)
+				dut->nontrigger_txbf = VALUE_ENABLED;
 		}
 	}
 
@@ -10720,6 +10733,8 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_twtinfoframerx = VALUE_NOT_SET;
 	dut->ap_ulmudata_disablerx = VALUE_NOT_SET;
 	dut->ap_btwt = VALUE_NOT_SET;
+	dut->ltf_trig = 0;
+	dut->nontrigger_txbf = VALUE_NOT_SET;
 
 	if (is_60g_sigma_dut(dut)) {
 		dut->ap_mode = AP_11ad;
@@ -13224,6 +13239,82 @@ static enum sigma_cmd_result he_ar_gi_ltf_mask(struct sigma_dut *dut,
 }
 
 
+static enum sigma_cmd_result eht_ar_gi_ltf_mask(struct sigma_dut *dut,
+						struct sigma_conn *conn,
+						const char *ifname,
+						const char *val)
+{
+
+	unsigned int he_ar_gi = 0, he_ar_ltf = 0;
+	char buf[100];
+	int gi = -1, ltf = -1;
+
+	if (strcmp(val, "0.4") == 0) {
+		he_ar_gi = 0x01;
+		if (dut->nontrigger_txbf == VALUE_ENABLED)
+			gi = 1;
+	} else if (strcmp(val, "0.8") == 0) {
+		he_ar_gi = 0x02;
+		if (dut->nontrigger_txbf == VALUE_ENABLED)
+			gi = 0;
+	} else if (strcmp(val, "1.6") == 0) {
+		he_ar_gi = 0x04;
+		if (dut->nontrigger_txbf == VALUE_ENABLED)
+			gi = 2;
+	} else if (strcmp(val, "3.2") == 0) {
+		he_ar_gi = 0x08;
+		if (dut->nontrigger_txbf == VALUE_ENABLED)
+			gi = 3;
+	} else {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Unsupported shortGI");
+		return STATUS_SENT_ERROR;
+	}
+
+	if (!dut->ar_ltf) {
+		if (dut->ltf_trig == 1) {
+			he_ar_ltf = 0x01;
+		} else if (dut->ltf_trig == 2) {
+			he_ar_ltf = 0x02;
+		} else if (dut->ltf_trig == 4) {
+			he_ar_ltf = 0x04;
+		} else {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Unsupported LTF");
+			return STATUS_SENT_ERROR;
+		}
+	} else {
+		if (dut->ar_ltf && strcmp(dut->ar_ltf, "6.4") == 0) {
+			he_ar_ltf = 0x02;
+			if (dut->nontrigger_txbf == VALUE_ENABLED)
+				ltf = 1;
+		} else if (dut->ar_ltf && strcmp(dut->ar_ltf, "12.8") == 0) {
+			he_ar_ltf = 0x04;
+			if (dut->nontrigger_txbf == VALUE_ENABLED)
+				ltf = 2;
+		} else if (dut->ar_ltf && strcmp(dut->ar_ltf, "3.2") == 0) {
+			he_ar_ltf = 0x01;
+			if (dut->nontrigger_txbf == VALUE_ENABLED)
+				ltf = 0;
+		} else {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Unsupported LTF");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	snprintf(buf, sizeof(buf), "%02x%02x", he_ar_gi, he_ar_ltf);
+	run_iwpriv(dut, ifname, "ar_gi_ltf 0x%s", buf);
+	if (dut->nontrigger_txbf == VALUE_ENABLED) {
+		run_system_wrapper(
+			dut, "wifitool %s setUnitTestCmd 0x48 3 620 %d %d",
+			ifname, ltf, gi);
+	}
+
+	return SUCCESS_SEND_STATUS;
+}
+
+
 static enum sigma_cmd_result he_rualloctones(struct sigma_dut *dut,
 					     struct sigma_conn *conn,
 					     const char *ifname,
@@ -13544,10 +13635,15 @@ static enum sigma_cmd_result ath_ap_set_rfeature(struct sigma_dut *dut,
 
 	val = get_param(cmd, "GI");
 	if (val) {
-		if (dut->ap_fixed_rate)
+		if (dut->ap_fixed_rate) {
 			res = he_shortgi(dut, conn, ifname, val);
-		else
-			res = he_ar_gi_ltf_mask(dut, conn, ifname, val);
+		} else {
+			if (dut->ap_mode == AP_11be)
+				res = eht_ar_gi_ltf_mask(dut, conn, ifname,
+							 val);
+			else
+				res = he_ar_gi_ltf_mask(dut, conn, ifname, val);
+		}
 		if (res != SUCCESS_SEND_STATUS)
 			return res;
 	}
@@ -13728,14 +13824,38 @@ static enum sigma_cmd_result ath_ap_set_rfeature(struct sigma_dut *dut,
 
 		trig_gi_ltf = atoi(val);
 		if (trig_gi_ltf == 0) {
-			he_ltf(dut, conn, ifname, "3.2");
-			he_shortgi(dut, conn, ifname, "1.6");
+			if (dut->ap_fixed_rate) {
+				he_ltf(dut, conn, ifname, "3.2");
+				he_shortgi(dut, conn, ifname, "1.6");
+			} else {
+				dut->ltf_trig = 1;
+				res = eht_ar_gi_ltf_mask(dut, conn, ifname,
+							 "1.6");
+				if (res != SUCCESS_SEND_STATUS)
+					return res;
+			}
 		} else if (trig_gi_ltf == 1) {
-			he_ltf(dut, conn, ifname, "6.4");
-			he_shortgi(dut, conn, ifname, "1.6");
+			if (dut->ap_fixed_rate) {
+				he_ltf(dut, conn, ifname, "6.4");
+				he_shortgi(dut, conn, ifname, "1.6");
+			} else {
+				dut->ltf_trig = 2;
+				res = eht_ar_gi_ltf_mask(dut, conn, ifname,
+							 "1.6");
+				if (res != SUCCESS_SEND_STATUS)
+					return res;
+			}
 		} else if (trig_gi_ltf == 2) {
-			he_ltf(dut, conn, ifname, "12.8");
-			he_shortgi(dut, conn, ifname, "3.2");
+			if (dut->ap_fixed_rate) {
+				he_ltf(dut, conn, ifname, "12.8");
+				he_shortgi(dut, conn, ifname, "3.2");
+			} else {
+				dut->ltf_trig = 4;
+				res = eht_ar_gi_ltf_mask(dut, conn, ifname,
+							 "3.2");
+				if (res != SUCCESS_SEND_STATUS)
+					return res;
+			}
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Unsupported Trig_ComInfo_GI-LTF");
