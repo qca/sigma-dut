@@ -2289,6 +2289,12 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 		}
 	}
 
+	val = get_param(cmd, "ForceEHTTXMCS");
+	if (val) {
+		dut->ap_fixed_rate = 1;
+		dut->eht_txmcs = atoi(val);
+	}
+
 	return SUCCESS_SEND_STATUS;
 }
 
@@ -7466,6 +7472,12 @@ static void ath_ap_set_params(struct sigma_dut *dut)
 				   "wifitool %s setUnitTestCmd 0x47 2 112 0",
 				   ifname);
 	}
+
+	if (dut->eht_txmcs) {
+		run_iwpriv(dut, ifname, "eht_mcs %d", dut->eht_txmcs);
+		if (dut->ap_tx_streams)
+			run_iwpriv(dut, ifname, "nss %d", dut->ap_tx_streams);
+	}
 }
 
 
@@ -10792,6 +10804,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ltf_trig = 0;
 	dut->nontrigger_txbf = VALUE_NOT_SET;
 	dut->ap_preamblepunct = VALUE_NOT_SET;
+	dut->eht_txmcs = 0;
 
 	if (is_60g_sigma_dut(dut)) {
 		dut->ap_mode = AP_11ad;
