@@ -925,6 +925,7 @@ struct sigma_dut {
 	enum value_not_set_enabled_disabled ap_fullbw_ulmumimo;
 	enum value_not_set_enabled_disabled ap_twtinfoframerx;
 	enum value_not_set_enabled_disabled ap_ulmudata_disablerx;
+	enum value_not_set_enabled_disabled ap_btwt;
 
 	enum ppdu {
 		PPDU_NOT_SET,

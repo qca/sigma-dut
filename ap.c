@@ -2242,6 +2242,21 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 		}
 	}
 
+	val = get_param(cmd, "BroadcastTWT");
+	if (val) {
+		if (strcasecmp(val, "enable") == 0) {
+			dut->ap_btwt = VALUE_ENABLED;
+			dut->ap_txBF = 0;
+			dut->ap_mu_txBF = 0;
+		} else if (strcasecmp(val, "disable") == 0) {
+			dut->ap_btwt = VALUE_DISABLED;
+		} else {
+			send_resp(dut, conn, SIGMA_INVALID,
+				  "errorCode,Unsupported BroadcastTWT");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
 	return SUCCESS_SEND_STATUS;
 }
 
@@ -3399,6 +3414,11 @@ static int owrt_ap_config_radio(struct sigma_dut *dut)
 					  "'2 1'");
 		owrt_ap_set_qcawifi(dut, "ap_bss_color_collision_detection",
 				    "1");
+	}
+
+	if (dut->ap_btwt == VALUE_ENABLED) {
+		owrt_ap_set_qcawifi(dut, "twt_enable", "1");
+		owrt_ap_set_qcawifi(dut, "b_twt_enable", "1");
 	}
 
 	return 1;
@@ -7115,6 +7135,24 @@ static void ath_ap_set_params(struct sigma_dut *dut)
 		run_system_wrapper(dut,
 				   "wifitool %s setUnitTestCmd 0x48 2 63 1908",
 				   ifname);
+		if (dut->ap_twtresp == VALUE_ENABLED ||
+		    dut->device_type == AP_dut ||
+		    (dut->ap_btwt == VALUE_ENABLED &&
+		     dut->device_type == AP_testbed)) {
+			run_system_wrapper(
+				dut, "wifitool %s setUnitTestCmd 0x47 2 42 7",
+				ifname);
+			run_system_wrapper(
+				dut, "wifitool %s setUnitTestCmd 0x47 2 95 6",
+				ifname);
+			run_system_wrapper(
+				dut, "wifitool %s setUnitTestCmd 0x47 2 43 8",
+				ifname);
+			run_system_wrapper(
+				dut,
+				"wifitool %s setUnitTestCmd 0x48 2 63 1000",
+				ifname);
+		}
 	}
 
 	if (dut->ap_he_dlofdma == VALUE_ENABLED) {
@@ -7349,6 +7387,16 @@ static void ath_ap_set_params(struct sigma_dut *dut)
 	if (dut->ap_ulmudata_disablerx == VALUE_ENABLED &&
 	    dut->device_type == AP_testbed)
 		run_iwpriv(dut, ifname, "he_ul_mu_data_dis_rx 1");
+
+	if (dut->ap_btwt == VALUE_ENABLED) {
+		/* Set 2 ms for SP command */
+		run_system_wrapper(dut,
+				   "wifitool %s setUnitTestCmd 77 2 22 2000",
+				   ifname);
+		/* SIFS burst disabled to handle short SP */
+		run_system_wrapper(dut, "wifitool %s setUnitTestCmd 0x47 2 2 1",
+				   ifname);
+	}
 }
 
 
@@ -10671,6 +10719,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_fullbw_ulmumimo = VALUE_NOT_SET;
 	dut->ap_twtinfoframerx = VALUE_NOT_SET;
 	dut->ap_ulmudata_disablerx = VALUE_NOT_SET;
+	dut->ap_btwt = VALUE_NOT_SET;
 
 	if (is_60g_sigma_dut(dut)) {
 		dut->ap_mode = AP_11ad;
@@ -11481,6 +11530,123 @@ static int ath_ap_send_frame_bcn_rpt_req(struct sigma_dut *dut,
 	}
 
 	run_system(dut, buf);
+	return 0;
+}
+
+
+static void binarytodecimal(int binarynum, char *buf, size_t buf_size)
+{
+	int decimalnum = 0, temp = 0, remainder;
+	char temp_val[100];
+
+	while (binarynum) {
+		remainder = binarynum % 10;
+		binarynum = binarynum / 10;
+		decimalnum += remainder * (1 << temp);
+		temp++;
+	}
+	snprintf(temp_val, sizeof(temp_val), "%d", decimalnum);
+	strlcat(buf, temp_val, buf_size);
+}
+
+
+/* Below commands are to add B-TWT dialog(session)
+ * wifitool <ifname> ap_twt_add_dialog 00:00:00:00:00:00 <id> <intvl> <mant> <dur> <off-0> <cmd-4> <recomd(3b)|pers(8b)|rsvd11-ID0-P-U-T-B>
+ */
+static int ap_send_btwt(struct sigma_dut *dut, struct sigma_cmd *cmd,
+			const char *ifname)
+{
+	char buf[200];
+	const char *str_val;
+	int val_id = 0, twt_en = 0, flowtype = 0, wakeintexp = 0;
+	char bin[200];
+
+	snprintf(buf, sizeof(buf),
+		 "wifitool %s ap_twt_add_dialog 00:00:00:00:00:00", ifname);
+
+	str_val = get_param(cmd, "BTWT_ID");
+	if (str_val) {
+		char btwt_id[100];
+		int btwtid;
+
+		btwtid = atoi(str_val);
+		if (btwtid == 0)
+		    val_id = 1;
+		else
+		    val_id = 0;
+		snprintf(btwt_id, sizeof(btwt_id), " %d", btwtid);
+		strlcat(buf, btwt_id, sizeof(buf));
+	}
+
+	str_val = get_param(cmd, "WakeIntervalExp");
+	if (str_val) {
+	    wakeintexp = atoi(str_val);
+	    if (wakeintexp < 0)
+		    return -1;
+	}
+
+	str_val = get_param(cmd, "WakeIntervalMantissa");
+	if (str_val) {
+		char wakeintdur[100];
+		int wakeintman = 0, wakeint = 0;
+
+		wakeintman = atoi(str_val);
+		wakeint = 1 << wakeintexp;
+		snprintf(wakeintdur, sizeof(wakeintdur), " %d",
+			 wakeint * wakeintman);
+		strlcat(buf, wakeintdur, sizeof(buf));
+	}
+
+	if (parse_send_frame_params_int("WakeIntervalMantissa", cmd, dut,
+					buf, sizeof(buf)))
+	    return -1;
+
+	str_val = get_param(cmd, "NominalMinWakeDur");
+	if (str_val) {
+		char mindur[100];
+		int minwakedur = 0;
+
+		minwakedur = atoi(str_val) * 256;
+		snprintf(mindur, sizeof(mindur), " %d", minwakedur);
+		strlcat(buf, mindur, sizeof(buf));
+	}
+
+	strlcat(buf, " 0", sizeof(buf));
+	strlcat(buf, " 4", sizeof(buf));
+
+	str_val = get_param(cmd, "BTWT_Persistence");
+	if (str_val) {
+		char btwt_p[100];
+		int btwt_p_val;
+
+		btwt_p_val = atoi(str_val);
+		snprintf(btwt_p, sizeof(btwt_p), " 0x00%x00", btwt_p_val);
+		strlcat(buf, btwt_p, sizeof(buf));
+		snprintf(btwt_p, sizeof(btwt_p), "%x", val_id);
+		strlcat(buf, btwt_p, sizeof(buf));
+	}
+
+	str_val = get_param(cmd, "TWT_Trigger");
+	if (str_val) {
+		if (strcasecmp(str_val, "Enable") == 0) {
+			twt_en = 1;
+		} else if (strcasecmp(str_val, "Disable") == 0) {
+			twt_en = 0;
+		} else {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Unsupported TWT_Trigger");
+			return -1;
+		}
+	}
+
+	str_val = get_param(cmd, "FlowType");
+	if (str_val)
+	    flowtype = atoi(str_val);
+
+	snprintf(bin, sizeof(bin), "0%d%d1", flowtype, twt_en);
+	binarytodecimal(atoi(bin), buf, sizeof(buf));
+
+	run_system_wrapper(dut, buf);
 	return 0;
 }
 
@@ -14016,6 +14182,9 @@ static enum sigma_cmd_result ath_ap_set_rfeature(struct sigma_dut *dut,
 		param = atoi(val);
 		run_iwpriv(dut, ifname, "muedca_timer %d %d", AP_AC_VO, param);
 	}
+
+	if (dut->ap_btwt == VALUE_ENABLED)
+		ap_send_btwt(dut, cmd, ifname);
 
 	return SUCCESS_SEND_STATUS;
 }
