@@ -2752,7 +2752,14 @@ static enum sigma_cmd_result cmd_ap_set_security(struct sigma_dut *dut,
 		} else if (strcasecmp(val, "WPA2-SAE") == 0 ||
 			   strcasecmp(val, "SAE") == 0) {
 			dut->ap_key_mgmt = AP_WPA2_SAE;
-			dut->ap_cipher = AP_CCMP;
+			if (dut->ap_mode == AP_11be) {
+				dut->ap_cipher = AP_GCMP_256;
+				dut->ap_group_cipher = AP_GCMP_256;
+				dut->ap_key_mgmt = AP_WPA3_SAE_EXT;
+				dut->ap_group_mgmt_cipher = AP_BIP_GMAC_256;
+			} else {
+				dut->ap_cipher = AP_CCMP;
+			}
 			dut->ap_pmf = AP_PMF_REQUIRED;
 		} else if (strcasecmp(val, "WPA2-PSK-SAE") == 0) {
 			dut->ap_key_mgmt = AP_WPA2_PSK_SAE;
@@ -4545,6 +4552,9 @@ static int owrt_ap_config_vap(struct sigma_dut *dut)
 				owrt_ap_set_vap(dut, vap_count, "hidden", "1");
 			}
 			break;
+		case AP_WPA3_SAE_EXT:
+			/* TODO - not yet supported */
+			break;
 		}
 
 		if (!dut->ap_is_dual)
@@ -5512,6 +5522,7 @@ static int cmd_wcn_ap_config_commit(struct sigma_dut *dut,
 	case AP_WPA2_EAP_SHA256:
 	case AP_WPA2_PSK_SHA256:
 	case AP_WPA2_ENT_FT_EAP:
+	case AP_WPA3_SAE_EXT:
 		/* Not supported */
 		break;
 	}
@@ -7741,6 +7752,7 @@ static int cmd_ath_ap_config_commit(struct sigma_dut *dut,
 	case AP_WPA2_PSK_SHA256:
 	case AP_WPA2_ENT_FT_EAP:
 	case AP_OSEN:
+	case AP_WPA3_SAE_EXT:
 		/* TODO */
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,Unsupported KeyMgnt value");
@@ -7855,6 +7867,7 @@ static int cmd_ath_ap_config_commit(struct sigma_dut *dut,
 		case AP_WPA2_PSK_SHA256:
 		case AP_WPA2_ENT_FT_EAP:
 		case AP_OSEN:
+		case AP_WPA3_SAE_EXT:
 			/* TODO */
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Unsupported KeyMgnt value");
@@ -9094,9 +9107,11 @@ write_conf:
 	case AP_WPA2_PSK_SAE:
 	case AP_WPA2_PSK_SHA256:
 	case AP_WPA2_FT_PSK:
+	case AP_WPA3_SAE_EXT:
 		if (dut->ap_key_mgmt == AP_WPA2_PSK ||
 		    dut->ap_key_mgmt == AP_WPA2_SAE ||
 		    dut->ap_key_mgmt == AP_WPA2_PSK_SAE ||
+		    dut->ap_key_mgmt == AP_WPA3_SAE_EXT ||
 		    dut->ap_key_mgmt == AP_WPA2_PSK_SHA256 ||
 		    dut->ap_key_mgmt == AP_WPA2_FT_PSK)
 			fprintf(f, "wpa=2\n");
@@ -9108,6 +9123,8 @@ write_conf:
 			key_mgmt = "SAE";
 		else if (dut->ap_key_mgmt == AP_WPA2_PSK_SAE)
 			key_mgmt = "WPA-PSK SAE";
+		else if (dut->ap_key_mgmt == AP_WPA3_SAE_EXT)
+			key_mgmt = "SAE-EXT-KEY";
 		else
 			key_mgmt = "WPA-PSK";
 		switch (dut->ap_pmf) {
@@ -9124,6 +9141,8 @@ write_conf:
 				key_mgmt = "SAE";
 			else if (dut->ap_key_mgmt == AP_WPA2_PSK_SAE)
 				key_mgmt = "WPA-PSK-SHA256 SAE";
+			else if (dut->ap_key_mgmt == AP_WPA3_SAE_EXT)
+				key_mgmt = "SAE-EXT-KEY";
 			else
 				key_mgmt = "WPA-PSK-SHA256";
 			fprintf(f, "wpa_key_mgmt=%s\n", key_mgmt);
@@ -9138,6 +9157,10 @@ write_conf:
 		if (dut->ap_group_cipher != AP_NO_GROUP_CIPHER_SET)
 			fprintf(f, "group_cipher=%s\n",
 				hostapd_cipher_name(dut->ap_group_cipher));
+		if (dut->ap_group_mgmt_cipher != AP_NO_GROUP_MGMT_CIPHER_SET)
+			fprintf(f, "group_mgmt_cipher=%s\n",
+				hostapd_group_mgmt_cipher_name(
+					dut->ap_group_mgmt_cipher));
 		if (write_hostapd_conf_password(
 			    dut, f, dut->ap_key_mgmt == AP_WPA2_SAE) < 0) {
 			fclose(f);
