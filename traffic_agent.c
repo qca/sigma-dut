@@ -520,6 +520,7 @@ static void send_file(struct sigma_stream *s)
 	struct timeval stop, now, start;
 	int res;
 	unsigned int counter = 0, total_sleep_usec = 0, total_pkts;
+	unsigned int error_again = 0, error_nobufs = 0;
 	int sleep_usec = 0;
 
 	if (s->duration <= 0 || s->frame_rate < 0 || s->payload_size < 20)
@@ -593,7 +594,9 @@ static void send_file(struct sigma_stream *s)
 		} else {
 			switch (errno) {
 			case EAGAIN:
+				error_again++;
 			case ENOBUFS:
+				error_nobufs++;
 				usleep(1000);
 				break;
 			case ECONNRESET:
@@ -608,8 +611,9 @@ static void send_file(struct sigma_stream *s)
 	}
 
 	sigma_dut_print(s->dut, DUT_MSG_DEBUG,
-			"send_file: counter %u s->tx_frames %d total_sleep_usec %u",
-			counter, s->tx_frames, total_sleep_usec);
+			"send_file: counter %u s->tx_frames %d total_sleep_usec %u EAGAIN %u ENOBUFS %u",
+			counter, s->tx_frames, total_sleep_usec, error_again,
+			error_nobufs - error_again);
 
 	free(pkt);
 }
