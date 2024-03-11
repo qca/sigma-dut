@@ -14761,6 +14761,23 @@ static enum sigma_cmd_result wcn_ap_set_rfeature(struct sigma_dut *dut,
 #endif /* NL80211_SUPPORT */
 	}
 
+	val = get_param(cmd, "CodingType");
+	if (val) {
+		if (strcasecmp(val, "BCCCoding") == 0) {
+			dut->ap_bcc = VALUE_ENABLED;
+			dut->ap_ldpc = VALUE_DISABLED;
+		} else if (strcasecmp(val, "LDPCCoding") == 0) {
+			dut->ap_ldpc = VALUE_ENABLED;
+			dut->ap_bcc = VALUE_DISABLED;
+		} else {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Unsupported CodingType value");
+			return STATUS_SENT_ERROR;
+		}
+
+		wcn_config_ap_ldpc(dut, ifname);
+	}
+
 	return SUCCESS_SEND_STATUS;
 }
 
