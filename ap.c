@@ -14665,6 +14665,17 @@ static int wcn_vht_chnum_band(struct sigma_dut *dut, const char *ifname,
 }
 
 
+static int wcn_ap_set_he_gi(struct sigma_dut *dut, const char *intf, u8 gi_val)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_set_link_gi(dut, intf, ap_get_mlo_link_id(dut, intf),
+			       gi_val);
+#else /* NL80211_SUPPORT */
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static enum sigma_cmd_result wcn_ap_set_rfeature(struct sigma_dut *dut,
 						 struct sigma_conn *conn,
 						 struct sigma_cmd *cmd)
@@ -14730,9 +14741,9 @@ static enum sigma_cmd_result wcn_ap_set_rfeature(struct sigma_dut *dut,
 				  "errorCode,GI value not supported");
 			return STATUS_SENT_ERROR;
 		}
-		if (wcn_set_he_gi(dut, ifname, he_gi_val)) {
+		if (wcn_ap_set_he_gi(dut, ifname, he_gi_val)) {
 			sigma_dut_print(dut, DUT_MSG_INFO,
-					"wcn_set_he_gi failed, using iwpriv");
+					"wcn_ap_set_he_gi failed, using iwpriv");
 			run_iwpriv(dut, ifname, "enable_short_gi %d",
 				   auto_rate_gi);
 			run_iwpriv(dut, ifname, "enable_short_gi %d",

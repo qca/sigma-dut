@@ -715,6 +715,33 @@ static int get_wpa_ctrl_status_field(const char *path, const char *ifname,
 	return -1;
 }
 
+static int get_hapd_status(const char *ifname, const char *field, char *obuf,
+		   size_t obuf_size)
+{
+	const char *path = sigma_hapd_ctrl ?
+		sigma_hapd_ctrl : DEFAULT_HAPD_CTRL_PATH;
+
+	return get_wpa_ctrl_status_field(path, ifname, "STATUS",
+					 field, obuf, obuf_size);
+}
+
+int ap_get_mlo_link_id(struct sigma_dut *dut, const char *ifname)
+{
+	char buf[4096];
+	int link_id = -1;
+
+	if (get_hapd_status(ifname, "mld_link_id[0]", buf, sizeof(buf)) < 0) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "%s: MLD Link ID not found",
+				__func__);
+		return -1;
+	}
+
+	link_id = atoi(buf);
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"%s: Found AP link ID %d", __func__, link_id);
+
+	return link_id;
+}
 
 int get_wpa_status(const char *ifname, const char *field, char *obuf,
 		   size_t obuf_size)

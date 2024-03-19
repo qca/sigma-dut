@@ -9931,8 +9931,8 @@ static int wcn_set_he_tx_rate(struct sigma_dut *dut, const char *intf,
 
 
 #ifdef NL80211_SUPPORT
-static int wcn_set_link_gi(struct sigma_dut *dut, const char *intf, int link_id,
-			   u8 gi_val)
+int wcn_set_link_gi(struct sigma_dut *dut, const char *intf, int link_id,
+		    u8 gi_val)
 {
 	struct nlattr *attr;
 	struct nlattr *attr1;

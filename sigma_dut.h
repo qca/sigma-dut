@@ -1363,6 +1363,8 @@ int sta_set_addba_buf_size(struct sigma_dut *dut,
 			   const char *intf, int bufsize);
 int wcn_set_he_gi(struct sigma_dut *dut, const char *intf, u8 gi_val);
 #ifdef NL80211_SUPPORT
+int wcn_set_link_gi(struct sigma_dut *dut, const char *intf, int link_id,
+		    u8 gi_val);
 int wcn_set_he_ltf(struct sigma_dut *dut, const char *intf,
 		   enum qca_wlan_he_ltf_cfg ltf);
 #endif /* NL80211_SUPPORT */
