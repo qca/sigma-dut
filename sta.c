@@ -12055,7 +12055,7 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 
 		if (program && (strcasecmp(program, "HE") == 0 ||
-				strcasecmp(program, "EHT")) == 0) {
+				strcasecmp(program, "EHT") == 0)) {
 #ifdef NL80211_SUPPORT
 			enum he_mcs_config mcs_config;
 			int ret;
