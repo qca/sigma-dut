@@ -745,6 +745,92 @@ static void set_vht_mcsmap_nss(struct sigma_dut *dut, int nss, int mcs)
 }
 
 
+static void set_eht_mcsmap_nss(struct sigma_dut *dut, int nss, int mcs)
+{
+	switch (mcs) {
+	case 7:
+		switch (nss) {
+		case 1:
+			dut->ap_ehtmcs_map = 0x1;
+			break;
+		case 2:
+			dut->ap_ehtmcs_map = 0x2;
+			break;
+		case 3:
+			dut->ap_ehtmcs_map = 0x3;
+			break;
+		case 4:
+			dut->ap_ehtmcs_map = 0x4;
+			break;
+		default:
+			dut->ap_ehtmcs_map = 0x4;
+			break;
+		}
+		break;
+	case 9:
+		switch (nss) {
+		case 1:
+			dut->ap_ehtmcs_map = 0x11;
+			break;
+		case 2:
+			dut->ap_ehtmcs_map = 0x22;
+			break;
+		case 3:
+			dut->ap_ehtmcs_map = 0x33;
+			break;
+		case 4:
+			dut->ap_ehtmcs_map = 0x44;
+			break;
+		default:
+			dut->ap_ehtmcs_map = 0x44;
+			break;
+		}
+		break;
+	case 11:
+		switch (nss) {
+		case 1:
+			dut->ap_ehtmcs_map = 0x111;
+			break;
+		case 2:
+			dut->ap_ehtmcs_map = 0x222;
+			break;
+		case 3:
+			dut->ap_ehtmcs_map = 0x333;
+			break;
+		case 4:
+			dut->ap_ehtmcs_map = 0x444;
+			break;
+		default:
+			dut->ap_ehtmcs_map = 0x444;
+			break;
+		}
+		break;
+	case 13:
+		switch (nss) {
+		case 1:
+			dut->ap_ehtmcs_map = 0x1111;
+			break;
+		case 2:
+			dut->ap_ehtmcs_map = 0x2222;
+			break;
+		case 3:
+			dut->ap_ehtmcs_map = 0x3333;
+			break;
+		case 4:
+			dut->ap_ehtmcs_map = 0x4444;
+			break;
+		default:
+			dut->ap_ehtmcs_map = 0x4444;
+			break;
+		}
+		break;
+	default:
+		dut->ap_ehtmcs_map = 0x4444;
+		break;
+	}
+}
+
+
 /* Get 2*nss bitmask */
 /* We are trying to pack 2-bit MCS values per NSS in a 16-bit wide field.
  * IEEE P802.11ax/D5.0, 9.4.2.247.4 supported HE-MCS And NSS Set field
@@ -1310,12 +1396,17 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 			return STATUS_SENT;
 		}
 		mcs = atoi(result);
-		if (dut->program == PROGRAM_HE) {
+		if (dut->program == PROGRAM_HE || dut->program == PROGRAM_EHT) {
 			uint16_t mcsnssmap = 0;
 
+			/* To set mcs_nss_map for HE program */
 			get_he_mcs_nssmap((uint8_t *) &mcsnssmap, nss, mcs);
 			dut->he_mcsnssmap = (mcsnssmap << 16) | mcsnssmap;
 			dut->he_ul_mcs = mcs;
+
+			/* To set mcs_nss_map for EHT program */
+			if (dut->ap_mode == AP_11be)
+				set_eht_mcsmap_nss(dut, nss, mcs);
 		} else {
 			set_vht_mcsmap_nss(dut, nss, mcs);
 		}
@@ -7276,6 +7367,13 @@ static void ath_ap_set_params(struct sigma_dut *dut)
 			break;
 		}
 		run_iwpriv(dut, basedev, "txchainmask %d", txchainmask);
+
+		if (dut->ap_mode == AP_11be) {
+			run_iwpriv(dut, ifname, "nss %d", dut->ap_numsounddim);
+			/* 9 is the default testbed max MCS value supported for
+			 * 11be */
+			set_eht_mcsmap_nss(dut, dut->ap_numsounddim, 9);
+		}
 	}
 
 	if (dut->ap_numsounddim && dut->device_type == AP_testbed) {
@@ -7516,6 +7614,15 @@ static void ath_ap_set_params(struct sigma_dut *dut)
 	if (dut->eht_txemlomn == VALUE_DISABLED)
 		run_system_wrapper(dut, "wifitool %s setUnitTestCmd 13 2 7 1",
 				   ifname);
+
+	if (dut->device_type == AP_testbed && dut->ap_ehtmcs_map) {
+		run_iwpriv(dut, ifname, "eht_rxmcsmap 0x%x 0x%x 0x%x",
+			   dut->ap_ehtmcs_map, dut->ap_ehtmcs_map,
+			   dut->ap_ehtmcs_map);
+		run_iwpriv(dut, ifname, "eht_txmcsmap 0x%x 0x%x 0x%x",
+			   dut->ap_ehtmcs_map, dut->ap_ehtmcs_map,
+			   dut->ap_ehtmcs_map);
+	}
 }
 
 
@@ -10846,6 +10953,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_addba_amsdu = -1;
 	dut->eht_omctrl = VALUE_NOT_SET;
 	dut->eht_txemlomn = VALUE_NOT_SET;
+	dut->ap_ehtmcs_map = 0;
 
 	if (is_60g_sigma_dut(dut)) {
 		dut->ap_mode = AP_11ad;

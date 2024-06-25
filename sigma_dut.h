@@ -904,6 +904,7 @@ struct sigma_dut {
 	int ltf_trig;
 	int eht_txmcs;
 	int ap_addba_amsdu;
+	unsigned int ap_ehtmcs_map;
 
 	enum value_not_set_enabled_disabled ap_oce;
 	enum value_not_set_enabled_disabled ap_filsdscv;
