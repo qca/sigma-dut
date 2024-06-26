@@ -3200,9 +3200,13 @@ void nan_init(struct sigma_dut *dut)
 	}
 	pthread_mutex_init(&gMutex, NULL);
 	pthread_cond_init(&gCondition, NULL);
-	if (dut->wifi_hal_iface_handle)
+	if (dut->wifi_hal_iface_handle) {
 		nan_register_handler(dut->wifi_hal_iface_handle,
 				     callbackHandler);
+#ifdef WFA_CERT_NANR4
+		nan_get_capabilities(0, dut->wifi_hal_iface_handle);
+#endif /* WFA_CERT_NANR4 */
+	}
 }
 
 
