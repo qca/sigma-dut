@@ -14680,6 +14680,7 @@ static enum sigma_cmd_result wcn_ap_set_rfeature(struct sigma_dut *dut,
 						 struct sigma_conn *conn,
 						 struct sigma_cmd *cmd)
 {
+	char buf[100];
 	const char *val;
 	const char *ifname;
 
@@ -14715,6 +14716,86 @@ static enum sigma_cmd_result wcn_ap_set_rfeature(struct sigma_dut *dut,
 				return STATUS_SENT_ERROR;
 		} else {
 			sigma_dut_print(dut, DUT_MSG_DEBUG, "No change in BW");
+		}
+	}
+
+	val = get_param(cmd, "STA_WMMPE_ECWmin_BK");
+	if (val) {
+		snprintf(buf, sizeof(buf), "SET wmm_ac_bk_cwmin %d", atoi(val));
+		if (hapd_command(ifname, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set wmm_ac_bk_cwmin");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "STA_WMMPE_ECWmin_BE");
+	if (val) {
+		snprintf(buf, sizeof(buf), "SET wmm_ac_be_cwmin %d", atoi(val));
+		if (hapd_command(ifname, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set wmm_ac_be_cwmin");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "STA_WMMPE_ECWmin_VI");
+	if (val) {
+		snprintf(buf, sizeof(buf), "SET wmm_ac_vi_cwmin %d", atoi(val));
+		if (hapd_command(ifname, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set wmm_ac_vi_cwmin");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "STA_WMMPE_ECWmin_VO");
+	if (val) {
+		snprintf(buf, sizeof(buf), "SET wmm_ac_vo_cwmin %d", atoi(val));
+		if (hapd_command(ifname, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set wmm_ac_vo_cwmin");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "STA_WMMPE_AIFSN_BK");
+	if (val) {
+		snprintf(buf, sizeof(buf), "SET wmm_ac_bk_aifs %d", atoi(val));
+		if (hapd_command(ifname, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set wmm_ac_bk_aifs");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "STA_WMMPE_AIFSN_BE");
+	if (val) {
+		snprintf(buf, sizeof(buf), "SET wmm_ac_be_aifs %d", atoi(val));
+		if (hapd_command(ifname, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set wmm_ac_be_aifs");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "STA_WMMPE_AIFSN_VI");
+	if (val) {
+		snprintf(buf, sizeof(buf), "SET wmm_ac_vi_aifs %d", atoi(val));
+		if (hapd_command(ifname, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set wmm_ac_vi_aifs");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	val = get_param(cmd, "STA_WMMPE_AIFSN_VO");
+	if (val) {
+		snprintf(buf, sizeof(buf), "SET wmm_ac_vo_aifs %d", atoi(val));
+		if (hapd_command(ifname, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set wmm_ac_vo_aifs");
+			return STATUS_SENT_ERROR;
 		}
 	}
 
