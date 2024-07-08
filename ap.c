@@ -8310,6 +8310,19 @@ static int get_5g_channel_freq(int chan)
 }
 
 
+static int get_sec_channel_offset(int chan, bool is_6g)
+{
+	if (is_6g) {
+		if (((chan - 1) / 4) % 2)
+			return -1;
+		else
+			return 1;
+	}
+
+	return is_ht40plus_chan(chan) ? 1 : -1;
+}
+
+
 static const char * hostapd_cipher_name(enum ap_cipher cipher)
 {
 	switch (cipher) {
@@ -14646,20 +14659,106 @@ static enum sigma_cmd_result ath_ap_set_rfeature(struct sigma_dut *dut,
 }
 
 
+static int hostapd_chan_switch(struct sigma_dut *dut, const char *ifname,
+			       const char *type, int channel, int chwidth)
+{
+	int res, center_freq_idx, channel_freq, sec_channel_offset, center_freq;
+	bool is_6g = !!dut->ap_band_6g;
+	char *mode = NULL, buf[256];
+
+	if (!ifname) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "%s: ifname is NULL",
+				__func__);
+		return -1;
+	}
+
+	if (!type) {
+		sigma_dut_print(dut, DUT_MSG_ERROR, "%s: type is NULL",
+				__func__);
+		return -1;
+	}
+
+	if (strcasecmp(type, "EHT") == 0) {
+		mode = "eht";
+	} else if (strcasecmp(type, "HE") == 0) {
+		mode = "he";
+	} else if (strcasecmp(type, "VHT") == 0) {
+		mode = "vht";
+	} else if (strcasecmp(type, "HT") == 0) {
+		mode = "ht";
+	} else {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: unknown type %s", __func__, type);
+		return -1;
+	}
+
+	channel_freq = chan_to_freq(channel, is_6g);
+
+	if (chwidth > 20) {
+		if (is_6g || channel > 14)  {
+			sec_channel_offset = get_sec_channel_offset(channel,
+								    is_6g);
+			center_freq_idx = get_oper_centr_freq_seq_idx(dut,
+								      chwidth,
+								      channel);
+		} else {
+			sec_channel_offset = 1;
+			center_freq_idx = channel + 10;
+		}
+	} else {
+		sec_channel_offset = 0;
+		center_freq_idx = channel;
+	}
+
+	if (center_freq_idx < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Failed to get center frequency index",
+				__func__);
+		return -1;
+	}
+
+	center_freq = chan_to_freq(center_freq_idx, is_6g);
+
+	/* Issue the channel switch command */
+	res = snprintf(buf, sizeof(buf),
+		       "CHAN_SWITCH 10 %d sec_channel_offset=%d center_freq1=%d bandwidth=%d blocktx %s",
+		       channel_freq, sec_channel_offset, center_freq, chwidth,
+		       mode ? mode : "");
+	if (res < 0 || res >= sizeof(buf) || hapd_command(ifname, buf) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to initiate channel switch using hostapd control interface");
+		return -1;
+	}
+
+	return 0;
+}
+
+
 static int wcn_vht_chnum_band(struct sigma_dut *dut, const char *ifname,
-			      const char *val)
+			      const char *type, const char *val)
 {
 	char *token, *result;
-	int channel = 36;
+	int channel = 36, chwidth = 20, ret;
 	char *saveptr;
 
 	/* Extract the channel info */
 	token = strdup(val);
 	if (!token)
 		return -1;
+
 	result = strtok_r(token, ";", &saveptr);
 	if (result)
 		channel = atoi(result);
+
+	result = strtok_r(NULL, ";", &saveptr);
+	if (result)
+		chwidth = atoi(result);
+
+	ret = hostapd_chan_switch(dut, ifname, type, channel, chwidth);
+	if (ret == 0 || dut->program == PROGRAM_EHT) {
+		free(token);
+		return ret;
+	}
 
 	/* Issue the channel switch command */
 	run_iwpriv(dut, ifname, "setChanChange %d", channel);
@@ -14687,11 +14786,12 @@ static enum sigma_cmd_result wcn_ap_set_rfeature(struct sigma_dut *dut,
 	char buf[100];
 	const char *val;
 	const char *ifname;
+	const char *type = get_param(cmd, "type");
 
 	ifname = get_main_ifname(dut);
 
 	val = get_param(cmd, "chnum_band");
-	if (val && wcn_vht_chnum_band(dut, ifname, val) < 0)
+	if (val && wcn_vht_chnum_band(dut, ifname, type, val) < 0)
 		return ERROR_SEND_STATUS;
 
 	val = get_param(cmd, "txBandwidth");
