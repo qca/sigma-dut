@@ -2155,7 +2155,8 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 		if (strcasecmp(val, "le64") == 0) {
 			dut->ap_ba_bufsize = BA_BUFSIZE_64;
 		} else if (strcasecmp(val, "gt64") == 0) {
-			dut->ap_ba_bufsize = BA_BUFSIZE_256;
+			dut->ap_ba_bufsize = dut->program == PROGRAM_EHT ?
+				BA_BUFSIZE_1024 : BA_BUFSIZE_256;
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Unsupported ADDBAReq Buffer Size");
@@ -2166,7 +2167,8 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 	val = get_param(cmd, "ADDBAResp_BufSize");
 	if (val) {
 		if (strcasecmp(val, "gt64") == 0) {
-			dut->ap_ba_bufsize = BA_BUFSIZE_256;
+			dut->ap_ba_bufsize = dut->program == PROGRAM_EHT ?
+				BA_BUFSIZE_1024 : BA_BUFSIZE_256;
 		} else {
 			send_resp(dut, conn, SIGMA_ERROR,
 				  "errorCode,Unsupported ADDBAResp Buffer Size");
@@ -9955,7 +9957,9 @@ skip_vht_parameters_set:
 	if (dut->ap_ba_bufsize != BA_BUFSIZE_NOT_SET) {
 		int buf_size;
 
-		if (dut->ap_ba_bufsize == BA_BUFSIZE_256)
+		if (dut->ap_ba_bufsize == BA_BUFSIZE_1024)
+			buf_size = 1024;
+		else if (dut->ap_ba_bufsize == BA_BUFSIZE_256)
 			buf_size = 256;
 		else
 			buf_size = 64;
