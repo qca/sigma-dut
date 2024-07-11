@@ -1267,6 +1267,7 @@ struct sigma_dut {
 	int group_mgmt_ciphers_capa; /* bitmap of enum sigma_cipher_suites
 				      * values */
 	bool usd_enabled;
+	bool p2p_r2_capable;
 };
 
 

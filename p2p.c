@@ -924,6 +924,25 @@ noa_done:
 		}
 	}
 
+	val  = get_param(cmd, "WFDR2Capabilities");
+	if (val) {
+		if (strcasecmp(val, "On") == 0) {
+			/* Support Wi-Fi Direct R2 capabilities */
+			dut->p2p_r2_capable = true;
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Wi-Fi Direct R2 Capabilities ON");
+			snprintf(buf, sizeof(buf),
+				 "P2P_SET chan_switch_req_enable 1");
+			if (wpa_command(intf, buf) < 0)
+				return ERROR_SEND_STATUS;
+		} else {
+			dut->p2p_r2_capable = false;
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Wi-Fi Direct R2 Capabilities OFF");
+		}
+
+	}
+
 	return 1;
 }
 
@@ -986,8 +1005,13 @@ cmd_sta_start_autonomous_go(struct sigma_dut *dut, struct sigma_conn *conn,
 		return -2;
 	}
 
-	snprintf(buf, sizeof(buf), "P2P_GROUP_ADD %sfreq=%d",
-		 dut->persistent ? "persistent " : "", freq);
+	if (dut->p2p_r2_capable)
+		snprintf(buf, sizeof(buf), "P2P_GROUP_ADD %sfreq=%d he p2p2",
+			 dut->persistent ? "persistent " : "", freq);
+	else
+		snprintf(buf, sizeof(buf), "P2P_GROUP_ADD %sfreq=%d",
+			 dut->persistent ? "persistent " : "", freq);
+
 	if (wpa_command(intf, buf) < 0) {
 		wpa_ctrl_detach(ctrl);
 		wpa_ctrl_close(ctrl);
@@ -1930,6 +1954,7 @@ enum sigma_cmd_result cmd_sta_p2p_reset(struct sigma_dut *dut,
 	wpa_command(get_station_ifname(dut), "P2P_SET ps 96");
 	wpa_command(get_station_ifname(dut), "P2P_SET ps 0");
 	wpa_command(intf, "P2P_SET ps 0");
+	wpa_command(intf, "P2P_SET chan_switch_req_enable 0");
 	wpa_command(intf, "SET persistent_reconnect 1");
 	wpa_command(intf, "SET ampdu 1");
 	run_system(dut, "iptables -F INPUT");
