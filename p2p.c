@@ -852,6 +852,14 @@ noa_done:
 			return -2;
 	}
 
+	val = get_param(cmd, "GenNewDeviceAddr");
+	if (val && atoi(val) == 1) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Generate new P2P Device Address");
+		if (wpa_command(intf, "NEW_RANDOM_MAC_ADDRESS") < 0)
+			return ERROR_SEND_STATUS;
+	}
+
 	val = get_param(cmd, "Service_Discovery");
 	if (val) {
 		int sd = atoi(val);
