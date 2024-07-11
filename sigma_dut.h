@@ -496,6 +496,18 @@ struct peer_pairing_info {
 	bool is_paired;
 };
 
+#define P2P_MAX_PASSWORD_LEN 63
+struct p2p_r2_connect_info {
+	int go_intent;
+	int bootstrap;
+	char peer_mac[20];
+	char password[P2P_MAX_PASSWORD_LEN];
+	int freq;
+	int pairing_role;
+	bool is_opportunistic_bs;
+	bool join;
+};
+
 #ifdef ANDROID_MDNS
 struct mdnssd_apis {
 	__typeof__(DNSServiceCreateConnection) *service_create_connection;
@@ -647,6 +659,7 @@ struct sigma_dut {
 	char wps_pin[9];
 
 	struct wfa_cs_p2p_group *groups;
+	struct wfa_cs_p2p_group *active_group;
 
 	char infra_ssid[33];
 	int infra_network_id;
@@ -1304,6 +1317,8 @@ struct sigma_dut {
 	bool is_p2p_twt_power_mgmt_enabled;
 	struct twt_config_params twt_param;
 	char *sta_bssid_pool;
+	struct p2p_r2_connect_info p2p_connect_info;
+	pthread_t p2p_event_mon_thread;
 };
 
 
@@ -1615,5 +1630,8 @@ enum sigma_cmd_result usd_cmd_sta_exec_action(struct sigma_dut *dut,
 					      struct sigma_conn *conn,
 					      struct sigma_cmd *cmd);
 u16 get_link_id_bitmask(const char *param);
+enum sigma_cmd_result p2p_cmd_sta_exec_action(struct sigma_dut *dut,
+					      struct sigma_conn *conn,
+					      struct sigma_cmd *cmd);
 
 #endif /* SIGMA_DUT_H */

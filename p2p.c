@@ -2097,6 +2097,19 @@ static enum sigma_cmd_result cmd_sta_get_psk(struct sigma_dut *dut,
 }
 
 
+static bool stop_p2p_resp_event_rx = false;
+
+static void stop_p2p_event_mon_thread(struct sigma_dut *dut)
+{
+	if (dut->p2p_event_mon_thread) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Stopping P2P event monitoring thread");
+		dut->p2p_event_mon_thread = 0;
+		stop_p2p_resp_event_rx = true;
+	}
+}
+
+
 enum sigma_cmd_result sta_p2p_reset_default(struct sigma_dut *dut,
 					    struct sigma_conn *conn,
 					    struct sigma_cmd *cmd)
@@ -2131,12 +2144,16 @@ enum sigma_cmd_result sta_p2p_reset_default(struct sigma_dut *dut,
 		p2p_group_remove(dut, prev->grpid);
 	}
 
+	stop_p2p_event_mon_thread(dut);
+
 	wpa_command(intf, "P2P_GROUP_REMOVE *");
 	wpa_command(intf, "P2P_STOP_FIND");
 	wpa_command(intf, "P2P_FLUSH");
+	wpa_command(intf, "NAN_FLUSH");
 	wpa_command(intf, "P2P_SERVICE_FLUSH");
 	wpa_command(intf, "P2P_SET disabled 0");
 	wpa_command(intf, "P2P_SET ssid_postfix ");
+	wpa_command(intf, "P2P_REMOVE_IDENTITY");
 
 	if (dut->program == PROGRAM_60GHZ) {
 		wpa_command(intf, "SET p2p_oper_reg_class 180");
@@ -3298,6 +3315,677 @@ int p2p_cmd_sta_get_parameter(struct sigma_dut *dut, struct sigma_conn *conn,
 static int req_intf(struct sigma_cmd *cmd)
 {
 	return get_param(cmd, "interface") == NULL ? -1 : 0;
+}
+
+
+static int p2p_pasn_responder_auth(struct sigma_dut *dut,
+				   struct sigma_conn *conn,
+				   const char *intf)
+{
+	char buf[512], *pos, *end;
+
+	pos = buf;
+	end = buf + sizeof(buf);
+
+	pos += snprintf(pos, end - pos,
+			"P2P_CONNECT %s pair provdisc he go_intent=%d persistent allow_6ghz p2p2",
+			dut->p2p_connect_info.peer_mac,
+			dut->p2p_connect_info.go_intent);
+
+	pos += snprintf(pos, end - pos, " bstrapmethod=%d",
+			dut->p2p_connect_info.bootstrap);
+
+	if (dut->p2p_connect_info.join)
+		pos += snprintf(pos, end - pos, " join");
+
+	if (dut->p2p_connect_info.pairing_role)
+		pos += snprintf(pos, end - pos, " auth");
+
+	if (dut->p2p_connect_info.password[0] != '\0')
+		pos += snprintf(pos, end - pos, " password=%s",
+				dut->p2p_connect_info.password);
+
+	if (dut->p2p_connect_info.freq)
+		pos += snprintf(pos, end - pos, " freq=%d",
+				dut->p2p_connect_info.freq);
+
+	if (wpa_command(intf, buf) < 0) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Failed to start P2P PASN group formation");
+		return -2;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "P2P Authorize");
+	return 0;
+}
+
+
+static enum sigma_cmd_result p2p_pasn_initiator_connect(struct sigma_dut *dut,
+					      struct sigma_conn *conn,
+					      const char *intf)
+{
+	struct wpa_ctrl *ctrl = NULL;
+	char buf[512], *pos, *end, resp[256], grpid[50];
+	char *ifname, *gtype, *ssid, *freq_str, bssid[20];
+	char *go_dev_addr;
+	int res;
+
+	pos = buf;
+	end = buf + sizeof(buf);
+
+	pos += snprintf(pos, end - pos,
+			"P2P_CONNECT %s pair provdisc he go_intent=%d persistent allow_6ghz p2p2",
+			dut->p2p_connect_info.peer_mac,
+			dut->p2p_connect_info.go_intent);
+
+	pos += snprintf(pos, end - pos, " bstrapmethod=%d",
+			dut->p2p_connect_info.bootstrap);
+
+	if (dut->p2p_connect_info.join)
+		pos += snprintf(pos, end - pos, " join");
+
+	if (dut->p2p_connect_info.pairing_role)
+		pos += snprintf(pos, end - pos, " auth");
+
+	if (dut->p2p_connect_info.password[0] != '\0')
+		pos += snprintf(pos, end - pos, " password=%s",
+				dut->p2p_connect_info.password);
+
+	if (dut->p2p_connect_info.freq)
+		pos += snprintf(pos, end - pos, " freq=%d",
+				dut->p2p_connect_info.freq);
+
+	ctrl = open_wpa_mon(intf);
+	if (!ctrl) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to open wpa_supplicant monitor connection");
+		return ERROR_SEND_STATUS;
+	}
+
+	if (wpa_command(intf, buf) < 0) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Failed to start P2P PASN group formation");
+		return ERROR_SEND_STATUS;
+	}
+
+	res = get_wpa_cli_event(dut, ctrl, "P2P-GROUP-STARTED",
+				buf, sizeof(buf));
+
+	wpa_ctrl_detach(ctrl);
+	wpa_ctrl_close(ctrl);
+
+	if (res < 0 && !dut->p2p_connect_info.pairing_role) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,Group joining did not complete on Initiator");
+		return STATUS_SENT_ERROR;
+	} else if (res < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,Group joining did not complete on Responder");
+		return STATUS_SENT_ERROR;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Group started event '%s'", buf);
+	ifname = strchr(buf, ' ');
+	if (!ifname)
+		return ERROR_SEND_STATUS;
+	ifname++;
+	pos = strchr(ifname, ' ');
+	if (!pos)
+		return ERROR_SEND_STATUS;
+	*pos++ = '\0';
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Group interface %s", ifname);
+
+	gtype = pos;
+	pos = strchr(gtype, ' ');
+	if (!pos)
+		return ERROR_SEND_STATUS;
+	*pos++ = '\0';
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Group type %s", gtype);
+
+	ssid = strstr(pos, "ssid=\"");
+	if (!ssid)
+		return ERROR_SEND_STATUS;
+	ssid += 6;
+	pos = strchr(ssid, '"');
+	if (!pos)
+		return ERROR_SEND_STATUS;
+	*pos++ = '\0';
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Group SSID %s", ssid);
+
+	go_dev_addr = strstr(pos, "go_dev_addr=");
+	if (!go_dev_addr) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"No GO P2P Device Address found");
+		return ERROR_SEND_STATUS;
+	}
+	go_dev_addr += 12;
+	if (strlen(go_dev_addr) < 17) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Too short GO P2P Device Address '%s'",
+				go_dev_addr);
+		return ERROR_SEND_STATUS;
+	}
+	go_dev_addr[17] = '\0';
+	*pos++ = '\0';
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "GO P2P Device Address %s",
+			go_dev_addr);
+
+	freq_str = strstr(pos, "freq=");
+	if (!freq_str)
+		return ERROR_SEND_STATUS;
+	freq_str += 5;
+	pos = strchr(freq_str, ' ');
+	if (!pos)
+		return ERROR_SEND_STATUS;
+	*pos = '\0';
+	dut->p2p_connect_info.freq = atoi(freq_str);
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "freq %d",
+			dut->p2p_connect_info.freq);
+
+	if (get_wpa_status(ifname, "bssid", bssid, sizeof(bssid)) < 0)
+		return ERROR_SEND_STATUS;
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Group BSSID %s", bssid);
+
+	res = snprintf(grpid, sizeof(grpid), "%s %s", go_dev_addr, ssid);
+	if (res < 0 || res >= (int) sizeof(grpid))
+		return ERROR_SEND_STATUS;
+	p2p_group_add(dut, ifname, strcmp(gtype, "GO") == 0, grpid, ssid,
+		      dut->p2p_connect_info.peer_mac);
+
+	snprintf(resp, sizeof(resp), "Result,%s,GroupID,%s",
+		 strcmp(gtype, "GO") == 0 ? "GO" : "CLIENT", grpid);
+
+	send_resp(dut, conn, SIGMA_COMPLETE, resp);
+	return STATUS_SENT;
+}
+
+
+static void * wpa_pairing_resp_event_recv(void *ptr)
+{
+	struct sigma_dut *dut = ptr;
+	struct wpa_ctrl *ctrl;
+	char buf[4096], grpid[50];
+	char *pos, *pos1;
+	char *ifname, *gtype, *ssid, *freq_str, bssid[20];
+	char *go_dev_addr;
+	int fd, ret, i;
+	fd_set rfd;
+	struct timeval tv;
+	size_t len;
+	const char *events[] = {
+		"P2P-BOOTSTRAP-REQUEST",
+		"P2P-GROUP-STARTED",
+		"P2P-GO-NEG-FAILURE",
+		"P2P-GROUP-FORMATION-FAILURE",
+		NULL
+	};
+
+	if (dut->p2p_connect_info.is_opportunistic_bs) {
+		if (p2p_pasn_responder_auth(dut, NULL, dut->main_ifname) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"P2P PASN Connect Failed");
+			return NULL;
+		}
+	}
+
+	ctrl = open_wpa_mon(dut->main_ifname);
+	if (!ctrl) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to open wpa_supplicant monitor connection");
+		return NULL;
+	}
+
+	for (i = 0; events[i]; i++)
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Waiting for wpa_cli event: %s", events[i]);
+
+	fd = wpa_ctrl_get_fd(ctrl);
+	if (fd < 0) {
+		wpa_ctrl_detach(ctrl);
+		wpa_ctrl_close(ctrl);
+		return NULL;
+	}
+
+	while (!stop_p2p_resp_event_rx) {
+		FD_ZERO(&rfd);
+		FD_SET(fd, &rfd);
+		tv.tv_sec = 1;
+		tv.tv_usec = 0;
+
+		ret = select(fd + 1, &rfd, NULL, NULL, &tv);
+		if (ret == 0)
+			continue;
+		if (ret < 0) {
+			sigma_dut_print(dut, DUT_MSG_INFO, "select: %s",
+					strerror(errno));
+			usleep(100000);
+			continue;
+		}
+
+		len = sizeof(buf);
+		if (wpa_ctrl_recv(ctrl, buf, &len) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failure while waiting for events");
+			continue;
+		}
+
+		ret = 0;
+		pos = strchr(buf, '>');
+		if (pos) {
+			for (i = 0; events[i]; i++) {
+				if (strncmp(pos + 1, events[i],
+					    strlen(events[i])) == 0) {
+					ret = 1;
+					break; /* Event found */
+				}
+			}
+		}
+		if (!ret)
+			continue;
+
+		if (strstr(buf, "P2P-BOOTSTRAP-REQUEST")) {
+			pos = strchr(buf, ' ');
+			if (!pos)
+				continue;
+			pos++;
+			pos1 = strchr(pos, ' ');
+			if (!pos1)
+				continue;
+			if (pos1 - pos >
+			    (int) sizeof(dut->p2p_connect_info.peer_mac))
+				continue;
+			if (pos1 - pos < 17) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Too short P2P Peer Address");
+				continue;
+			}
+			if (strncasecmp(pos, dut->p2p_connect_info.peer_mac,
+					pos1 - pos) == 0) {
+				sigma_dut_print(dut, DUT_MSG_DEBUG,
+						"Bootstrap request event '%s' sleep for 500ms",
+						buf);
+				usleep(500000);
+				if (p2p_pasn_responder_auth(dut, NULL,
+							    dut->main_ifname) <
+				    0) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"P2P PASN Connect Failed");
+					break;
+				}
+			}
+		} else if (strstr(buf, "P2P-GO-NEG-FAILURE")) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"ErrorCode,Group Negotiation failed");
+			break;
+		} else if (strstr(buf, "P2P-GROUP-FORMATION-FAILURE")) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"ErrorCode,Group formation failed");
+			break;
+		} else if (strstr(buf, "P2P-GROUP-STARTED")) {
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"Group started event '%s'", buf);
+			ifname = strchr(buf, ' ');
+			if (!ifname)
+				continue;
+			ifname++;
+			pos = strchr(ifname, ' ');
+			if (!pos)
+				continue;
+			*pos++ = '\0';
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"Group interface %s", ifname);
+
+			gtype = pos;
+			pos = strchr(gtype, ' ');
+			if (!pos)
+				continue;
+			*pos++ = '\0';
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"Group type %s", gtype);
+
+			ssid = strstr(pos, "ssid=\"");
+			if (!ssid)
+				continue;
+			ssid += 6;
+			pos = strchr(ssid, '"');
+			if (!pos)
+				continue;
+			*pos++ = '\0';
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"Group SSID %s", ssid);
+
+			go_dev_addr = strstr(pos, "go_dev_addr=");
+			if (!go_dev_addr) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"No GO P2P Device Address found");
+				continue;
+			}
+			go_dev_addr += 12;
+			if (strlen(go_dev_addr) < 17) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Too short GO P2P Device Address '%s'",
+						go_dev_addr);
+				continue;
+			}
+			go_dev_addr[17] = '\0';
+			*pos++ = '\0';
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"GO P2P Device Address %s",
+					go_dev_addr);
+
+			freq_str = strstr(pos, "freq=");
+			if (!freq_str)
+				continue;
+			freq_str += 5;
+			pos = strchr(freq_str, ' ');
+			if (!pos)
+				continue;
+			*pos = '\0';
+			dut->p2p_connect_info.freq = atoi(freq_str);
+			sigma_dut_print(dut, DUT_MSG_DEBUG, "freq %d",
+					dut->p2p_connect_info.freq);
+
+			if (get_wpa_status(ifname, "bssid", bssid,
+					   sizeof(bssid)) < 0)
+				continue;
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"Group BSSID %s", bssid);
+
+			ret = snprintf(grpid, sizeof(grpid), "%s %s", go_dev_addr,
+				       ssid);
+			if (ret < 0 || ret >= (int) sizeof(grpid))
+				continue;
+			p2p_group_add(dut, ifname, strcmp(gtype, "GO") == 0,
+				      grpid, ssid,
+				      dut->p2p_connect_info.peer_mac);
+		}
+	}
+
+	wpa_ctrl_detach(ctrl);
+	wpa_ctrl_close(ctrl);
+
+	pthread_exit(0);
+	return NULL;
+}
+
+
+static enum sigma_cmd_result
+p2p_pasn_pairing_setup(struct sigma_dut *dut, struct sigma_conn *conn,
+		       struct sigma_cmd *cmd)
+{
+	const char *intf = get_param(cmd, "interface");
+	const char *mac = get_param(cmd, "MAC");
+	const char *service_name = get_param(cmd, "ServiceName");
+	const char *role = get_param(cmd, "Role");
+	const char *bstrapmethod = get_param(cmd, "PairingBootstrapMethod");
+	const char *pmk_devik_caching = get_param(cmd, "PMKDevIKCaching");
+	const char *comeback_after = get_param(cmd, "ComebackAfter");
+	const char *comeback_cookie = get_param(cmd, "ComebackCookie");
+	const char *pairing_setup = get_param(cmd, "PairingSetup");
+	const char *password = get_param(cmd, "PairingPassword");
+	const char *intent_value = get_param(cmd, "IntentValue");
+	const char *oper_chan = get_param(cmd, "GOOperChan");
+	const char *rcv_freq = get_param(cmd, "GOOperChanFreq");
+	char buf[256];
+	int freq = 0, chan = 0, ret;
+
+	if (!dut->p2p_r2_capable)
+		return INVALID_SEND_STATUS;
+
+	if (!mac || !service_name || !pairing_setup)
+		return INVALID_SEND_STATUS;
+
+	if (pmk_devik_caching && strcasecmp(pmk_devik_caching, "Enable") == 0 &&
+	    wpa_command(intf, "P2P_SET pairing_cache 1") < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,Failed to set pmk_devik_caching");
+		return STATUS_SENT_ERROR;
+	}
+
+	if (comeback_after && comeback_cookie) {
+		ret = snprintf(buf, sizeof(buf), "P2P_SET comeback_after %s",
+			       comeback_after);
+		if (ret < 0 || ret >= (int) sizeof(buf)) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to form set command");
+			return STATUS_SENT_ERROR;
+		}
+		if (wpa_command(intf, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set comeback_after");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	memset(&dut->p2p_connect_info, 0, sizeof(struct p2p_r2_connect_info));
+	strlcpy(dut->p2p_connect_info.peer_mac, mac,
+		sizeof(dut->p2p_connect_info.peer_mac));
+
+	if (role && strcasecmp(role, "Responder") == 0) {
+		dut->p2p_connect_info.pairing_role = 1;
+	} else {
+		if (wpa_command(intf, "NAN_FLUSH") < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,NAN_FLUSH failed");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	if (intent_value)
+		dut->p2p_connect_info.go_intent = atoi(intent_value);
+
+	if (bstrapmethod)
+		dut->p2p_connect_info.bootstrap = atoi(bstrapmethod);
+
+	if (strcasecmp(pairing_setup, "Password") == 0) {
+		if (!password) {
+			sigma_dut_print(dut, DUT_MSG_ERROR, "Password not set");
+			return INVALID_SEND_STATUS;
+		}
+		strlcpy(dut->p2p_connect_info.password, password,
+			sizeof(dut->p2p_connect_info.password));
+	} else {
+		dut->p2p_connect_info.password[0] = '\0';
+	}
+
+	if (strcasecmp(pairing_setup, "OpportunisticBS") == 0)
+		dut->p2p_connect_info.is_opportunistic_bs = true;
+
+	if (rcv_freq) {
+		freq = atoi(rcv_freq);
+		dut->p2p_connect_info.freq = freq;
+	} else if (oper_chan) {
+		chan = atoi(oper_chan);
+		freq = channel_to_freq(dut, chan);
+		dut->p2p_connect_info.freq = freq;
+	}
+
+	if (!dut->p2p_connect_info.pairing_role)
+		return p2p_pasn_initiator_connect(dut, conn, intf);
+
+	/* Configure operating channel for pairing verification */
+	snprintf(buf, sizeof(buf), "P2P_SET inv_oper_freq %d", freq);
+	if (wpa_command(intf, buf) < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode, P2P_SET inv_oper_freq Failed");
+		return STATUS_SENT_ERROR;
+	}
+
+	if (!dut->p2p_event_mon_thread) {
+		/* Create a separate event thread to receive
+		 * bootstrap request event
+		 */
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Starting P2P event monitoring thread");
+		stop_p2p_resp_event_rx = false;
+		pthread_create(&dut->p2p_event_mon_thread, NULL,
+			       &wpa_pairing_resp_event_recv,
+			       (void *) dut);
+	}
+
+	send_resp(dut, conn, SIGMA_COMPLETE, "NULL");
+	return STATUS_SENT;
+}
+
+
+static enum sigma_cmd_result
+p2p_pasn_pairing_verification(struct sigma_dut *dut, struct sigma_conn *conn,
+			      struct sigma_cmd *cmd)
+{
+	const char *intf = get_param(cmd, "interface");
+	const char *mac = get_param(cmd, "MAC");
+	const char *service_name = get_param(cmd, "ServiceName");
+	const char *grpid = get_param(cmd, "P2PGroupID");
+	const char *oper_chan = get_param(cmd, "GOOperChan");
+	char buf[256], resp[256];
+	int res, freq, chan;
+	int id = -1;
+	char *ssid, *pos, *end, *inv_ssid, inv_grpid[50];
+	struct wpa_ctrl *ctrl;
+	char *go_dev_addr;
+	const char *events[] = {
+		"P2P-INVITATION-ACCEPTED",
+		"P2P-INVITATION-RESULT",
+		NULL
+	};
+
+	if (!dut->p2p_r2_capable)
+		return INVALID_SEND_STATUS;
+
+	if (!mac || !service_name || !grpid)
+		return INVALID_SEND_STATUS;
+
+	ssid = strchr(grpid, ' ');
+	if (!ssid) {
+		sigma_dut_print(dut, DUT_MSG_INFO, "Invalid grpid");
+		return INVALID_SEND_STATUS;
+	}
+	*ssid = '\0';
+	ssid++;
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"Search for persistent group credentials based on SSID: '%s'",
+			ssid);
+	if (wpa_command_resp(intf, "LIST_NETWORKS", buf, sizeof(buf)) < 0)
+		return ERROR_SEND_STATUS;
+	pos = strstr(buf, ssid);
+	if (!pos || pos == buf || pos[-1] != '\t' ||
+	    pos[strlen(ssid)] != '\t') {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,Persistent group credentials not found");
+		return STATUS_SENT_ERROR;
+	}
+	while (pos > buf && pos[-1] != '\n')
+		pos--;
+	id = atoi(pos);
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Persistent id %d", id);
+
+	if (wpa_command(intf, "NAN_FLUSH") < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,NAN_FLUSH failed");
+		return STATUS_SENT_ERROR;
+	}
+
+	pos = buf;
+	end = buf + sizeof(buf);
+
+	pos += snprintf(pos, end - pos, "P2P_INVITE persistent peer=%s p2p2",
+		 mac);
+
+	if (oper_chan) {
+		chan = atoi(oper_chan);
+		freq = channel_to_freq(dut, chan);
+	} else {
+		/* Fetch previous connection freq */
+		freq = dut->p2p_connect_info.freq;
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "freq %d", freq);
+		pos += snprintf(pos, end - pos, " freq=%d", freq);
+	}
+
+	ctrl = open_wpa_mon(intf);
+	if (!ctrl) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to open wpa_supplicant monitor connection");
+		return ERROR_SEND_STATUS;
+	}
+
+	if (wpa_command(intf, buf) < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,Failed to start P2P PASN pairing verification");
+		return STATUS_SENT_ERROR;
+	}
+
+	res = get_wpa_cli_events(dut, ctrl, events, buf, sizeof(buf));
+
+	wpa_ctrl_detach(ctrl);
+	wpa_ctrl_close(ctrl);
+
+	if (res < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,Invitation did not complete");
+		return STATUS_SENT_ERROR;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Invitation event: '%s'", buf);
+
+	inv_ssid = strstr(buf, "ssid=\"");
+	if (inv_ssid) {
+		inv_ssid += 6;
+		pos = strchr(inv_ssid, '"');
+		if (!pos)
+			return STATUS_SENT_ERROR;
+		*pos++ = '\0';
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "Invitation Group SSID %s",
+				inv_ssid);
+	}
+
+	go_dev_addr = strstr(pos, "go_dev_addr=");
+	if (go_dev_addr) {
+		go_dev_addr += 12;
+		if (strlen(go_dev_addr) < 17) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Too short GO P2P Device Address '%s'",
+					go_dev_addr);
+			return STATUS_SENT_ERROR;
+		}
+		go_dev_addr[17] = '\0';
+		*pos++ = '\0';
+		sigma_dut_print(dut, DUT_MSG_DEBUG, "GO P2P Device Address %s",
+				go_dev_addr);
+	}
+
+	res = snprintf(inv_grpid, sizeof(inv_grpid), "%s %s",
+		       go_dev_addr ? go_dev_addr : grpid,
+		       inv_ssid ? inv_ssid : ssid);
+	if (res < 0 || res >= (int) sizeof(inv_grpid))
+		return STATUS_SENT_ERROR;
+
+	snprintf(resp, sizeof(resp), "GroupID,%s", inv_grpid);
+	send_resp(dut, conn, SIGMA_COMPLETE, resp);
+	return STATUS_SENT;
+}
+
+
+enum sigma_cmd_result p2p_cmd_sta_exec_action(struct sigma_dut *dut,
+					      struct sigma_conn *conn,
+					      struct sigma_cmd *cmd)
+{
+	enum sigma_cmd_result ret = STATUS_SENT;
+	const char *method_type = get_param(cmd, "MethodType");
+
+	if (!method_type)
+		return ERROR_SEND_STATUS;
+
+	if (strcasecmp(method_type, "PASNGroupFormation") == 0) {
+		ret = p2p_pasn_pairing_setup(dut, conn, cmd);
+	} else if (strcasecmp(method_type, "PairingVerification") == 0) {
+		ret = p2p_pasn_pairing_verification(dut, conn, cmd);
+	} else {
+		sigma_dut_print(dut, DUT_MSG_INFO, "P2P unsupported method: %s",
+				method_type);
+		send_resp(dut, conn, SIGMA_COMPLETE, "NULL");
+	}
+
+	return ret;
 }
 
 
