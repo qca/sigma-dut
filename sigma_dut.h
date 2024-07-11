@@ -1265,6 +1265,7 @@ struct sigma_dut {
 	int group_ciphers_capa; /* bitmap of enum sigma_cipher_suites values */
 	int group_mgmt_ciphers_capa; /* bitmap of enum sigma_cipher_suites
 				      * values */
+	bool usd_enabled;
 };
 
 
@@ -1563,5 +1564,10 @@ enum sigma_cmd_result dev_start_test_log(struct sigma_dut *dut,
 
 /* dnssd.c */
 int mdnssd_init(struct sigma_dut *dut);
+
+/* p2p_usd.c */
+enum sigma_cmd_result usd_cmd_sta_exec_action(struct sigma_dut *dut,
+					      struct sigma_conn *conn,
+					      struct sigma_cmd *cmd);
 
 #endif /* SIGMA_DUT_H */

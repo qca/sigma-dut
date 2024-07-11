@@ -872,6 +872,20 @@ noa_done:
 		}
 	}
 
+	val = get_param(cmd, "UnsyncServDsc");
+	if (val) {
+		if (strcasecmp(val, "On") == 0) {
+			/* Support USD functionality */
+			dut->usd_enabled = true;
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Unsynchronized Service Discovery ON");
+		} else {
+			dut->usd_enabled = false;
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Unsynchronized Service Discovery OFF");
+		}
+	}
+
 	return 1;
 }
 

@@ -11482,6 +11482,7 @@ static enum sigma_cmd_result cmd_sta_exec_action(struct sigma_dut *dut,
 						 struct sigma_cmd *cmd)
 {
 	const char *program = get_param(cmd, "Prog");
+	const char *method = get_param(cmd, "MethodType");
 
 	if (program && !get_param(cmd, "interface"))
 		return -1;
@@ -11489,6 +11490,14 @@ static enum sigma_cmd_result cmd_sta_exec_action(struct sigma_dut *dut,
 	if (program && strcasecmp(program, "NAN") == 0)
 		return nan_cmd_sta_exec_action(dut, conn, cmd);
 #endif /* ANDROID_NAN */
+
+	if (program && strcasecmp(program, "P2P") == 0) {
+		dut->program = sigma_program_to_enum(program);
+		if (method &&
+		    (strcasecmp(method, "ADVERTISE") == 0 ||
+		     strcasecmp(method, "SEEK") == 0))
+			return usd_cmd_sta_exec_action(dut, conn, cmd);
+	}
 
 	if (program && strcasecmp(program, "Loc") == 0)
 		return loc_cmd_sta_exec_action(dut, conn, cmd);

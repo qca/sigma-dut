@@ -15,6 +15,7 @@ OBJS += atheros.c
 OBJS += ftm.c
 OBJS += dpp.c
 OBJS += dhcp.c
+OBJS += p2p_usd.c
 
 # Initialize CFLAGS to limit to local module
 CFLAGS =

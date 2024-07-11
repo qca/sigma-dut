@@ -54,6 +54,7 @@ OBJS += powerswitch.o
 OBJS += atheros.o
 OBJS += ftm.o
 OBJS += dpp.o
+OBJS += p2p_usd.o
 
 ifndef NO_TRAFFIC_AGENT
 CFLAGS += -DCONFIG_TRAFFIC_AGENT -DCONFIG_WFA_WMM_AC
