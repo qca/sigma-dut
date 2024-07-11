@@ -12096,6 +12096,9 @@ static int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 		return -1;
 	}
 
+	if (dut->program == PROGRAM_P2P)
+		ifindex = if_nametoindex(get_group_ifname(dut, intf));
+
 	val = get_param(cmd, "FlowType");
 	if (val) {
 		flow_type = atoi(val);

@@ -513,7 +513,7 @@ const char * get_p2p_group_ifname(struct sigma_dut *dut, const char *ifname)
 }
 
 
-static const char * get_group_ifname(struct sigma_dut *dut, const char *ifname)
+const char * get_group_ifname(struct sigma_dut *dut, const char *ifname)
 {
 	static char buf[1000];
 	char *iface, *pos;
