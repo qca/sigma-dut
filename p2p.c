@@ -961,7 +961,166 @@ noa_done:
 
 	}
 
+	val = get_param(cmd, "TWT_Power_Management");
+	if (val) {
+		int twt_pm = get_enable_disable(val);
+
+		snprintf(buf, sizeof(buf), "P2P_SET twt_power_mgmt %d", twt_pm);
+		if (wpa_command(intf, buf) < 0)
+			return ERROR_SEND_STATUS;
+
+		dut->is_p2p_twt_power_mgmt_enabled = twt_pm;
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"TWT_Power_Management enable: %d", twt_pm);
+	}
+
+	val = get_param(cmd, "UnavailabilityMode");
+	if (val)
+		dut->twt_param.unavailability_mode = !!atoi(val);
+
+	val = get_param(cmd, "TWT_Trigger");
+	if (val)
+		dut->twt_param.twt_trigger = !!atoi(val);
+
+	val = get_param(cmd, "WakeIntervalMantissa");
+	if (val)
+		dut->twt_param.wake_interval_mantissa = atoi(val);
+
+	val = get_param(cmd, "WakeIntervalExp");
+	if (val)
+		dut->twt_param.wake_interval_exp = atoi(val);
+
+	val = get_param(cmd, "NominalMinWakeDur");
+	if (val)
+		dut->twt_param.nominal_min_wake_dur = atoi(val);
+
+	val = get_param(cmd, "BTWT_ID");
+	if (val) {
+		dut->twt_param.bcast_twt_id = atoi(val);
+		dut->twt_param.is_bcast_twt = true;
+		dut->twt_param.is_user_config = true;
+		dut->twt_param.responder_pm = 1;
+	}
+
+	val = get_param(cmd, "BTWT_Persistence");
+	if (val)
+		dut->twt_param.bcast_twt_persis = atoi(val);
+
+	val = get_param(cmd, "BTWT_Recommendation");
+	if (val)
+		dut->twt_param.bcast_twt_recommdn = atoi(val);
+
 	return 1;
+}
+
+
+static int set_p2p_twt_unavailability_mode(struct sigma_dut *dut,
+					   struct sigma_conn *conn,
+					   const char *intf)
+{
+#ifdef NL80211_SUPPORT
+	struct nlattr *params;
+	struct nlattr *attr;
+	struct nl_msg *msg;
+	int ifindex, ret;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Index for interface %s failed",
+				__func__, intf);
+		return -1;
+	}
+
+	msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
+			      NL80211_CMD_VENDOR);
+	if (!msg ||
+	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			QCA_NL80211_VENDOR_SUBCMD_CONFIG_TWT)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in adding vendor_cmd", __func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	attr = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA);
+	if (!attr ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TWT_OPERATION,
+		       QCA_WLAN_TWT_SET_PARAM)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in adding vendor attr", __func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	params = nla_nest_start(msg, QCA_WLAN_VENDOR_ATTR_CONFIG_TWT_PARAMS);
+	if (!params ||
+	    nla_put_flag(msg,
+			 QCA_WLAN_VENDOR_ATTR_TWT_SET_PARAM_UNAVAILABILITY_MODE)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in adding vendor_params", __func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	nla_nest_end(msg, params);
+	nla_nest_end(msg, attr);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret)
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in send_and_recv_msgs, ret=%d",
+				__func__, ret);
+
+	return 0;
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"TWT unavailability mode cannot be done without NL80211_SUPPORT defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
+static int set_p2p_twt_params(struct sigma_dut *dut, struct sigma_conn *conn,
+			      const char *intf)
+{
+	/* Set default param when user config is not available. */
+	if (!dut->twt_param.is_user_config) {
+		dut->twt_param.is_bcast_twt = true;
+		dut->twt_param.unavailability_mode = false;
+		dut->twt_param.twt_trigger = false;
+		dut->twt_param.flow_type = 1;
+		dut->twt_param.protection = 0;
+		dut->twt_param.target_wake_time = 0;
+		dut->twt_param.wake_interval_mantissa = 112;
+		/* SI = pow(2, exp) * mantissa */
+		dut->twt_param.wake_interval_exp = 10;
+		/* SP = val * 256 us */
+		dut->twt_param.nominal_min_wake_dur = 78;
+		dut->twt_param.bcast_twt_id = 0;
+		dut->twt_param.bcast_twt_persis = 0;
+		dut->twt_param.bcast_twt_recommdn = 0;
+		dut->twt_param.responder_pm = 1;
+	}
+
+	dut->twt_param.cmd_type = 1;
+	dut->twt_param.ifindex = if_nametoindex(intf);
+	if (sta_twt_request(dut, conn, NULL) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to set default BCAST TWT parms");
+		return -1;
+	}
+
+	/* Configure Unavailability Mode bit in control field of TWT element */
+	if (dut->twt_param.unavailability_mode &&
+	    set_p2p_twt_unavailability_mode(dut, conn, intf) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to set unavailability mode");
+		return -1;
+	}
+	return 0;
 }
 
 
@@ -1117,6 +1276,13 @@ cmd_sta_start_autonomous_go(struct sigma_dut *dut, struct sigma_conn *conn,
 		miracast_start_autonomous_go(dut, conn, cmd, ifname);
 	}
 #endif /* MIRACAST */
+
+	if (dut->is_p2p_twt_power_mgmt_enabled &&
+	    set_p2p_twt_params(dut, conn, ifname) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to set default TWT-based P2P Power Management");
+		return ERROR_SEND_STATUS;
+	}
 
 	send_resp(dut, conn, SIGMA_COMPLETE, resp);
 	return 0;
@@ -1949,6 +2115,10 @@ enum sigma_cmd_result sta_p2p_reset_default(struct sigma_dut *dut,
 	dut->p2p_client = 0;
 	dut->wps_method = WFA_CS_WPS_NOT_READY;
 	dut->pasn_type = 0xf;
+	dut->is_p2p_twt_power_mgmt_enabled = false;
+	dut->twt_param.is_user_config = false;
+	dut->twt_param.is_bcast_twt = false;
+	dut->twt_param.unavailability_mode = false;
 
 	grp = dut->groups;
 	while (grp) {

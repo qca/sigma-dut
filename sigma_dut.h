@@ -569,6 +569,25 @@ enum oper_chan_width {
 	CONF_OPER_CHWIDTH_320MHZ,
 };
 
+struct twt_config_params {
+	bool is_user_config;
+	bool is_bcast_twt;
+	bool unavailability_mode;
+	bool twt_trigger;
+	int cmd_type;
+	int flow_type;
+	int protection;
+	int target_wake_time;
+	int wake_interval_mantissa;
+	int wake_interval_exp;
+	int nominal_min_wake_dur;
+	int bcast_twt_id;
+	int bcast_twt_persis;
+	int bcast_twt_recommdn;
+	int responder_pm;
+	int ifindex;
+};
+
 struct sigma_dut {
 	const char *main_ifname;
 	char *main_ifname_2g;
@@ -1282,6 +1301,8 @@ struct sigma_dut {
 	bool usd_enabled;
 	bool p2p_r2_capable;
 	u8 pasn_type;
+	bool is_p2p_twt_power_mgmt_enabled;
+	struct twt_config_params twt_param;
 };
 
 
@@ -1433,6 +1454,8 @@ int wcn_set_he_ltf(struct sigma_dut *dut, const char *intf,
 #endif /* NL80211_SUPPORT */
 void stop_dscp_policy_mon_thread(struct sigma_dut *dut);
 void free_dscp_policy_table(struct sigma_dut *dut);
+int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
+		    struct sigma_cmd *cmd);
 
 /* p2p.c */
 void p2p_register_cmds(void);

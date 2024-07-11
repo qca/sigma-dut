@@ -11807,8 +11807,10 @@ static int twt_async_event_wait(struct sigma_dut *dut, unsigned int twt_op)
 	int err_code = 0, select_retval = 0;
 	struct wait_event wait_info;
 
-	if (dut->nl_ctx->event_sock)
-		cb = nl_socket_get_cb(dut->nl_ctx->event_sock);
+	if (!dut->nl_ctx->event_sock && nl80211_open_event_sock(dut))
+		return -1;
+
+	cb = nl_socket_get_cb(dut->nl_ctx->event_sock);
 	if (!cb) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"event callback not found");
@@ -12067,12 +12069,13 @@ static int sta_twt_resume(struct sigma_dut *dut, struct sigma_conn *conn,
 }
 
 
-#define TWT_REQUEST_CMD     0
-#define TWT_SUGGEST_CMD     1
-#define TWT_DEMAND_CMD      2
+#define TWT_REQUEST_CMD       0
+#define TWT_SUGGEST_CMD       1
+#define TWT_DEMAND_CMD        2
+#define TWT_ALTERNATE_TWT_CMD 5
 
-static int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
-			   struct sigma_cmd *cmd)
+int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
+		    struct sigma_cmd *cmd)
 {
 #ifdef NL80211_SUPPORT
 	struct nlattr *params;
@@ -12087,6 +12090,32 @@ static int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 		protection = 0, cmd_type = QCA_WLAN_VENDOR_TWT_SETUP_SUGGEST;
 	int bcast_twt = 0;
 	int bcast_twt_id = 0, bcast_twt_recommdn = 0, bcast_twt_persis = 0;
+	int responder_pm = 0;
+
+	if (dut->is_p2p_twt_power_mgmt_enabled && !cmd) {
+		ifindex = dut->twt_param.ifindex;
+		flow_type = dut->twt_param.flow_type;
+		twt_trigger = dut->twt_param.twt_trigger;
+		protection = dut->twt_param.protection;
+		cmd_type = dut->twt_param.cmd_type;
+		target_wake_time = dut->twt_param.target_wake_time;
+		wake_interval_mantissa = dut->twt_param.wake_interval_mantissa;
+		wake_interval_exp = dut->twt_param.wake_interval_exp;
+		nominal_min_wake_dur = dut->twt_param.nominal_min_wake_dur;
+		bcast_twt_id = dut->twt_param.bcast_twt_id;
+		bcast_twt_persis = dut->twt_param.bcast_twt_persis;
+		bcast_twt_recommdn = dut->twt_param.bcast_twt_recommdn;
+		responder_pm = dut->twt_param.responder_pm;
+		bcast_twt = 1;
+
+		goto send_command;
+	}
+
+	if (!cmd) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"NULL cmd received with TWT setup request");
+		return -1;
+	}
 
 	ifindex = if_nametoindex(intf);
 	if (ifindex == 0) {
@@ -12134,16 +12163,20 @@ static int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 	val = get_param(cmd, "SetupCommand");
 	if (val) {
 		cmd_type = atoi(val);
-		if (cmd_type == TWT_REQUEST_CMD)
+		if (cmd_type == TWT_REQUEST_CMD) {
 			cmd_type = QCA_WLAN_VENDOR_TWT_SETUP_REQUEST;
-		else if (cmd_type == TWT_SUGGEST_CMD)
+		} else if (cmd_type == TWT_SUGGEST_CMD) {
 			cmd_type = QCA_WLAN_VENDOR_TWT_SETUP_SUGGEST;
-		else if (cmd_type == TWT_DEMAND_CMD)
+		} else if (cmd_type == TWT_DEMAND_CMD) {
 			cmd_type = QCA_WLAN_VENDOR_TWT_SETUP_DEMAND;
-		else
+		} else if (cmd_type == TWT_ALTERNATE_TWT_CMD) {
+			cmd_type = QCA_WLAN_VENDOR_TWT_SETUP_ALTERNATE_TWT;
+		} else {
 			sigma_dut_print(dut, DUT_MSG_ERROR,
-					"Default suggest is used for cmd %d",
+					"cmd type not supported %d",
 					cmd_type);
+			return -1;
+		}
 	}
 
 	val = get_param(cmd, "TargetWakeTime");
@@ -12180,12 +12213,17 @@ static int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 		bcast_twt = 1;
 	}
 
+	val = get_param(cmd, "RespPMMode");
+	if (val)
+		responder_pm = atoi(val);
+
 	if (bcast_twt)
 		sigma_dut_print(dut, DUT_MSG_DEBUG,
 				"BCAST_TWT: ID %d, RECOMM %d, PERSIS %d",
 				bcast_twt_id, bcast_twt_recommdn,
 				bcast_twt_persis);
 
+send_command:
 	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
 				    NL80211_CMD_VENDOR)) ||
 	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
@@ -12218,6 +12256,9 @@ static int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 	     nla_put_u8(msg,
 			QCA_WLAN_VENDOR_ATTR_TWT_SETUP_BCAST_RECOMMENDATION,
 			bcast_twt_recommdn)) ||
+	    (responder_pm &&
+	     nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_TWT_SETUP_RESPONDER_PM_MODE,
+			responder_pm)) ||
 	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_TWT_SETUP_WAKE_TIME,
 			target_wake_time) ||
 	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_TWT_SETUP_WAKE_DURATION,
