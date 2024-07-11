@@ -9005,6 +9005,10 @@ static enum sigma_cmd_result cmd_sta_disconnect(struct sigma_dut *dut,
 {
 	const char *intf = get_param(cmd, "Interface");
 	const char *val = get_param(cmd, "maintain_profile");
+	const char *disconnect_iface = get_param(cmd, "DisconnectInterface");
+
+	if (disconnect_iface && strcmp(disconnect_iface, "P2P") == 0)
+		intf = get_p2p_group_ifname(dut, intf);
 
 	if (dut->program == PROGRAM_OCE ||
 	    dut->program == PROGRAM_HE ||

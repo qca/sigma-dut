@@ -483,6 +483,33 @@ static struct wfa_cs_p2p_group * p2p_group_get(struct sigma_dut *dut,
 }
 
 
+const char * get_p2p_group_ifname(struct sigma_dut *dut, const char *ifname)
+{
+	char *iface, *pos;
+	static char buf[1000];
+
+	/* Try to find a suitable group interface */
+	if (wpa_command_resp(get_main_ifname(dut), "INTERFACES",
+			     buf, sizeof(buf)) < 0)
+		return ifname;
+
+	iface = buf;
+	while (iface && *iface) {
+		pos = strchr(iface, '\n');
+		if (pos)
+			*pos++ = '\0';
+		if (memcmp(iface, "p2p-", 4) == 0) {
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"Considering interface '%s' for IP address",
+					iface);
+			return iface;
+		}
+		iface = pos;
+	}
+	return ifname;
+}
+
+
 static const char * get_group_ifname(struct sigma_dut *dut, const char *ifname)
 {
 	static char buf[1000];
