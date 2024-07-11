@@ -9599,6 +9599,32 @@ static enum sigma_cmd_result sta_get_parameter_wpa3(struct sigma_dut *dut,
 }
 
 
+static enum sigma_cmd_result sta_get_pasn_ptk(struct sigma_dut *dut,
+					      struct sigma_conn *conn,
+					      struct sigma_cmd *cmd)
+{
+	const char *intf = get_param(cmd, "Interface");
+	char buf[200], resp[256];
+
+	if (dut->program != PROGRAM_P2P) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,PASNPTK not supported");
+		return STATUS_SENT_ERROR;
+	}
+
+	if (wpa_command_resp(intf, "P2P_GET_PASNPTK", buf, sizeof(buf)) < 0 ||
+	    strncmp(buf, "UNKNOWN COMMAND", 15) == 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,PASNPTK not supported");
+		return STATUS_SENT_ERROR;
+	}
+
+	snprintf(resp, sizeof(resp), "PASNPTK,%s", buf);
+	send_resp(dut, conn, SIGMA_COMPLETE, resp);
+	return STATUS_SENT;
+}
+
+
 static enum sigma_cmd_result sta_get_pmk(struct sigma_dut *dut,
 					 struct sigma_conn *conn,
 					 struct sigma_cmd *cmd)
@@ -9667,6 +9693,9 @@ static enum sigma_cmd_result cmd_sta_get_parameter(struct sigma_dut *dut,
 
 	if (!parameter)
 		return INVALID_SEND_STATUS;
+
+	if (strcasecmp(parameter, "PASNPTK") == 0)
+		return sta_get_pasn_ptk(dut, conn, cmd);
 
 	if (strcasecmp(parameter, "PMK") == 0)
 		return sta_get_pmk(dut, conn, cmd);
