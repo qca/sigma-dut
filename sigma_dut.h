@@ -1431,9 +1431,9 @@ void stop_dhcp(struct sigma_dut *dut, const char *group_ifname, int go);
 int p2p_discover_peer(struct sigma_dut *dut, const char *ifname,
 		      const char *peer, int full);
 const char * get_p2p_group_ifname(struct sigma_dut *dut, const char *ifname);
-enum sigma_cmd_result cmd_sta_p2p_reset(struct sigma_dut *dut,
-					struct sigma_conn *conn,
-					struct sigma_cmd *cmd);
+enum sigma_cmd_result sta_p2p_reset_default(struct sigma_dut *dut,
+					    struct sigma_conn *conn,
+					    struct sigma_cmd *cmd);
 
 /* basic.c */
 void basic_register_cmds(void);

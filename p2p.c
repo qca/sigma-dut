@@ -1901,9 +1901,9 @@ static enum sigma_cmd_result cmd_sta_get_psk(struct sigma_dut *dut,
 }
 
 
-enum sigma_cmd_result cmd_sta_p2p_reset(struct sigma_dut *dut,
-					struct sigma_conn *conn,
-					struct sigma_cmd *cmd)
+enum sigma_cmd_result sta_p2p_reset_default(struct sigma_dut *dut,
+					    struct sigma_conn *conn,
+					    struct sigma_cmd *cmd)
 {
 	const char *intf = get_param(cmd, "interface");
 	struct wfa_cs_p2p_group *grp, *prev;
@@ -1979,6 +1979,15 @@ enum sigma_cmd_result cmd_sta_p2p_reset(struct sigma_dut *dut,
 		dut_ifc_reset(dut);
 
 	return 1;
+}
+
+
+static enum sigma_cmd_result cmd_sta_p2p_reset(struct sigma_dut *dut,
+					       struct sigma_conn *conn,
+					       struct sigma_cmd *cmd)
+{
+	dut->program = PROGRAM_P2P;
+	return sta_p2p_reset_default(dut, conn, cmd);
 }
 
 

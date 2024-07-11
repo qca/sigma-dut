@@ -11444,7 +11444,7 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 		wpa_command(intf, "STA_AUTOCONNECT 0");
 
 	if (dut->program != PROGRAM_VHT)
-		return cmd_sta_p2p_reset(dut, conn, cmd);
+		return sta_p2p_reset_default(dut, conn, cmd);
 
 	return 1;
 }
