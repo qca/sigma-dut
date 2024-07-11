@@ -18184,7 +18184,7 @@ static enum sigma_cmd_result cmd_sta_set_rfeature(struct sigma_dut *dut,
 		return cmd_sta_set_rfeature_vht(intf, dut, conn, cmd);
 
 	if (strcasecmp(prog, "HE") == 0 || strcasecmp(prog, "EHT") == 0 ||
-	    dut->device_mode == MODE_11BE)
+	    dut->device_mode == MODE_11BE || strcasecmp(prog, "P2P") == 0)
 		return cmd_sta_set_rfeature_he(intf, dut, conn, cmd);
 
 	if (strcasecmp(prog, "MBO") == 0) {
