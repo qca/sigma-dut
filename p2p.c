@@ -351,7 +351,8 @@ void p2p_create_event_thread(struct sigma_dut *dut)
 
 
 static int p2p_group_add(struct sigma_dut *dut, const char *ifname,
-			 int go, const char *grpid, const char *ssid)
+			 int go, const char *grpid, const char *ssid,
+			 const char *peer_mac)
 {
 	struct wfa_cs_p2p_group *grp;
 
@@ -367,6 +368,8 @@ static int p2p_group_add(struct sigma_dut *dut, const char *ifname,
 	grp->go = go;
 	strlcpy(grp->grpid, grpid, P2P_GRP_ID_LEN);
 	strlcpy(grp->ssid, ssid, sizeof(grp->ssid));
+	if (peer_mac)
+		strlcpy(grp->peer_mac, peer_mac, sizeof(grp->peer_mac));
 
 	grp->next = dut->groups;
 	dut->groups = grp;
@@ -472,7 +475,7 @@ static struct wfa_cs_p2p_group * p2p_group_get(struct sigma_dut *dut,
 		}
 
 		if (add) {
-			p2p_group_add(dut, ifname, go, grpid, ssid);
+			p2p_group_add(dut, ifname, go, grpid, ssid, NULL);
 			return dut->groups;
 		}
 
@@ -1045,7 +1048,8 @@ cmd_sta_start_autonomous_go(struct sigma_dut *dut, struct sigma_conn *conn,
 	sigma_dut_print(dut, DUT_MSG_DEBUG, "Group BSSID %s", bssid);
 
 	snprintf(grpid, sizeof(grpid), "%s %s", go_dev_addr, ssid);
-	p2p_group_add(dut, ifname, strcmp(gtype, "GO") == 0, grpid, ssid);
+	p2p_group_add(dut, ifname, strcmp(gtype, "GO") == 0, grpid, ssid,
+		      NULL);
 
 	snprintf(resp, sizeof(resp), "GroupID,%s", grpid);
 
@@ -1173,7 +1177,8 @@ static enum sigma_cmd_result cmd_sta_p2p_connect(struct sigma_dut *dut,
 	sigma_dut_print(dut, DUT_MSG_DEBUG, "Group BSSID %s", bssid);
 
 	snprintf(grpid, sizeof(grpid), "%s %s", bssid, ssid);
-	p2p_group_add(dut, ifname, strcmp(gtype, "GO") == 0, grpid, ssid);
+	p2p_group_add(dut, ifname, strcmp(gtype, "GO") == 0, grpid, ssid,
+		      devid);
 
 	return 1;
 }
@@ -1419,7 +1424,7 @@ static int p2p_group_formation_event(struct sigma_dut *dut,
 	sigma_dut_print(dut, DUT_MSG_DEBUG, "Group BSSID %s", bssid);
 
 	snprintf(grpid, sizeof(grpid), "%s %s", go_dev_addr, ssid);
-	p2p_group_add(dut, ifname, strcmp(gtype, "GO") == 0, grpid, ssid);
+	p2p_group_add(dut, ifname, strcmp(gtype, "GO") == 0, grpid, ssid, NULL);
 	snprintf(resp, sizeof(resp), "Result,%s,GroupID,%s%s%s",
 		 strcmp(gtype, "GO") == 0 ? "GO" : "CLIENT", grpid, role,
 		 nfc ? ",PauseFlag,0" : "");

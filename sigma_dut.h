@@ -202,6 +202,7 @@ struct wfa_cs_p2p_group {
 	int go;
 	char grpid[P2P_GRP_ID_LEN];
 	char ssid[33];
+	char peer_mac[20];
 };
 
 #ifdef CONFIG_TRAFFIC_AGENT
