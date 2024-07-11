@@ -1567,6 +1567,11 @@ cmd_sta_send_p2p_invitation_req(struct sigma_dut *dut, struct sigma_conn *conn,
 	char buf[4096];
 	struct wpa_ctrl *ctrl;
 	int res;
+	const char *events[] = {
+		"P2P-INVITATION-RESULT",
+		"P2P-INVITATION-ACCEPTED",
+		NULL
+	};
 
 	if (devid == NULL || grpid == NULL)
 		return -1;
@@ -1633,8 +1638,7 @@ cmd_sta_send_p2p_invitation_req(struct sigma_dut *dut, struct sigma_conn *conn,
 		return -2;
 	}
 
-	res = get_wpa_cli_event(dut, ctrl, "P2P-INVITATION-RESULT",
-				buf, sizeof(buf));
+	res = get_wpa_cli_events(dut, ctrl, events, buf, sizeof(buf));
 
 	wpa_ctrl_detach(ctrl);
 	wpa_ctrl_close(ctrl);
