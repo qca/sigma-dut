@@ -1080,6 +1080,7 @@ struct sigma_dut {
 		PROGRAM_LOCR2,
 		PROGRAM_EHT,
 		PROGRAM_PR,
+		PROGRAM_P2P,
 	} program;
 
 	enum device_type {
