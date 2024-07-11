@@ -860,6 +860,23 @@ noa_done:
 			return ERROR_SEND_STATUS;
 	}
 
+	val = get_param(cmd, "PASN");
+	if (val && strcasecmp(val, "Enable") == 0) {
+		/* Support Wi-Fi Direct R2 capabilities */
+		sigma_dut_print(dut, DUT_MSG_INFO, "PASN Enable");
+		val = get_param(cmd, "PASN_Unsupported_DH_Group");
+		if (val) {
+			if (atoi(val) == 20)
+				dut->pasn_type &= ~0xc;
+			else if (atoi(val) == 19)
+				dut->pasn_type &= ~0x3;
+		}
+		snprintf(buf, sizeof(buf), "P2P_SET pasn_type %d",
+			 dut->pasn_type);
+		if (wpa_command(intf, buf) < 0)
+			return ERROR_SEND_STATUS;
+	}
+
 	val = get_param(cmd, "Service_Discovery");
 	if (val) {
 		int sd = atoi(val);
@@ -1922,6 +1939,7 @@ enum sigma_cmd_result sta_p2p_reset_default(struct sigma_dut *dut,
 	dut->go = 0;
 	dut->p2p_client = 0;
 	dut->wps_method = WFA_CS_WPS_NOT_READY;
+	dut->pasn_type = 0xf;
 
 	grp = dut->groups;
 	while (grp) {

@@ -1268,6 +1268,7 @@ struct sigma_dut {
 				      * values */
 	bool usd_enabled;
 	bool p2p_r2_capable;
+	u8 pasn_type;
 };
 
 

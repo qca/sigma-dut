@@ -890,6 +890,7 @@ static void set_defaults(struct sigma_dut *dut)
 #endif /* ANDROID */
 	dut->autoconnect_default = 1;
 	set_host_name(dut);
+	dut->pasn_type = 0xf;
 }
 
 
