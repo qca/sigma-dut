@@ -958,8 +958,11 @@ static int get_bitmap_from_punct_chlist(struct sigma_dut *dut,
 		return -1;
 	}
 
-	center_chan_idx = get_oper_centr_freq_seq_idx(dut, chwidth,
-						      dut->ap_channel);
+	if (dut->ap_center_freq)
+		center_chan_idx = freq_to_chan(dut->ap_center_freq);
+	else
+		center_chan_idx = get_oper_centr_freq_seq_idx(dut, chwidth,
+							      dut->ap_channel);
 	if (center_chan_idx < 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: couldn't get center channel index",
@@ -1108,6 +1111,7 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 		if (wlan_tag == 1) {
 			const char *pos;
 
+			dut->ap_center_freq = 0;
 			dut->ap_channel = atoi(val);
 			pos = strchr(val, ';');
 			if (pos) {
@@ -1121,10 +1125,20 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 
 	val = get_param(cmd, "ChnlFreq");
 	if (val) {
-		if (atoi(val) >= 5935 && atoi(val) <= 7115)
+		int freq = atoi(val);
+
+		if (is_6ghz_freq(freq))
 			dut->ap_band_6g = 1;
 		else
 			dut->ap_band_6g = 0;
+
+		dut->ap_center_freq = 0;
+		if (get_param(cmd, "CHANNEL")) {
+			const char *width = get_param(cmd, "WIDTH");
+
+			if (width && strcasecmp(width, "320") == 0)
+				dut->ap_center_freq = freq;
+		}
 	}
 
 	/* Overwrite the AP channel with DFS channel if configured */
@@ -9735,6 +9749,12 @@ skip_key_mgmt:
 			return 0;
 		}
 
+		if (dut->ap_center_freq) {
+			vht_oper_centr_freq_idx =
+				freq_to_chan(dut->ap_center_freq);
+			goto set_center_freq_idx_conf;
+		}
+
 		switch (dut->ap_chwidth) {
 		case AP_20:
 			dut->ap_vht_chwidth = AP_20_40_VHT_OPER_CHWIDTH;
@@ -9773,6 +9793,8 @@ skip_key_mgmt:
 							    dut->ap_channel);
 			break;
 		}
+
+set_center_freq_idx_conf:
 		fprintf(f, "vht_oper_centr_freq_seg0_idx=%d\n",
 			vht_oper_centr_freq_idx);
 		fprintf(f, "vht_oper_chwidth=%d\n", dut->ap_vht_chwidth);
@@ -10768,6 +10790,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_max_mpdu_len = 0;
 	dut->ap_band_6g = 0;
 	dut->ap_punct_bitmap = 0;
+	dut->ap_center_freq = 0;
 
 	dut->ap_rsn_preauth = 0;
 	dut->ap_wpsnfc = 0;
