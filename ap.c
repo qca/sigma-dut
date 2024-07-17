@@ -122,6 +122,8 @@ static int ath_ap_start_hostapd(struct sigma_dut *dut);
 static void ath_ap_set_params(struct sigma_dut *dut);
 static int kill_process(struct sigma_dut *dut, char *proc_name,
 			unsigned char is_proc_instance_one, int sig);
+static int get_oper_centr_freq_seq_idx(struct sigma_dut *dut, int chwidth,
+				       int channel);
 
 
 static int fwtest_cmd_wrapper(struct sigma_dut *dut, const char *arg,
@@ -932,6 +934,80 @@ static int wcn_set_txbf_periodic_ndp(struct sigma_dut *dut, const char *intf,
 	return 0;
 }
 #endif /* NL80211_SUPPORT */
+
+
+static int get_bitmap_from_punct_chlist(struct sigma_dut *dut,
+					const char *punct_channel_list)
+{
+	int center_chan_idx, start_chan_idx, end_chan_idx;
+	int chwidth, punct_bitmap = 0;
+
+	switch (dut->ap_chwidth) {
+	case AP_80:
+		chwidth = 80;
+		break;
+	case AP_160:
+		chwidth = 160;
+		break;
+	case AP_320:
+		chwidth = 320;
+		break;
+	default:
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Invalid channel width", __func__);
+		return -1;
+	}
+
+	center_chan_idx = get_oper_centr_freq_seq_idx(dut, chwidth,
+						      dut->ap_channel);
+	if (center_chan_idx < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: couldn't get center channel index",
+				__func__);
+		return -1;
+	}
+
+	start_chan_idx = center_chan_idx - ((chwidth / 40 - 1) * 4) - 2;
+	end_chan_idx = center_chan_idx + ((chwidth / 40 - 1) * 4) + 2;
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"%s: center_chan_idx=%d, start_chan_idx=%d, end_chan_idx=%d",
+			__func__, center_chan_idx, start_chan_idx,
+			end_chan_idx);
+
+	if (punct_channel_list) {
+		char token[100];
+		const char *current_channel;
+		char *saveptr = NULL;
+		int channel, i;
+
+		strlcpy(token, punct_channel_list, sizeof(token));
+		current_channel = strtok_r(token, " ", &saveptr);
+		while (current_channel) {
+			channel = atoi(current_channel);
+			sigma_dut_print(dut, DUT_MSG_DEBUG,
+					"%s: puncture channel = %d", __func__,
+					channel);
+			if (channel == 0)
+				break;
+
+			for (i = 0; (start_chan_idx + i * 4) <= end_chan_idx;
+			     i++) {
+				if (channel != (start_chan_idx + i * 4))
+					continue;
+
+				punct_bitmap |= BIT(i);
+			}
+
+			/* Get the next channel */
+			current_channel = strtok_r(NULL, " ", &saveptr);
+		}
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "%s: punct_bitmap = %d", __func__,
+			punct_bitmap);
+
+	return punct_bitmap;
+}
 
 
 static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
@@ -2404,6 +2480,16 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 			dut->eht_txemlomn = VALUE_DISABLED;
 		else if (strcasecmp(val, "enable") == 0)
 			dut->eht_txemlomn = VALUE_ENABLED;
+	}
+
+	val = get_param(cmd, "PunctChannel");
+	if (val) {
+		dut->ap_punct_bitmap = get_bitmap_from_punct_chlist(dut, val);
+		if (dut->ap_punct_bitmap < 0) {
+			send_resp(dut, conn, SIGMA_INVALID,
+				  "errorCode,Invalid PunctChannel");
+			return STATUS_SENT_ERROR;
+		}
 	}
 
 	return SUCCESS_SEND_STATUS;
@@ -8966,6 +9052,10 @@ write_conf:
 			fprintf(f, "eht_mu_beamformer=0\n");
 		}
 
+		/* Add puncture channels bitmap */
+		if (dut->ap_punct_bitmap)
+			fprintf(f, "punct_bitmap=%d\n", dut->ap_punct_bitmap);
+
 		/* Single link AP MLD parameters */
 		if (get_hwaddr(get_main_ifname(dut), addr) != 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
@@ -10677,6 +10767,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_ampdu_exp = 0;
 	dut->ap_max_mpdu_len = 0;
 	dut->ap_band_6g = 0;
+	dut->ap_punct_bitmap = 0;
 
 	dut->ap_rsn_preauth = 0;
 	dut->ap_wpsnfc = 0;
@@ -14660,7 +14751,8 @@ static enum sigma_cmd_result ath_ap_set_rfeature(struct sigma_dut *dut,
 
 
 static int hostapd_chan_switch(struct sigma_dut *dut, const char *ifname,
-			       const char *type, int channel, int chwidth)
+			       const char *type, int channel, int chwidth,
+			       int punct_bitmap)
 {
 	int res, center_freq_idx, channel_freq, sec_channel_offset, center_freq;
 	bool is_6g = !!dut->ap_band_6g;
@@ -14721,9 +14813,9 @@ static int hostapd_chan_switch(struct sigma_dut *dut, const char *ifname,
 
 	/* Issue the channel switch command */
 	res = snprintf(buf, sizeof(buf),
-		       "CHAN_SWITCH 10 %d sec_channel_offset=%d center_freq1=%d bandwidth=%d blocktx %s",
+		       "CHAN_SWITCH 10 %d sec_channel_offset=%d center_freq1=%d bandwidth=%d punct_bitmap=%d blocktx %s",
 		       channel_freq, sec_channel_offset, center_freq, chwidth,
-		       mode ? mode : "");
+		       punct_bitmap, mode ? mode : "");
 	if (res < 0 || res >= sizeof(buf) || hapd_command(ifname, buf) < 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"Failed to initiate channel switch using hostapd control interface");
@@ -14754,7 +14846,7 @@ static int wcn_vht_chnum_band(struct sigma_dut *dut, const char *ifname,
 	if (result)
 		chwidth = atoi(result);
 
-	ret = hostapd_chan_switch(dut, ifname, type, channel, chwidth);
+	ret = hostapd_chan_switch(dut, ifname, type, channel, chwidth, 0);
 	if (ret == 0 || dut->program == PROGRAM_EHT) {
 		free(token);
 		return ret;
@@ -14972,6 +15064,39 @@ static enum sigma_cmd_result wcn_ap_set_rfeature(struct sigma_dut *dut,
 		}
 
 		wcn_config_ap_ldpc(dut, ifname);
+	}
+
+	val = get_param(cmd, "PunctChannel");
+	if (val) {
+		int chwidth;
+
+		switch (dut->ap_chwidth) {
+		case AP_80:
+			chwidth = 80;
+			break;
+		case AP_160:
+			chwidth = 160;
+			break;
+		case AP_320:
+			chwidth = 320;
+			break;
+		default:
+			return ERROR_SEND_STATUS;
+		}
+
+		dut->ap_punct_bitmap = get_bitmap_from_punct_chlist(dut, val);
+		if (dut->ap_punct_bitmap < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Invalid punct bitmap");
+			return ERROR_SEND_STATUS;
+		}
+
+		if (hostapd_chan_switch(dut, ifname, type, dut->ap_channel,
+					chwidth, dut->ap_punct_bitmap) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to switch channel");
+			return ERROR_SEND_STATUS;
+		}
 	}
 
 	return SUCCESS_SEND_STATUS;

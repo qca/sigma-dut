@@ -536,6 +536,7 @@ struct sigma_dut {
 	char *p2p_ifname_buf;
 	int use_5g;
 	int ap_band_6g;
+	int ap_punct_bitmap;
 	int sta_2g_started;
 	int sta_5g_started;
 
