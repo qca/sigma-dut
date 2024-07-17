@@ -9606,7 +9606,7 @@ skip_key_mgmt:
 				vht_oper_centr_freq_idx);
 			if (dut->ap_band_6g)
 				fprintf(f, "op_class=%d\n",
-					get_6g_ch_op_class(dut->ap_channel));
+					get_6g_ch_op_class(vht_oper_centr_freq_idx));
 		}
 
 		find_ap_ampdu_exp_and_max_mpdu_len(dut);
