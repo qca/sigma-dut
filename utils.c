@@ -1216,6 +1216,42 @@ void kill_pid(struct sigma_dut *dut, const char *pid_file)
 }
 
 
+int chan_to_freq(int chan, bool is_6g)
+{
+	if (is_6g) {
+		if (chan == 2)
+			return 5935;
+
+		return 5950 + chan * 5;
+	}
+
+	if (chan == 14)
+		return 2484;
+	if (chan >= 1 && chan <= 13)
+		return 2407 + 5 * chan;
+
+	return 5000 + 5 * chan;
+}
+
+
+int freq_to_chan(int freq)
+{
+	if (freq == 2484)
+		return 14;
+
+	if (freq < 3000)
+		return (freq - 2407) / 5;
+
+	if (freq == 5935)
+		return 2;
+
+	if (freq > 5950)
+		return (freq - 5950) / 5;
+
+	return (freq - 5000) / 5;
+}
+
+
 bool is_6ghz_freq(int freq)
 {
 	if (freq == 5935)

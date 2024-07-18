@@ -1504,6 +1504,8 @@ int set_ipv6_addr(struct sigma_dut *dut, const char *ip, const char *mask,
 		  const char *ifname);
 void kill_pid(struct sigma_dut *dut, const char *pid_file);
 int get_ip_addr(const char *ifname, int ipv6, char *buf, size_t len);
+int chan_to_freq(int chan, bool is_6g);
+int freq_to_chan(int freq);
 bool is_6ghz_freq(int freq);
 
 enum sigma_cmd_result dev_start_test_log(struct sigma_dut *dut,
