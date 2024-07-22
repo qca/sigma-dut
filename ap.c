@@ -9718,7 +9718,8 @@ skip_key_mgmt:
 		fprintf(f, "he_rts_threshold=1024\n");
 
 	if ((dut->program == PROGRAM_VHT) ||
-	    ((dut->program == PROGRAM_HE || dut->program == PROGRAM_EHT) &&
+	    ((dut->program == PROGRAM_HE || dut->program == PROGRAM_EHT ||
+	      dut->program == PROGRAM_WPA3) &&
 	     dut->use_5g)) {
 		int vht_oper_centr_freq_idx;
 
