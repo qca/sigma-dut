@@ -4112,6 +4112,10 @@ enum qca_sta_helper_config_params {
 	/* For the attribute
 	 * QCA_WLAN_VENDOR_ATTR_CONFIG_TTLM_NEGOTIATION_SUPPORT */
 	STA_SET_T2LM_NEG_SUPPORT,
+
+	/* For the attribute
+	 * QCA_WLAN_VENDOR_ATTR_CONFIG_FOLLOW_AP_PREFERENCE_FOR_CNDS_SELECT */
+	STA_SET_AP_PREF_FOR_CNDS_SEL,
 };
 
 
@@ -4252,6 +4256,12 @@ static int sta_config_params(struct sigma_dut *dut, const char *intf,
 	case STA_SET_T2LM_NEG_SUPPORT:
 		if (nla_put_u8(msg,
 			       QCA_WLAN_VENDOR_ATTR_CONFIG_TTLM_NEGOTIATION_SUPPORT,
+			       value))
+			goto fail;
+		break;
+	case STA_SET_AP_PREF_FOR_CNDS_SEL:
+		if (nla_put_u8(msg,
+			       QCA_WLAN_VENDOR_ATTR_CONFIG_FOLLOW_AP_PREFERENCE_FOR_CNDS_SELECT,
 			       value))
 			goto fail;
 		break;
@@ -10663,6 +10673,7 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 		wpa_command(intf, "SET gas_address3 0");
 		wpa_command(intf, "SET roaming 1");
 		wpa_command(intf, "SET interworking 1");
+		sta_config_params(dut, intf, STA_SET_AP_PREF_FOR_CNDS_SEL, 1);
 	}
 
 	free(dut->rsne_override);
