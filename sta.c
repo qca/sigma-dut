@@ -10761,6 +10761,7 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	ret = wpa_command_resp(intf, "GET_CAPABILITY beacon_prot", resp,
 			       sizeof(resp));
 	dut->beacon_prot = ret == 0 && strncmp(resp, "supported", 9) == 0;
+	wpa_command(intf, "SET rsn_overriding 1");
 
 	if (sta_set_client_privacy(dut, conn, intf,
 				   dut->device_type == STA_dut &&
