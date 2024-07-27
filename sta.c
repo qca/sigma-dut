@@ -3417,11 +3417,384 @@ static enum sigma_cmd_result sta_set_owe(struct sigma_dut *dut,
 }
 
 
+static int get_key_mgmt_capa(struct sigma_dut *dut)
+{
+	char key_mgmt[500];
+	char *res, *saveptr = NULL;
+
+	if (dut->key_mgmt_capa)
+		goto out;
+
+	if (wpa_command_resp(get_main_ifname(dut), "GET_CAPABILITY key_mgmt",
+			     key_mgmt, sizeof(key_mgmt)) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to fetch key managements");
+		return -1;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Fetched key managements: %s",
+			key_mgmt);
+
+	res = strtok_r(key_mgmt, " ", &saveptr);
+	while (res) {
+		if (strcmp(res, "WPA-PSK"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_WPA_PSK);
+		if (strcmp(res, "WPA-PSK-SHA256"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_PSK_SHA256);
+		if (strcmp(res, "FT-PSK"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_PSK);
+		if (strcmp(res, "SAE"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_SAE);
+		if (strcmp(res, "FT-SAE"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_SAE);
+		if (strcmp(res, "SAE-EXT-KEY"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_SAE_EXT_KEY);
+		if (strcmp(res, "FT-SAE-EXT-KEY"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_SAE_EXT_KEY);
+
+		res = strtok_r(NULL, " ", &saveptr);
+	}
+out:
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Supported key managements: %x",
+			dut->key_mgmt_capa);
+	return 0;
+}
+
+
+static int get_pairwise_ciphers_capa(struct sigma_dut *dut)
+{
+	char pairwise_ciphers[200];
+	char *res, *saveptr = NULL;
+
+	if (dut->pairwise_ciphers_capa)
+		goto out;
+
+	if (wpa_command_resp(get_main_ifname(dut), "GET_CAPABILITY pairwise",
+			     pairwise_ciphers, sizeof(pairwise_ciphers)) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to fetch pairwise ciphers");
+		return -1;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Fetched pairwise ciphers: %s",
+			pairwise_ciphers);
+
+	res = strtok_r(pairwise_ciphers, " ", &saveptr);
+	while (res) {
+		if (strcmp(res, "CCMP"))
+			dut->pairwise_ciphers_capa |= BIT(SIGMA_CIPHER_CCMP);
+		if (strcmp(res, "GCMP"))
+			dut->pairwise_ciphers_capa |= BIT(SIGMA_CIPHER_GCMP);
+		if (strcmp(res, "CCMP-256"))
+			dut->pairwise_ciphers_capa |=
+				BIT(SIGMA_CIPHER_CCMP_256);
+		if (strcmp(res, "GCMP-256"))
+			dut->pairwise_ciphers_capa |=
+				BIT(SIGMA_CIPHER_GCMP_256);
+
+		res = strtok_r(NULL, " ", &saveptr);
+	}
+out:
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Supported pairwise ciphers: %x",
+			dut->pairwise_ciphers_capa);
+	return 0;
+}
+
+
+static int get_group_ciphers_capa(struct sigma_dut *dut)
+{
+	char group_ciphers[200];
+	char *res, *saveptr = NULL;
+
+	if (dut->group_ciphers_capa)
+		goto out;
+
+	if (wpa_command_resp(get_main_ifname(dut), "GET_CAPABILITY group",
+			     group_ciphers, sizeof(group_ciphers)) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to fetch group ciphers");
+		return -1;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Fetched group ciphers: %s",
+			group_ciphers);
+
+	res = strtok_r(group_ciphers, " ", &saveptr);
+	while (res) {
+		if (strcmp(res, "CCMP"))
+			dut->group_ciphers_capa |= BIT(SIGMA_CIPHER_CCMP);
+		if (strcmp(res, "GCMP"))
+			dut->group_ciphers_capa |= BIT(SIGMA_CIPHER_GCMP);
+		if (strcmp(res, "CCMP-256"))
+			dut->group_ciphers_capa |= BIT(SIGMA_CIPHER_CCMP_256);
+		if (strcmp(res, "GCMP-256"))
+			dut->group_ciphers_capa |= BIT(SIGMA_CIPHER_GCMP_256);
+
+		res = strtok_r(NULL, " ", &saveptr);
+	}
+out:
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Supported group ciphers: %x",
+			dut->group_ciphers_capa);
+	return 0;
+}
+
+
+static int get_group_mgmt_ciphers_capa(struct sigma_dut *dut)
+{
+	char group_mgmt_ciphers[200];
+	char *res, *saveptr = NULL;
+
+	if (dut->group_mgmt_ciphers_capa)
+		goto out;
+
+	if (wpa_command_resp(get_main_ifname(dut), "GET_CAPABILITY group_mgmt",
+			     group_mgmt_ciphers,
+			     sizeof(group_mgmt_ciphers)) < 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to fetch device group management ciphers");
+		return -1;
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"Fetched group management ciphers: %s",
+			group_mgmt_ciphers);
+
+	res = strtok_r(group_mgmt_ciphers, " ", &saveptr);
+	while (res) {
+		if (strcmp(res, "AES-128-CMAC"))
+			dut->group_mgmt_ciphers_capa |=
+				BIT(SIGMA_CIPHER_AES_128_CMAC);
+		if (strcmp(res, "BIP-GMAC-128"))
+			dut->group_mgmt_ciphers_capa |=
+				BIT(SIGMA_CIPHER_BIP_GMAC_128);
+		if (strcmp(res, "BIP-GMAC-256"))
+			dut->group_mgmt_ciphers_capa |=
+				BIT(SIGMA_CIPHER_BIP_GMAC_256);
+		if (strcmp(res, "BIP-CMAC-256"))
+			dut->group_mgmt_ciphers_capa |=
+				BIT(SIGMA_CIPHER_BIP_CMAC_256);
+
+		res = strtok_r(NULL, " ", &saveptr);
+	}
+out:
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"Supported group management ciphers: %x",
+			dut->group_mgmt_ciphers_capa);
+	return 0;
+}
+
+
+static enum sigma_cmd_result sta_set_wpa3_transition(struct sigma_dut *dut,
+						     struct sigma_conn *conn,
+						     struct sigma_cmd *cmd)
+{
+	const char *intf = get_param(cmd, "Interface");
+	const char *passphrase = get_param(cmd, "passphrase");
+	const char *ifname;
+	char buf[500];
+	char *pos;
+	int id, ret, rem;
+
+	if (!passphrase || !intf)
+		return INVALID_SEND_STATUS;
+
+	if (get_key_mgmt_capa(dut) < 0 ||
+	    get_pairwise_ciphers_capa(dut) < 0 ||
+	    get_group_ciphers_capa(dut) < 0 ||
+	    get_group_mgmt_ciphers_capa(dut) < 0)
+		return ERROR_SEND_STATUS;
+
+	if (!(dut->key_mgmt_capa & BIT(SIGMA_AKM_WPA_PSK)) ||
+	    !(dut->key_mgmt_capa & BIT(SIGMA_AKM_SAE)) ||
+	    !(dut->pairwise_ciphers_capa & BIT(SIGMA_CIPHER_CCMP)) ||
+	    !(dut->group_ciphers_capa & BIT(SIGMA_CIPHER_CCMP)) ||
+	    !(dut->group_mgmt_ciphers_capa & BIT(SIGMA_CIPHER_AES_128_CMAC))) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Device doesn't support basic WPA3 transition mode");
+		return ERROR_SEND_STATUS;
+	}
+
+	if (dut->device_mode == MODE_11BE &&
+	    (!(dut->key_mgmt_capa & BIT(SIGMA_AKM_SAE_EXT_KEY)) ||
+	     !(dut->pairwise_ciphers_capa & BIT(SIGMA_CIPHER_GCMP_256)) ||
+	     !(dut->group_ciphers_capa & BIT(SIGMA_CIPHER_GCMP_256)) ||
+	     !(dut->group_mgmt_ciphers_capa &
+	       BIT(SIGMA_CIPHER_BIP_GMAC_256)))) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Device doesn't support basic WPA3 transition mode needed for 11BE mode");
+		return ERROR_SEND_STATUS;
+	}
+
+	if (strcmp(intf, get_main_ifname(dut)) == 0)
+		ifname = get_station_ifname(dut);
+	else
+		ifname = intf;
+
+	id = add_network_common(dut, conn, ifname, cmd);
+	if (id < 0)
+		return id;
+
+	if (set_network(ifname, id, "proto", "WPA2") < 0)
+		return ERROR_SEND_STATUS;
+
+	/* Set key_mgmt */
+	pos = buf;
+	rem = sizeof(buf);
+
+	ret = snprintf(pos, rem, "WPA-PSK SAE");
+	pos += ret;
+	rem -= ret;
+
+	if (dut->key_mgmt_capa & BIT(SIGMA_AKM_PSK_SHA256)) {
+		ret = snprintf(pos, rem, " WPA-PSK-SHA256");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (dut->key_mgmt_capa & BIT(SIGMA_AKM_FT_PSK)) {
+		ret = snprintf(pos, rem, " FT-PSK");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (dut->key_mgmt_capa & BIT(SIGMA_AKM_FT_SAE)) {
+		ret = snprintf(pos, rem, " FT-SAE");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (dut->key_mgmt_capa & BIT(SIGMA_AKM_SAE_EXT_KEY)) {
+		ret = snprintf(pos, rem, " SAE-EXT-KEY");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (dut->key_mgmt_capa & BIT(SIGMA_AKM_FT_SAE_EXT_KEY)) {
+		ret = snprintf(pos, rem, " FT-SAE-EXT-KEY");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (set_network(ifname, id, "key_mgmt", buf) < 0)
+		return ERROR_SEND_STATUS;
+
+	/* Set pairwise ciphers */
+	pos = buf;
+	rem = sizeof(buf);
+
+	ret = snprintf(pos, rem, "CCMP");
+	pos += ret;
+	rem -= ret;
+
+	if (dut->pairwise_ciphers_capa & BIT(SIGMA_CIPHER_GCMP)) {
+		ret = snprintf(pos, rem, " GCMP");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (dut->pairwise_ciphers_capa & BIT(SIGMA_CIPHER_GCMP_256)) {
+		ret = snprintf(pos, rem, " GCMP-256");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (dut->pairwise_ciphers_capa & BIT(SIGMA_CIPHER_CCMP_256)) {
+		ret = snprintf(pos, rem, " CCMP-256");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (set_network(ifname, id, "pairwise", buf) < 0)
+		return ERROR_SEND_STATUS;
+
+	/* Set group ciphers */
+	pos = buf;
+	rem = sizeof(buf);
+
+	ret = snprintf(pos, rem, "CCMP");
+	pos += ret;
+	rem -= ret;
+
+	if (dut->group_ciphers_capa & BIT(SIGMA_CIPHER_GCMP)) {
+		ret = snprintf(pos, rem, " GCMP");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (dut->group_ciphers_capa & BIT(SIGMA_CIPHER_GCMP_256)) {
+		ret = snprintf(pos, rem, " GCMP-256");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (dut->group_ciphers_capa & BIT(SIGMA_CIPHER_CCMP_256)) {
+		ret = snprintf(pos, rem, " CCMP-256");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (set_network(ifname, id, "group", buf) < 0)
+		return ERROR_SEND_STATUS;
+
+	/* Set group management ciphers */
+	pos = buf;
+	rem = sizeof(buf);
+
+	ret = snprintf(pos, rem, "AES-128-CMAC");
+	pos += ret;
+	rem -= ret;
+
+	if (dut->group_mgmt_ciphers_capa & BIT(SIGMA_CIPHER_BIP_GMAC_128)) {
+		ret = snprintf(pos, rem, " BIP-GMAC-128");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (dut->group_mgmt_ciphers_capa & BIT(SIGMA_CIPHER_BIP_GMAC_256)) {
+		ret = snprintf(pos, rem, " BIP-GMAC-256");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (dut->group_mgmt_ciphers_capa & BIT(SIGMA_CIPHER_BIP_CMAC_256)) {
+		ret = snprintf(pos, rem, " BIP-CMAC-256");
+		pos += ret;
+		rem -= ret;
+	}
+
+	if (set_network(ifname, id, "group_mgmt", buf) < 0)
+		return ERROR_SEND_STATUS;
+
+	if (set_network_quoted(ifname, id, "psk", passphrase) < 0)
+		return ERROR_SEND_STATUS;
+
+	if (set_network(ifname, id, "ieee80211w", "1") < 0)
+		return ERROR_SEND_STATUS;
+
+	if (wpa_command(ifname, "SET sae_pwe 2") != 0)
+		return ERROR_SEND_STATUS;
+
+	if (dut->beacon_prot && set_network(ifname, id, "beacon_prot", "1") < 0)
+		return ERROR_SEND_STATUS;
+
+	if (dut->ocvc && dut->device_mode != MODE_11BE &&
+	    set_network(ifname, id, "ocv", "1") < 0)
+		return ERROR_SEND_STATUS;
+
+	return SUCCESS_SEND_STATUS;
+}
+
+
 static enum sigma_cmd_result cmd_sta_set_security(struct sigma_dut *dut,
 						  struct sigma_conn *conn,
 						  struct sigma_cmd *cmd)
 {
 	const char *type = get_param(cmd, "Type");
+	const char *ssid = get_param(cmd, "SSID");
+	const char *passphrase = get_param(cmd, "passphrase");
+
+	if (ssid && passphrase && !type)
+		return sta_set_wpa3_transition(dut, conn, cmd);
 
 	if (type == NULL) {
 		send_resp(dut, conn, SIGMA_ERROR,

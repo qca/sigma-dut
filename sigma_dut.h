@@ -526,6 +526,27 @@ struct mdnss_discovery_info {
 };
 #endif /* ANDROID_MDNS */
 
+enum sigma_akm_suites {
+	SIGMA_AKM_WPA_PSK = 0,
+	SIGMA_AKM_FT_PSK,
+	SIGMA_AKM_PSK_SHA256,
+	SIGMA_AKM_SAE,
+	SIGMA_AKM_FT_SAE,
+	SIGMA_AKM_SAE_EXT_KEY,
+	SIGMA_AKM_FT_SAE_EXT_KEY,
+};
+
+enum sigma_cipher_suites {
+	SIGMA_CIPHER_CCMP = 0,
+	SIGMA_CIPHER_GCMP,
+	SIGMA_CIPHER_CCMP_256,
+	SIGMA_CIPHER_GCMP_256,
+	SIGMA_CIPHER_AES_128_CMAC,
+	SIGMA_CIPHER_BIP_GMAC_128,
+	SIGMA_CIPHER_BIP_GMAC_256,
+	SIGMA_CIPHER_BIP_CMAC_256,
+};
+
 struct sigma_dut {
 	const char *main_ifname;
 	char *main_ifname_2g;
@@ -1222,6 +1243,12 @@ struct sigma_dut {
 #endif /* ANDROID_MDNS */
 	char host_name[100];
 	int sta_roaming_disabled;
+	int key_mgmt_capa; /* bitmap of enum sigma_akm_suites values */
+	int pairwise_ciphers_capa; /* bitmap of enum sigma_cipher_suites values
+				    */
+	int group_ciphers_capa; /* bitmap of enum sigma_cipher_suites values */
+	int group_mgmt_ciphers_capa; /* bitmap of enum sigma_cipher_suites
+				      * values */
 };
 
 
