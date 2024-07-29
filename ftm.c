@@ -961,17 +961,18 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 		return -1;
 	}
 
-	if (!program || strcasecmp(program, "LOCR2") != 0) {
+	if (!program || (strcasecmp(program, "LOCR2") != 0 &&
+			 strcasecmp(program, "PR") != 0)) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
-				"%s - No LOCR2 Program in Command! - Aborting",
+				"%s - No valid Program in Command! - Aborting",
 				__func__);
 		return -1;
 	}
 
 	if (!interface || strcasecmp(interface, "wlan0") != 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
-				"%s - Incomplete command in LOCR2 CAPI request",
-				__func__);
+				"%s - Incomplete command in %s CAPI request",
+				__func__, program);
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "ErrMsg,Missing wlan0 Interface Type");
 		return 0;
@@ -979,28 +980,28 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 
 	if (!dest_mac) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
-				"%s - Incomplete command in LOCR2 CAPI request",
-				__func__);
+				"%s - Incomplete command in %s CAPI request",
+				__func__, program);
 		send_resp(dut, conn, SIGMA_ERROR,
-			  "ErrMsg,Incomplete LOCR2 CAPI command - missing MAC");
+			  "ErrMsg,Incomplete CAPI command - missing MAC");
 		return 0;
 	}
 
 	if (!ftm_bw_rtt) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
-				"%s - Incomplete command in LOCR2 CAPI request",
-				__func__);
+				"%s - Incomplete command in %s CAPI request",
+				__func__, program);
 		send_resp(dut, conn, SIGMA_ERROR,
-			  "ErrMsg,Incomplete Loc CAPI command - missing Format & BW");
+			  "ErrMsg,Incomplete CAPI command - missing Format & BW");
 		return 0;
 	}
 
 	if (!ntb && !tb) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
-				"%s - Incomplete command in LOCR2 CAPI request",
-				__func__);
+				"%s - Incomplete command in %s CAPI request",
+				__func__, program);
 		send_resp(dut, conn, SIGMA_ERROR,
-			  "ErrMsg,Incomplete Loc CAPI command - missing TMR Type(NTB or TB)");
+			  "ErrMsg,Incomplete CAPI command - missing TMR Type(NTB or TB)");
 		return 0;
 	}
 
@@ -1052,7 +1053,8 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 	}
 
 	sigma_dut_print(dut, DUT_MSG_INFO,
-			"%s - Succeeded to initiate LOCR2 command", __func__);
+			"%s - Succeeded to initiate %s command", __func__,
+			program);
 	send_resp(dut, conn, SIGMA_COMPLETE, NULL);
 	return 0;
 }

@@ -195,6 +195,8 @@ enum sigma_program sigma_program_to_enum(const char *prog)
 		return PROGRAM_QM;
 	if (strcasecmp(prog, "LOCR2") == 0)
 		return PROGRAM_LOCR2;
+	if (strcasecmp(prog, "PR") == 0)
+		return PROGRAM_PR;
 	if (strcasecmp(prog, "EHT") == 0)
 		return PROGRAM_EHT;
 

@@ -1079,6 +1079,7 @@ struct sigma_dut {
 		PROGRAM_HS2_2022,
 		PROGRAM_LOCR2,
 		PROGRAM_EHT,
+		PROGRAM_PR,
 	} program;
 
 	enum device_type {
