@@ -946,6 +946,7 @@ noa_done:
 		if (strcasecmp(val, "On") == 0) {
 			/* Support Wi-Fi Direct R2 capabilities */
 			dut->p2p_r2_capable = true;
+			dut->persistent = 1;
 			sigma_dut_print(dut, DUT_MSG_INFO,
 					"Wi-Fi Direct R2 Capabilities ON");
 			snprintf(buf, sizeof(buf),
@@ -3829,6 +3830,101 @@ p2p_pasn_pairing_setup(struct sigma_dut *dut, struct sigma_conn *conn,
 
 
 static enum sigma_cmd_result
+p2p_pasn_join(struct sigma_dut *dut, struct sigma_conn *conn,
+	      struct sigma_cmd *cmd)
+{
+	const char *intf = get_param(cmd, "interface");
+	const char *mac = get_param(cmd, "MAC");
+	const char *service_name = get_param(cmd, "ServiceName");
+	const char *role = get_param(cmd, "Role");
+	const char *bstrapmethod = get_param(cmd, "PairingBootstrapMethod");
+	const char *pmk_devik_caching = get_param(cmd, "PMKDevIKCaching");
+	const char *comeback_after = get_param(cmd, "ComebackAfter");
+	const char *comeback_cookie = get_param(cmd, "ComebackCookie");
+	const char *pairing_setup = get_param(cmd, "PairingSetup");
+	const char *password = get_param(cmd, "PairingPassword");
+	char buf[256];
+	int ret;
+
+	if (!dut->p2p_r2_capable)
+		return INVALID_SEND_STATUS;
+
+	if (!mac || !service_name || !pairing_setup)
+		return INVALID_SEND_STATUS;
+
+	if (pmk_devik_caching && strcmp(pmk_devik_caching, "Enable") == 0) {
+		if (wpa_command(intf, "P2P_SET pairing_cache 1") < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set pmk_devik_caching");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	if (comeback_after && comeback_cookie) {
+		ret = snprintf(buf, sizeof(buf), "P2P_SET comeback_after %s",
+			       comeback_after);
+		if (ret < 0 || ret >= (int) sizeof(buf)) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to form a P2P_SET command");
+			return STATUS_SENT_ERROR;
+		}
+		if (wpa_command(intf, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set comeback_after");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
+	memset(&dut->p2p_connect_info, 0, sizeof(struct p2p_r2_connect_info));
+	dut->p2p_connect_info.join = true;
+
+	strlcpy(dut->p2p_connect_info.peer_mac, mac,
+		sizeof(dut->p2p_connect_info.peer_mac));
+
+	if (role && strcasecmp(role, "Responder") == 0) {
+		dut->p2p_connect_info.pairing_role = 1;
+		dut->p2p_connect_info.go_intent = 15;
+	}
+
+	if (bstrapmethod)
+		dut->p2p_connect_info.bootstrap = atoi(bstrapmethod);
+
+	if (strcasecmp(pairing_setup, "Password") == 0) {
+		if (!password) {
+			sigma_dut_print(dut, DUT_MSG_ERROR, "Password not set");
+			return INVALID_SEND_STATUS;
+		}
+		strlcpy(dut->p2p_connect_info.password, password,
+			sizeof(dut->p2p_connect_info.password));
+	} else {
+		dut->p2p_connect_info.password[0] = '\0';
+	}
+
+	if (strcasecmp(pairing_setup, "OpportunisticBS") == 0)
+		dut->p2p_connect_info.is_opportunistic_bs = true;
+
+	if (!dut->p2p_connect_info.pairing_role) {
+		if (wpa_command(intf, "NAN_FLUSH") < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,NAN_FLUSH Failed");
+			return STATUS_SENT_ERROR;
+		}
+		return p2p_pasn_initiator_connect(dut, conn, intf);
+	}
+
+	if (!dut->p2p_event_mon_thread) {
+		/* Create a separate event thread to receive bootstrap request
+		 * event */
+		pthread_create(&dut->p2p_event_mon_thread, NULL,
+			       &wpa_pairing_resp_event_recv, (void *) dut);
+	}
+
+	send_resp(dut, conn, SIGMA_COMPLETE, "NULL");
+	return STATUS_SENT;
+}
+
+
+static enum sigma_cmd_result
 p2p_pasn_pairing_verification(struct sigma_dut *dut, struct sigma_conn *conn,
 			      struct sigma_cmd *cmd)
 {
@@ -3979,6 +4075,8 @@ enum sigma_cmd_result p2p_cmd_sta_exec_action(struct sigma_dut *dut,
 		ret = p2p_pasn_pairing_setup(dut, conn, cmd);
 	} else if (strcasecmp(method_type, "PairingVerification") == 0) {
 		ret = p2p_pasn_pairing_verification(dut, conn, cmd);
+	} else if (strcasecmp(method_type, "PASNConnectGO") == 0) {
+		ret = p2p_pasn_join(dut, conn, cmd);
 	} else {
 		sigma_dut_print(dut, DUT_MSG_INFO, "P2P unsupported method: %s",
 				method_type);
