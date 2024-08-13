@@ -136,6 +136,10 @@ int wpa_ctrl_command(const char *path, const char *ifname, const char *cmd)
 		printf("wpa_command: Command failed (FAIL received)\n");
 		return -1;
 	}
+	if (strncmp(buf, "UNKNOWN COMMAND", 15) == 0) {
+		printf("wpa_command: Command failed (unknown command)\n");
+		return 1;
+	}
 	return 0;
 }
 
