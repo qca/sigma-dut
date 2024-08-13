@@ -777,7 +777,13 @@ static enum sigma_cmd_result cmd_sta_set_p2p(struct sigma_dut *dut,
 			snprintf(buf, sizeof(buf), "P2P_SET noa %d,%d,%d",
 				dut->noa_count, start,
 				dut->noa_duration);
-			if (wpa_command(ifname, buf) < 0) {
+			if (wpa_command(ifname, buf) == 0)
+				goto noa_done;
+
+			snprintf(buf, sizeof(buf), "P2P_SET_NOA %d %d %d %d",
+				 dut->noa_count, start, dut->noa_duration,
+				 dut->noa_interval);
+			if (wcn_driver_cmd(intf, buf) < 0) {
 				send_resp(dut, conn, SIGMA_ERROR,
 					  "errorCode,Use of NoA as GO not supported");
 				return 0;
@@ -2057,10 +2063,12 @@ cmd_sta_set_opportunistic_ps(struct sigma_dut *dut, struct sigma_conn *conn,
 			     struct sigma_cmd *cmd)
 {
 	/* const char *intf = get_param(cmd, "Interface"); */
+	const char *intf = get_p2p_ifname(dut, get_param(cmd, "Interface"));
 	struct wfa_cs_p2p_group *grp;
 	char buf[100];
 	const char *grpid = get_param(cmd, "GroupID");
 	const char *ctwindow = get_param(cmd, "CTWindow");
+	int ret;
 
 	if (grpid == NULL || ctwindow == NULL)
 		return -1;
@@ -2074,9 +2082,15 @@ cmd_sta_set_opportunistic_ps(struct sigma_dut *dut, struct sigma_conn *conn,
 
 	snprintf(buf, sizeof(buf), "P2P_SET ctwindow %d", atoi(ctwindow));
 	if (wpa_command(grp->ifname, buf) < 0) {
-		send_resp(dut, conn, SIGMA_ERROR,
-			  "errorCode,Use of CTWindow as GO not supported");
-		return 0;
+		ret = snprintf(buf, sizeof(buf), "P2P_SET_PS %d %d %d",
+			       -1, 1, atoi(ctwindow));
+		if (ret < 0 || ret >= (int) sizeof(buf) ||
+		    wcn_driver_cmd(intf, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Use of CTWindow and opps_PS as GO not supported");
+			return STATUS_SENT_ERROR;
+		}
+		return SUCCESS_SEND_STATUS;
 	}
 
 	if (wpa_command(grp->ifname, "P2P_SET oppps 1") < 0) {
