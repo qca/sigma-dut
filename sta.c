@@ -6922,6 +6922,13 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 			sta_set_phymode(dut, intf, val);
 		}
 
+		/* Change the mode in case of WCN driver and testbed for WPA3
+		 * program. */
+		if (get_driver_type(dut) == DRIVER_WCN &&
+		    dut->device_type == STA_testbed &&
+		    dut->program == PROGRAM_WPA3)
+			sta_set_phymode(dut, intf, val);
+
 		/* Change the driver phymode to 11AX for QM program if
 		 * requested */
 		if (dut->program == PROGRAM_QM &&
@@ -10097,11 +10104,14 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 	int ret;
 #endif /* NL80211_SUPPORT */
 
+	/* reset phymode to auto */
 	if (dut->program == PROGRAM_HE || dut->program == PROGRAM_EHT ||
-	    dut->device_mode == MODE_11BE || dut->program == PROGRAM_QM) {
-		/* resetting phymode to auto in case of HE program */
+	    dut->device_mode == MODE_11BE || dut->program == PROGRAM_QM ||
+	    dut->program == PROGRAM_WPA3)
 		sta_set_phymode(dut, intf, "auto");
 
+	if (dut->program == PROGRAM_HE || dut->program == PROGRAM_EHT ||
+	    dut->device_mode == MODE_11BE || dut->program == PROGRAM_QM) {
 		/* reset the rate to Auto rate */
 		if (wcn_set_he_tx_rate(dut, intf, 0x0FFF, 2)) {
 			/* 0xFFF value for setting MCS 0-12 */
