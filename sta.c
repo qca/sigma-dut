@@ -13093,6 +13093,14 @@ sta_set_wireless_wpa3(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 	}
 
+	val = get_param(cmd, "MRSNO");
+	if (val && strcasecmp(val, "Disable") == 0 &&
+	    wpa_command(intf, "SET rsn_overriding 0") < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Failed to disable RSN overriding");
+		return STATUS_SENT_ERROR;
+	}
+
 	if (dut->device_mode == MODE_11BE)
 		return cmd_sta_set_wireless_eht(dut, conn, cmd);
 
