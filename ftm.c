@@ -748,8 +748,7 @@ int lowi_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 }
 
 
-static int loc_r2_set_11az_config(struct sigma_dut *dut, const char *dst_mac,
-				  struct capi_loc_cmd *loc_cmd)
+int loc_pr_set_11az_config(struct sigma_dut *dut)
 {
 	FILE *xml;
 
@@ -775,12 +774,13 @@ static int loc_r2_set_11az_config(struct sigma_dut *dut, const char *dst_mac,
 }
 
 
-static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
+static int loc_pr_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 				 struct capi_loc_cmd *loc_cmd)
 {
 	FILE *xml;
 	unsigned int bw, preamble;
-	unsigned int tmrtype = 0;
+	unsigned int tmrtype = 0, mintime = 2500, maxtime = 300;
+	unsigned int ftm_per_burst_frame = 25;
 	unsigned int is_rtt_bg_node = 0;
 
 	xml = fopen(LOC_XML_FILE_PATH, "w");
@@ -826,7 +826,6 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 		return -1;
 	}
 
-#define LOC_R2_CAPI_DEFAULT_FTMS_PER_BURST 25
 #define LOC_R2_CAPI_DEFAULT_BURST_DUR 10
 
 	if (loc_cmd->ntb) {
@@ -835,12 +834,18 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 		tmrtype = 2;
 		is_rtt_bg_node = 1;
 	}
+
+	if (dut->program == PROGRAM_PR) {
+		mintime = 2000;
+		maxtime = 500;
+		ftm_per_burst_frame = 8;
+	}
+
 	fprintf(xml, "<body>\n");
 	fprintf(xml, "  <ranging>\n");
 	fprintf(xml, "    <ap>\n");
 	fprintf(xml, "    <rttType>3</rttType>\n");
-	fprintf(xml, "    <numFrames>%u</numFrames>\n",
-		LOC_R2_CAPI_DEFAULT_FTMS_PER_BURST);
+	fprintf(xml, "    <numFrames>%u</numFrames>\n", ftm_per_burst_frame);
 	fprintf(xml, "    <bw>%u</bw>\n", bw);
 	fprintf(xml, "    <preamble>%u</preamble>\n", preamble);
 	fprintf(xml, "    <phymode>-1</phymode>\n");
@@ -852,9 +857,9 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 	fprintf(xml, "    <ptsftimer>%u</ptsftimer>\n", 0);
 	fprintf(xml, "    <frequency>%u</frequency>\n", loc_cmd->freq);
 	fprintf(xml, "    <tmrtype>%u</tmrtype>\n", tmrtype);
-	fprintf(xml, "    <sectype>%u</sectype>\n", 1);
-	fprintf(xml, "    <tmrMinDelta>%u</tmrMinDelta>\n", 2500);
-	fprintf(xml, "    <tmrMaxDelta>%u</tmrMaxDelta>\n", 300);
+	fprintf(xml, "    <sectype>%u</sectype>\n", dut->sectype);
+	fprintf(xml, "    <tmrMinDelta>%u</tmrMinDelta>\n", mintime);
+	fprintf(xml, "    <tmrMaxDelta>%u</tmrMaxDelta>\n", maxtime);
 	fprintf(xml, "    <I2RFbPolicy>%u</I2RFbPolicy>\n", dut->i2rlmr_iftmr);
 	fprintf(xml, "    <isRttBgNode>%u</isRttBgNode>\n", is_rtt_bg_node);
 	fprintf(xml, "    <tbPeriodicity>%u</tbPeriodicity>\n", 4);
@@ -877,7 +882,7 @@ static int loc_r2_write_xml_file(struct sigma_dut *dut, const char *dst_mac,
 }
 
 
-static int loc_r2_get_bss_frequency(struct sigma_dut *dut,
+static int loc_pr_get_bss_frequency(struct sigma_dut *dut,
 				    struct sigma_conn *conn,
 				    struct sigma_cmd *cmd)
 {
@@ -940,8 +945,8 @@ static int loc_r2_get_bss_frequency(struct sigma_dut *dut,
 }
 
 
-int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
-			       struct sigma_cmd *cmd)
+static int loc_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
+			   struct sigma_cmd *cmd)
 {
 	const char *params = NULL;
 	const char *program = get_param(cmd, "prog");
@@ -951,7 +956,13 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *ntb = get_param(cmd, "NTB");
 	const char *tb = get_param(cmd, "TB");
 	const char *ftm_bw_rtt = get_param(cmd, "FormatBWRanging");
+	const char *secure_ltf = get_param(cmd, "secureltf");
+	const char *pasn = get_param(cmd, "pasn");
+	const char *protaction_11az = get_param(cmd, "wpa2_11az");
 	struct capi_loc_cmd loc_cmd;
+
+	if (!program)
+		program = get_param(cmd, "program");
 
 	memset(&loc_cmd, 0, sizeof(loc_cmd));
 
@@ -1015,15 +1026,26 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 				__func__, loc_cmd.tb);
 	}
 
+	if (secure_ltf && strcasecmp(secure_ltf, "Enable") == 0)
+		dut->sectype = SEC_PHY;
+	else if (pasn && (strcasecmp(pasn, "disabled") == 0 ||
+			  strcasecmp(pasn, "forceDisabled") == 0))
+		dut->sectype = SEC_OPEN;
+	else if (protaction_11az &&
+		 strcasecmp(protaction_11az, "unprotected") == 0)
+		dut->sectype = SEC_OPEN;
+	else
+		dut->sectype = SEC_MAC;
+
 	sscanf(ftm_bw_rtt, "%u", &loc_cmd.ftm_bw_rtt);
 	sigma_dut_print(dut, DUT_MSG_INFO, "%s - ftmbw: %u",
 			__func__, loc_cmd.ftm_bw_rtt);
 
-	loc_cmd.freq = loc_r2_get_bss_frequency(dut, conn, cmd);
+	loc_cmd.freq = loc_pr_get_bss_frequency(dut, conn, cmd);
 	sigma_dut_print(dut, DUT_MSG_INFO, "%s - freq: %u",
 			__func__, loc_cmd.freq);
 
-	if (loc_r2_write_xml_file(dut, dest_mac, &loc_cmd) < 0) {
+	if (loc_pr_write_xml_file(dut, dest_mac, &loc_cmd) < 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s - Failed to write to XML file because of bad command",
 				__func__);
@@ -1032,7 +1054,7 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 		return 0;
 	}
 
-	if (loc_r2_set_11az_config(dut, dest_mac, &loc_cmd) < 0) {
+	if (loc_pr_set_11az_config(dut) < 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s - Failed to set 11az config command",
 				__func__);
@@ -1057,4 +1079,18 @@ int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
 			program);
 	send_resp(dut, conn, SIGMA_COMPLETE, NULL);
 	return 0;
+}
+
+
+int loc_r2_cmd_sta_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
+			       struct sigma_cmd *cmd)
+{
+	return loc_exec_action(dut, conn, cmd);
+}
+
+
+int loc_pr_cmd_dev_exec_action(struct sigma_dut *dut, struct sigma_conn *conn,
+			       struct sigma_cmd *cmd)
+{
+	return loc_exec_action(dut, conn, cmd);
 }
