@@ -7683,6 +7683,61 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 	}
 #endif /* NL80211_SUPPORT */
 
+	val = get_param(cmd, "Eapol_KDE_Rand");
+	if (val && strcasecmp(val, "1") == 0) {
+		char buf[1500];
+		uint8_t kdes[700], *pos, len;
+
+		pos = kdes;
+
+		/* KDE1 with random OUI and random length */
+		if (random_get_bytes((char *) &len, sizeof(len)) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to get random length for KDE1");
+			return ERROR_SEND_STATUS;
+		}
+		*pos++ = 0xdd;
+		*pos++ = len;
+		if (random_get_bytes((char *) pos, len) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to get random data for KDE1");
+			return ERROR_SEND_STATUS;
+		}
+		pos += len;
+
+		/* KDE2 with random OUI and 255 length */
+		*pos++ = 0xdd;
+		*pos++ = 255;
+		if (random_get_bytes((char *) pos, 255) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to get random data for KDE2");
+			return ERROR_SEND_STATUS;
+		}
+		pos += 255;
+
+		/* KDE3 with reserved RSN OUI type and some fixed length */
+		*pos++ = 0xdd;
+		*pos++ = 20;
+		WPA_PUT_BE32(pos, 0x000facf0);
+		pos += 4;
+		if (random_get_bytes((char *) pos, 16) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to get random data for KDE3");
+			return ERROR_SEND_STATUS;
+		}
+		pos += 16;
+
+		len = snprintf(buf, sizeof(buf), "TEST_EAPOL_M2_ELEMS ");
+		snprintf_hex(buf + len, sizeof(buf) - len, kdes, pos - kdes,
+			     false);
+
+		if (wpa_command(intf, buf) != 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				"ErrorCode,Failed to enable random KDEs for EAPOL 2/4");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
 	return 1;
 }
 
