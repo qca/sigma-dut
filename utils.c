@@ -454,6 +454,31 @@ void hex_dump(struct sigma_dut *dut, u8 *data, size_t len)
 }
 
 
+int snprintf_hex(char *buf, size_t buf_size, const uint8_t *data,
+		size_t len, bool uppercase)
+{
+	size_t i;
+	char *pos = buf, *end = buf + buf_size;
+	int ret;
+
+	if (buf_size == 0)
+		return 0;
+
+	for (i = 0; i < len; i++) {
+		ret = snprintf(pos, end - pos, uppercase ? "%02X" : "%02x",
+			       data[i]);
+		if (snprintf_error(end - pos, ret)) {
+			end[-1] = '\0';
+			return pos - buf;
+		}
+		pos += ret;
+	}
+
+	end[-1] = '\0';
+	return pos - buf;
+}
+
+
 #ifdef NL80211_SUPPORT
 
 void * nl80211_cmd(struct sigma_dut *dut, struct nl80211_ctx *ctx,
