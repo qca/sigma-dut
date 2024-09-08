@@ -7748,6 +7748,61 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 	}
 
+	val = get_param(cmd, "RSNXE_Rand");
+	if (val) {
+		char buf[1000], data_str[400], mask_str[400];
+		uint8_t data[150], mask[150], len;
+		int byte_offset, bit_offset = atoi(val);
+
+		/* Check if bit offset in valid range of Extended RSN
+		 * Capabilities field data */
+		byte_offset = bit_offset / 8;
+		if (bit_offset < 4 || byte_offset > 15)
+			return INVALID_SEND_STATUS;
+
+		/* Get random length which can fit 16 bytes of Extended RSN
+		 * Capabilities field and additional random number of bytes
+		 * between 8 to 128. */
+		if (random_get_bytes((char *) &len, sizeof(len)) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to get random length for RSNXE");
+			return ERROR_SEND_STATUS;
+		}
+		len = 16 + 8 + len % 121;
+
+		/* Clear mask till specified bit offset to preserve STA's
+		 * Extended RSN Capabilities field data in normal operation. */
+		memset(mask, 0, byte_offset + 1);
+		mask[byte_offset] |= 0xFF << (bit_offset % 8);
+
+		/* Enable mask for Extended RSN Capabilities length field */
+		mask[0] |= 0xF;
+
+		/* Enable mask for remaining data to set random data */
+		memset(&mask[byte_offset + 1], 0xFF, len - byte_offset - 1);
+
+		/* Generate random data for RSNXE */
+		if (random_get_bytes((char *) data, len) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to get random data for RSNXE");
+			return ERROR_SEND_STATUS;
+		}
+
+		/* Set Extended RSN Capabilities field length to 16 */
+		data[0] |= 0xF;
+
+		snprintf_hex(data_str, sizeof(data_str), data, len, false);
+		snprintf_hex(mask_str, sizeof(mask_str), mask, len, false);
+
+		snprintf(buf, sizeof(buf), "TEST_RSNXE_DATA %s %s", data_str,
+			 mask_str);
+		if (wpa_command(intf, buf) != 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				"ErrorCode,Failed to set random RSNXE data");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
 	return 1;
 }
 
