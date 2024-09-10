@@ -7683,6 +7683,16 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 	}
 #endif /* NL80211_SUPPORT */
 
+	val = get_param(cmd, "Eapol_Reserved");
+	if (val && strcasecmp(val, "1") == 0) {
+		if (wpa_command(intf,
+				"SET eapol_2_key_info_set_mask c000") != 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				"ErrorCode,Failed to enable reserved bits in EAPOL-Key msg 2/4");
+			return STATUS_SENT_ERROR;
+		}
+	}
+
 	val = get_param(cmd, "Eapol_KDE_Rand");
 	if (val && strcasecmp(val, "1") == 0) {
 		char buf[1500];
