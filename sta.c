@@ -7110,6 +7110,18 @@ static void sta_set_phymode(struct sigma_dut *dut, const char *intf,
 }
 
 
+#ifdef NL80211_SUPPORT
+static int wcn_sta_set_rsne_random_pmkid_cnt(struct sigma_dut *dut,
+					     const char *intf, uint8_t cnt)
+{
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_RSNE_ADD_RANDOM_PMKIDS,
+		cnt);
+}
+#endif /* NL80211_SUPPORT */
+
+
 static enum sigma_cmd_result
 cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 			      struct sigma_cmd *cmd)
@@ -7644,6 +7656,32 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 			return STATUS_SENT_ERROR;
 		}
 	}
+
+#ifdef NL80211_SUPPORT
+	val = get_param(cmd, "PMKID_Rand");
+	if (val && strcasecmp(val, "1") == 0 &&
+	    get_driver_type(dut) == DRIVER_WCN) {
+		uint8_t cnt;
+
+		if (random_get_bytes((char *) &cnt, sizeof(cnt)) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to get random number for PMKID count");
+			return ERROR_SEND_STATUS;
+		}
+
+		/* Enable including 9-11 randomized PMKIDs in RSNE of the
+		 * (Re)Association request frames */
+		cnt = 9 + cnt % 3;
+
+		if (wcn_sta_set_rsne_random_pmkid_cnt(dut, intf, cnt) < 0) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to configure random PMKID count");
+			return ERROR_SEND_STATUS;
+		}
+
+		dut->config_random_pmkid = 1;
+	}
+#endif /* NL80211_SUPPORT */
 
 	return 1;
 }
@@ -11130,6 +11168,12 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	    dut->config_rsnie == 1) {
 		dut->config_rsnie = 0;
 		sta_config_params(dut, intf, STA_SET_RSNIE, 0);
+	}
+
+	if (get_driver_type(dut) == DRIVER_WCN &&
+	    dut->config_random_pmkid == 1) {
+		wcn_sta_set_rsne_random_pmkid_cnt(dut, intf, 0);
+		dut->config_random_pmkid = 0;
 	}
 #endif /* NL80211_SUPPORT */
 
