@@ -2282,6 +2282,8 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 			   strcasecmp(val, "Disable") == 0 ||
 			   strcasecmp(val, "Forced_Disabled") == 0) {
 			dut->sta_pmf = STA_PMF_DISABLED;
+			dut->beacon_prot = 0;
+			dut->ocvc = 0;
 			if (set_network(ifname, id, "ieee80211w", "0") < 0)
 				return -2;
 		} else {
