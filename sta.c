@@ -195,6 +195,8 @@ struct wil_wmi_p2p_cfg_cmd {
 } __attribute__((packed));
 #endif /* __linux__ */
 
+static int get_key_mgmt_capa(struct sigma_dut *dut);
+
 #ifdef ANDROID
 
 static int add_ipv6_rule(struct sigma_dut *dut, const char *ifname);
@@ -2820,12 +2822,37 @@ static int set_eap_common(struct sigma_dut *dut, struct sigma_conn *conn,
 		}
 
 		erp = 1;
-	} else if (!akm && dut->sta_pmf == STA_PMF_OPTIONAL) {
-		if (set_network(ifname, id, "key_mgmt",
-				"WPA-EAP WPA-EAP-SHA256") < 0)
-			return -2;
 	} else if (!akm) {
-		if (set_network(ifname, id, "key_mgmt", "WPA-EAP") < 0)
+		strlcpy(buf, "WPA-EAP", sizeof(buf));
+
+		if (dut->sta_pmf == STA_PMF_OPTIONAL)
+			strlcat(buf, " WPA-EAP-SHA256", sizeof(buf));
+
+		if (!val && dut->program == PROGRAM_WPA3 &&
+		    get_key_mgmt_capa(dut) == 0) {
+			if (dut->key_mgmt_capa & BIT(SIGMA_AKM_FT_802_1X))
+				strlcat(buf, " FT-EAP", sizeof(buf));
+			if (dut->key_mgmt_capa &
+			    BIT(SIGMA_AKM_FT_802_1X_SHA384))
+				strlcat(buf, " FT-EAP-SHA384", sizeof(buf));
+			if (dut->key_mgmt_capa & BIT(SIGMA_AKM_SUITE_B))
+				strlcat(buf, " WPA-EAP-SUITE-B", sizeof(buf));
+			if (dut->key_mgmt_capa & BIT(SIGMA_AKM_SUITE_B_192))
+				strlcat(buf, " WPA-EAP-SUITE-B-192",
+					sizeof(buf));
+			if (dut->key_mgmt_capa & BIT(SIGMA_AKM_FILS_SHA256))
+				strlcat(buf, " FILS-SHA256", sizeof(buf));
+			if (dut->key_mgmt_capa & BIT(SIGMA_AKM_FILS_SHA384))
+				strlcat(buf, " FILS-SHA384", sizeof(buf));
+			if (dut->key_mgmt_capa &
+			    BIT(SIGMA_AKM_FT_FILS_SHA256))
+				strlcat(buf, " FT-FILS-SHA256", sizeof(buf));
+			if (dut->key_mgmt_capa &
+			    BIT(SIGMA_AKM_FT_FILS_SHA384))
+				strlcat(buf, " FT-FILS-SHA384", sizeof(buf));
+		}
+
+		if (set_network(ifname, id, "key_mgmt", buf) < 0)
 			return -2;
 	}
 
@@ -3453,6 +3480,22 @@ static int get_key_mgmt_capa(struct sigma_dut *dut)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_SAE_EXT_KEY);
 		if (strcmp(res, "FT-SAE-EXT-KEY"))
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_SAE_EXT_KEY);
+		if (strcmp(res, "FT-EAP"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_802_1X);
+		if (strcmp(res, "FT-EAP-SHA384"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_802_1X_SHA384);
+		if (strcmp(res, "WPA-EAP-SUITE-B"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_SUITE_B);
+		if (strcmp(res, "WPA-EAP-SUITE-B-192"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_SUITE_B_192);
+		if (strcmp(res, "FILS-SHA256"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FILS_SHA256);
+		if (strcmp(res, "FILS-SHA384"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FILS_SHA384);
+		if (strcmp(res, "FT-FILS-SHA256"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_FILS_SHA256);
+		if (strcmp(res, "FT-FILS-SHA384"))
+			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_FILS_SHA384);
 
 		res = strtok_r(NULL, " ", &saveptr);
 	}
