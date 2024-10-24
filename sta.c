@@ -7749,6 +7749,7 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 					"Failed to get random length for KDE1");
 			return ERROR_SEND_STATUS;
 		}
+		len = 4 + len % 252;
 		*pos++ = 0xdd;
 		*pos++ = len;
 		if (random_get_bytes((char *) pos, len) < 0) {
