@@ -1022,12 +1022,20 @@ cmd_sta_start_autonomous_go(struct sigma_dut *dut, struct sigma_conn *conn,
 		return -2;
 	}
 
-	if (dut->p2p_r2_capable)
-		snprintf(buf, sizeof(buf), "P2P_GROUP_ADD %sfreq=%d he p2p2",
-			 dut->persistent ? "persistent " : "", freq);
-	else
+	if (dut->p2p_r2_capable) {
+		const char *type = get_param(cmd, "type");
+		int p2p_mode = 0;
+
+		if (type && strcasecmp(type, "PCC") == 0)
+			p2p_mode = 2;
+
+		snprintf(buf, sizeof(buf),
+			 "P2P_GROUP_ADD %sfreq=%d p2pmode=%d he p2p2",
+			 dut->persistent ? "persistent " : "", freq, p2p_mode);
+	} else {
 		snprintf(buf, sizeof(buf), "P2P_GROUP_ADD %sfreq=%d",
 			 dut->persistent ? "persistent " : "", freq);
+	}
 
 	if (wpa_command(intf, buf) < 0) {
 		wpa_ctrl_detach(ctrl);
