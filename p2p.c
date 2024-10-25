@@ -2017,6 +2017,10 @@ static enum sigma_cmd_result cmd_sta_p2p_reset(struct sigma_dut *dut,
 					       struct sigma_cmd *cmd)
 {
 	dut->program = PROGRAM_P2P;
+
+	if (get_param(cmd, "Runtime_ID"))
+		dev_start_test_log(dut, conn, cmd);
+
 	return sta_p2p_reset_default(dut, conn, cmd);
 }
 
