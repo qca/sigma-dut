@@ -1472,6 +1472,8 @@ void stop_dscp_policy_mon_thread(struct sigma_dut *dut);
 void free_dscp_policy_table(struct sigma_dut *dut);
 int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 		    struct sigma_cmd *cmd);
+int start_dhcp_client(struct sigma_dut *dut, const char *ifname);
+void kill_dhcp_client(struct sigma_dut *dut, const char *ifname);
 
 /* p2p.c */
 void p2p_register_cmds(void);

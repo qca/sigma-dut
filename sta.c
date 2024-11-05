@@ -1270,7 +1270,7 @@ static enum sigma_cmd_result cmd_sta_get_ip_config(struct sigma_dut *dut,
 }
 
 
-static void kill_dhcp_client(struct sigma_dut *dut, const char *ifname)
+void kill_dhcp_client(struct sigma_dut *dut, const char *ifname)
 {
 #ifdef __linux__
 	char buf[200];
@@ -1344,7 +1344,7 @@ static int get_dhcp_client_path(const char *name, char *buf, size_t buf_size)
 }
 
 
-static int start_dhcp_client(struct sigma_dut *dut, const char *ifname)
+int start_dhcp_client(struct sigma_dut *dut, const char *ifname)
 {
 #ifdef __linux__
 	char fpath[128];

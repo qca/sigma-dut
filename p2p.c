@@ -1290,27 +1290,125 @@ cmd_sta_start_autonomous_go(struct sigma_dut *dut, struct sigma_conn *conn,
 }
 
 
+static enum sigma_cmd_result sta_p2p_client_connect(struct sigma_dut *dut,
+						    struct sigma_conn *conn,
+						    struct sigma_cmd *cmd)
+{
+	int i, ret = 0;
+	const char *ssid;
+	char buf[256], *pos, *end;
+	struct wpa_ctrl *ctrl = NULL;
+	const char *intf = get_p2p_ifname(dut, get_param(cmd, "Interface"));
+	const char *grpid = get_param(cmd, "GroupID");
+	const char *mac = get_param(cmd, "P2PDevID");
+	const char *password = get_param(cmd, "Passphrase");
+	char ssid_hex[100];
+
+	if (!intf || !grpid || !mac) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+			  "Interface or groupID or peermac unknown");
+		return INVALID_SEND_STATUS;
+	}
+
+	ssid = strstr(grpid, " ");
+	if (!ssid || strlen(ssid) * 2 >= sizeof(ssid_hex)) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,SSID not found");
+		return STATUS_SENT_ERROR;
+	}
+	ssid++;
+
+	memset(buf, 0, sizeof(buf));
+	pos = buf;
+	end = buf + sizeof(buf);
+
+	pos += snprintf(pos, end - pos, "P2P_CONNECT %s pair he skip_prov join",
+			mac);
+
+	for (i = 0; i < strlen(ssid); i++) {
+		ret = snprintf(ssid_hex + i * 2, sizeof(ssid_hex) - i * 2,
+			       "%02x", ssid[i]);
+		if (ret < 0 || ret >= sizeof(ssid_hex) - i * 2)
+			return ERROR_SEND_STATUS;
+	}
+
+	ssid_hex[strlen(ssid) * 2] = '\0';
+
+	pos += snprintf(pos, end - pos, " ssid=%s", ssid_hex);
+
+	if (dut->p2p_r2_capable)
+		pos += snprintf(pos, end - pos, " p2p2");
+
+	if (password)
+		pos += snprintf(pos, end - pos, " password=%s", password);
+
+	ctrl = open_wpa_mon(intf);
+	if (!ctrl)
+		return ERROR_SEND_STATUS;
+
+	if (wpa_command(intf, buf) < 0) {
+		sigma_dut_print(dut, DUT_MSG_INFO, "Failed to connect");
+		wpa_ctrl_detach(ctrl);
+		wpa_ctrl_close(ctrl);
+		return ERROR_SEND_STATUS;
+	}
+
+	ret = get_wpa_cli_event(dut, ctrl, "P2P-GROUP-STARTED",
+				buf, sizeof(buf));
+
+	wpa_ctrl_detach(ctrl);
+	wpa_ctrl_close(ctrl);
+
+	if (ret < 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "Result,Association did not complete");
+		return STATUS_SENT_ERROR;
+	}
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Connection event: %s", buf);
+	if (!dut->p2p_r2_capable) {
+		/*
+		 * Interface MAC address will be changed by
+		 * wpa_supplicant before connection attempt when
+		 * client privacy enabled. Restart DHCP client
+		 * to make sure DHCP frames use the correct
+		 * source MAC address.
+		 */
+		kill_dhcp_client(dut, intf);
+		if (start_dhcp_client(dut, intf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "Result,DHCP client start failed");
+			return STATUS_SENT_ERROR;
+		}
+	}
+	send_resp(dut, conn, SIGMA_COMPLETE,
+		  "Result,Connection success");
+	return STATUS_SENT;
+}
+
+
 static enum sigma_cmd_result cmd_sta_p2p_connect(struct sigma_dut *dut,
 						 struct sigma_conn *conn,
 						 struct sigma_cmd *cmd)
 {
 	const char *intf = get_p2p_ifname(dut, get_param(cmd, "Interface"));
 	const char *devid = get_param(cmd, "P2PDevID");
-	/* const char *grpid_param = get_param(cmd, "GroupID"); */
+	const char *grpid_param = get_param(cmd, "GroupID");
 	int res;
 	char buf[256];
 	struct wpa_ctrl *ctrl;
 	char *ifname, *gtype, *pos, *ssid, bssid[20];
 	char grpid[100];
 
-	/* TODO: handle the new grpid argument */
-
 	if (devid == NULL)
 		return -1;
 
 	if (dut->wps_method == WFA_CS_WPS_NOT_READY) {
-		send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,WPS parameters "
-			  "not yet set");
+		/* P2P Client Infrastructure BSS connection */
+		if (grpid_param)
+			return sta_p2p_client_connect(dut, conn, cmd);
+
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,WPS parameters not yet set");
 		return 0;
 	}
 
