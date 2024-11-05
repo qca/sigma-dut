@@ -794,6 +794,11 @@ static void determine_sigma_p2p_ifname(struct sigma_dut *dut)
 
 	snprintf(buf, sizeof(buf), "p2p-dev-%s", get_station_ifname(dut));
 	ctrl = open_wpa_mon(buf);
+	if (!ctrl) {
+		snprintf(buf, sizeof(buf), "p2p0");
+		ctrl = open_wpa_mon(buf);
+	}
+
 	if (ctrl) {
 		wpa_ctrl_detach(ctrl);
 		wpa_ctrl_close(ctrl);
