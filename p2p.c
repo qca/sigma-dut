@@ -123,9 +123,16 @@ void start_dhcp(struct sigma_dut *dut, const char *group_ifname, int go)
 		snprintf(buf, sizeof(buf), "ifconfig %s %s", group_ifname,
 			 GO_IP_ADDR);
 		run_system(dut, buf);
+#ifdef ANDROID
 		snprintf(buf, sizeof(buf),
 			 "/system/bin/dnsmasq -x /data/dnsmasq.pid --no-resolv --no-poll --dhcp-range=%s,%s,1h",
 			 START_IP_RANGE, END_IP_RANGE);
+#else /* ANDROID */
+		run_system(dut, "killall dnsmasq");
+		snprintf(buf, sizeof(buf),
+			 "dnsmasq --no-resolv --no-poll --port=5353 --dhcp-range=%s,%s,1h",
+			 START_IP_RANGE, END_IP_RANGE);
+#endif /* ANDROID */
 	} else {
 #ifdef ANDROID
 		if (access("/system/bin/dhcpcd", F_OK) != -1) {
