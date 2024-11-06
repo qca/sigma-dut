@@ -1512,6 +1512,14 @@ static void enable_sta_ipv6_configuration(struct sigma_dut *dut,
 {
 #if defined(ANDROID)
 	snprintf(buf, buf_size,
+		 "sysctl net.ipv6.conf.%s.disable_ipv6=1",
+		 ifname);
+	sigma_dut_print(dut, DUT_MSG_DEBUG, "Run: %s", buf);
+	if (system(buf) != 0) {
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Failed to disable IPv6 address");
+	}
+	snprintf(buf, buf_size,
 		 "sysctl net.ipv6.conf.%s.disable_ipv6=0",
 		 ifname);
 	sigma_dut_print(dut, DUT_MSG_DEBUG, "Run: %s", buf);
