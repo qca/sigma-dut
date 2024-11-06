@@ -16704,10 +16704,25 @@ cmd_sta_send_frame_p2p_cur(struct sigma_dut *dut, struct sigma_conn *conn,
 			   const char *intf, struct sigma_cmd *cmd)
 {
 	const char *val;
+	const char *ifname;
 
 	val = get_param(cmd, "UsageMode");
-	if (val && atoi(val) == 4)
-		return sta_chan_switch_request(dut, conn, intf, cmd);
+	if (val) {
+		if (atoi(val) == 4)
+			return sta_chan_switch_request(dut, conn, intf, cmd);
+
+		if (atoi(val) == 3) {
+			ifname = get_p2p_group_ifname(dut, intf);
+			if (run_iwpriv(dut, ifname,
+				       "setUnitTestCmd 77 2 4 0x0016") < 0) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,Failed to run iwpriv");
+				return STATUS_SENT_ERROR;
+			}
+
+			return SUCCESS_SEND_STATUS;
+		}
+	}
 
 	return INVALID_SEND_STATUS;
 }
