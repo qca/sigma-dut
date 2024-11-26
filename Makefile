@@ -85,7 +85,9 @@ LIBS += -ldl
 endif
 
 ifdef NL80211_SUPPORT
-CFLAGS += -DNL80211_SUPPORT -I /usr/include/libnl3
+PKG_CONFIG ?= pkg-config
+CFLAGS += -DNL80211_SUPPORT
+CFLAGS += $(shell $(PKG_CONFIG) --cflags libnl-3.0)
 LIBS += -lnl-3 -lnl-genl-3
 endif
 
