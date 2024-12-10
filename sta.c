@@ -12138,6 +12138,8 @@ int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 	int bcast_twt = 0;
 	int bcast_twt_id = 0, bcast_twt_recommdn = 0, bcast_twt_persis = 0;
 	int responder_pm = 0;
+	int rtwt_ul_bitmap = 0, rtwt_dl_bitmap = 0,
+		rtwt_ul_bitmap_val = 0, rtwt_dl_bitmap_val = 0;
 
 	if (dut->is_p2p_twt_power_mgmt_enabled && !cmd) {
 		ifindex = dut->twt_param.ifindex;
@@ -12270,6 +12272,17 @@ int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 				bcast_twt_id, bcast_twt_recommdn,
 				bcast_twt_persis);
 
+	val = get_param(cmd, "RTWT_DLTIDBitmapValue");
+	if (val) {
+		rtwt_dl_bitmap_val = atoi(val);
+		rtwt_dl_bitmap = 1;
+	}
+	val = get_param(cmd, "RTWT_ULTIDBitmapValue");
+	if (val) {
+		rtwt_ul_bitmap_val = atoi(val);
+		rtwt_ul_bitmap = 1;
+	}
+
 send_command:
 	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
 				    NL80211_CMD_VENDOR)) ||
@@ -12299,6 +12312,14 @@ send_command:
 	    (bcast_twt &&
 	     nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_TWT_SETUP_BCAST_PERSISTENCE,
 			bcast_twt_persis)) ||
+	    (rtwt_dl_bitmap &&
+	     nla_put_u32(msg,
+			 QCA_WLAN_VENDOR_ATTR_TWT_SETUP_RTWT_DOWNLINK_TID_BITMAP,
+			 rtwt_dl_bitmap_val)) ||
+	    (rtwt_ul_bitmap &&
+	     nla_put_u32(msg,
+			 QCA_WLAN_VENDOR_ATTR_TWT_SETUP_RTWT_UPLINK_TID_BITMAP,
+			 rtwt_ul_bitmap_val)) ||
 	    (bcast_twt &&
 	     nla_put_u8(msg,
 			QCA_WLAN_VENDOR_ATTR_TWT_SETUP_BCAST_RECOMMENDATION,
