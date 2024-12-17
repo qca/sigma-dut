@@ -3378,16 +3378,23 @@ static void owrt_ap_set_vap(struct sigma_dut *dut, int id, const char *key,
 			    const char *val)
 {
 	char buf[256];
+	int res;
 
 	if (val == NULL) {
-		snprintf(buf, sizeof(buf),
-			 "uci delete wireless.@wifi-iface[%d].%s", id, key);
+		res = snprintf(buf, sizeof(buf),
+			       "uci delete wireless.@wifi-iface[%d].%s",
+			       id, key);
+		if (res < 0 || res >= sizeof(buf))
+			return;
 		run_system(dut, buf);
 		return;
 	}
 
-	snprintf(buf, sizeof(buf), "uci set wireless.@wifi-iface[%d].%s=%s",
-		 id, key, val);
+	res = snprintf(buf, sizeof(buf),
+		       "uci set wireless.@wifi-iface[%d].%s=%s",
+		       id, key, val);
+	if (res < 0 || res >= sizeof(buf))
+		return;
 	run_system(dut, buf);
 }
 
@@ -3396,17 +3403,23 @@ static void owrt_ap_set_list_vap(struct sigma_dut *dut, int id,
 				 const char *key, const char *val)
 {
 	char buf[1024];
+	int res;
 
 	if (val == NULL) {
-		snprintf(buf, sizeof(buf),
-			 "uci del_list wireless.@wifi-iface[%d].%s", id, key);
+		res = snprintf(buf, sizeof(buf),
+			       "uci del_list wireless.@wifi-iface[%d].%s",
+			       id, key);
+		if (res < 0 || res >= sizeof(buf))
+			return;
 		run_system(dut, buf);
 		return;
 	}
 
-	snprintf(buf, sizeof(buf),
-		 "uci add_list wireless.@wifi-iface[%d].%s=%s",
-		 id, key, val);
+	res = snprintf(buf, sizeof(buf),
+		       "uci add_list wireless.@wifi-iface[%d].%s=%s",
+		       id, key, val);
+	if (res < 0 || res >= sizeof(buf))
+		return;
 	run_system(dut, buf);
 }
 
