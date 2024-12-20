@@ -952,6 +952,7 @@ noa_done:
 				 "P2P_SET chan_switch_req_enable 1");
 			if (wpa_command(intf, buf) < 0)
 				return ERROR_SEND_STATUS;
+			wpa_command(intf, "P2P_SET reginfo 2");
 		} else {
 			dut->p2p_r2_capable = false;
 			sigma_dut_print(dut, DUT_MSG_INFO,
