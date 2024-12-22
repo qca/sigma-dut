@@ -170,17 +170,19 @@ static enum sigma_cmd_result cmd_ap_ca_version(struct sigma_dut *dut,
 void kill_hostapd_process_pid(struct sigma_dut *dut)
 {
 	FILE *f;
-	int pid, res;
+	int pid;
+	char *res;
 	char path[100];
 	int count;
 
 	f = fopen(SIGMA_DUT_HOSTAPD_PID_FILE, "r");
 	if (!f)
 		return;
-	res = fscanf(f, "%d", &pid);
+	res = fgets(path, sizeof(path), f);
 	fclose(f);
-	if (res != 1)
+	if (!res)
 		return;
+	pid = atoi(res);
 	sigma_dut_print(dut, DUT_MSG_INFO, "Killing hostapd pid %d", pid);
 	kill(pid, SIGTERM);
 	snprintf(path, sizeof(path), "/proc/%d", pid);
