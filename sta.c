@@ -11949,6 +11949,7 @@ static int sta_twt_send_suspend(struct sigma_dut *dut, struct sigma_conn *conn,
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: err in send_and_recv_msgs, ret=%d",
 				__func__, ret);
+		return ret;
 	}
 
 	if (!dut->sta_async_twt_supp)
@@ -12013,6 +12014,7 @@ static int sta_twt_send_nudge(struct sigma_dut *dut, struct sigma_conn *conn,
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: err in send_and_recv_msgs, ret=%d",
 				__func__, ret);
+		return ret;
 	}
 
 	if (!dut->sta_async_twt_supp)
@@ -12102,6 +12104,7 @@ static int sta_twt_resume(struct sigma_dut *dut, struct sigma_conn *conn,
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: err in send_and_recv_msgs, ret=%d",
 				__func__, ret);
+		return ret;
 	}
 
 	if (!dut->sta_async_twt_supp)
@@ -12347,6 +12350,7 @@ send_command:
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: err in send_and_recv_msgs, ret=%d",
 				__func__, ret);
+		return ret;
 	}
 
 	if (!dut->sta_async_twt_supp)
@@ -12420,6 +12424,7 @@ static int sta_twt_teardown(struct sigma_dut *dut, struct sigma_conn *conn,
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: err in send_and_recv_msgs, ret=%d",
 				__func__, ret);
+		return ret;
 	}
 
 	if (!dut->sta_async_twt_supp)
