@@ -10036,6 +10036,21 @@ static int sta_set_eht_triggered_su_bforming_feedback(struct sigma_dut *dut,
 }
 
 
+static int sta_set_eht_extra_eht_ltf(struct sigma_dut *dut, const char *intf,
+				     u8 val)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_EXTRA_LTF, val);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"extra eht-ltf cannot be changed without NL80211_SUPPORT defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 #ifdef NL80211_SUPPORT
 
 static int sta_set_he_testbed_def(struct sigma_dut *dut,
@@ -13376,6 +13391,10 @@ cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (val)
 		sta_set_eht_triggered_su_bforming_feedback(dut, intf,
 							   (u8) atoi(val));
+
+	val = get_param(cmd, "ExtraLTFSymbols");
+	if (val)
+		sta_set_eht_extra_eht_ltf(dut, intf, (u8) atoi(val));
 
 	return cmd_sta_set_wireless_vht(dut, conn, cmd);
 }
