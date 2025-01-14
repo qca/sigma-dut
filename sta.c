@@ -10251,6 +10251,21 @@ static int sta_set_mu_edca_override(struct sigma_dut *dut, const char *intf,
 }
 
 
+static int sta_set_btm_req_reject(struct sigma_dut *dut, const char *intf,
+				  u8 val)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_BTM_REQ_REJECT, val);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"BTM request reject cannot be changed without NL80211_SUPPORT defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static int sta_set_er_su_ppdu_type_tx(struct sigma_dut *dut, const char *intf,
 				      int val)
 {
@@ -10815,6 +10830,7 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 			sta_get_twt_feature_async_supp(dut, intf);
 
 		sta_set_scan_unicast_probe(dut, intf, 0);
+		sta_set_btm_req_reject(dut, intf, 0);
 
 #ifdef NL80211_SUPPORT
 		nl80211_close_event_sock(dut);
@@ -17536,6 +17552,18 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "ErrorCode,sta_transmit_omi failed");
 		return STATUS_SENT_ERROR;
+	}
+
+	val = get_param(cmd, "BSS_Transition");
+	if (val) {
+		int cfg = 0;
+
+		if (strcasecmp(val, "Reject") == 0)
+			cfg = 1;
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Set the BTM Request reject %d", cfg);
+		sta_set_btm_req_reject(dut, intf, cfg);
+		mbo_set_bss_trans_req(dut, conn, intf, val);
 	}
 
 	val = get_param(cmd, "Powersave");
