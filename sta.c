@@ -12992,6 +12992,16 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 				return STATUS_SENT_ERROR;
 			}
 
+			if (set_val &&
+			    sta_set_twt_req_support(dut, intf, set_val)) {
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Failed to set TWT req support %d",
+						set_val);
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,Failed to set TWT_ReqSupport");
+				return STATUS_SENT_ERROR;
+			}
+
 			if (sta_set_bcast_twt_support(dut, intf, set_val)) {
 				send_resp(dut, conn, SIGMA_ERROR,
 					  "ErrorCode,Failed to set TWTSchedSTASupport");
