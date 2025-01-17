@@ -12285,6 +12285,16 @@ int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 		rtwt_ul_bitmap_val = atoi(val);
 		rtwt_ul_bitmap = 1;
 	}
+	val = get_param(cmd, "RTWT_ULTIDBitmapValid");
+	if (val && atoi(val) == 0) {
+		rtwt_ul_bitmap_val = 0;
+		rtwt_ul_bitmap = 1;
+	}
+	val = get_param(cmd, "RTWT_DLTIDBitmapValid");
+	if (val && atoi(val) == 0) {
+		rtwt_dl_bitmap_val = 0;
+		rtwt_dl_bitmap = 1;
+	}
 
 send_command:
 	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
