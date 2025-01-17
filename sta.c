@@ -12385,7 +12385,7 @@ static int sta_twt_teardown(struct sigma_dut *dut, struct sigma_conn *conn,
 	struct nl_msg *msg;
 	const char *intf = get_param(cmd, "Interface");
 	int bcast_twt = 0;
-	int bcast_twt_id = 0;
+	int bcast_twt_id = 0, flow_id = 0;
 	const char *val;
 
 	ifindex = if_nametoindex(intf);
@@ -12402,6 +12402,13 @@ static int sta_twt_teardown(struct sigma_dut *dut, struct sigma_conn *conn,
 		bcast_twt = 1;
 	}
 
+	val = get_param(cmd, "TWT_TeardownAll");
+	if (val && atoi(val) == 1) {
+		flow_id = 0xFF;
+		if (bcast_twt)
+			bcast_twt_id = 0xFF;
+	}
+
 	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
 				    NL80211_CMD_VENDOR)) ||
 	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
@@ -12415,6 +12422,7 @@ static int sta_twt_teardown(struct sigma_dut *dut, struct sigma_conn *conn,
 		      msg,
 		      QCA_WLAN_VENDOR_ATTR_CONFIG_TWT_PARAMS)) ||
 	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_TWT_SETUP_FLOW_TYPE, 0) ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_TWT_SETUP_FLOW_ID, flow_id) ||
 	    (bcast_twt &&
 	     nla_put_flag(msg, QCA_WLAN_VENDOR_ATTR_TWT_SETUP_BCAST)) ||
 	    (bcast_twt &&
