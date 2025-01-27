@@ -11373,6 +11373,9 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 		dut->qm_domain_name[0] = '\0';
 		dut->reject_dscp_policies = 0;
 		dut->num_dscp_status = 0;
+#ifdef ANDROID
+		enable_sta_ipv6_configuration(dut, intf, buf, sizeof(buf));
+#endif /* ANDROID */
 		snprintf(buf, sizeof(buf),
 			 "ip -6 route replace fe80::/64 dev %s table local",
 			 intf);
