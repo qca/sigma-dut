@@ -43,6 +43,7 @@ static enum sigma_cmd_result cmd_traffic_send_ping(struct sigma_dut *dut,
 	char extra[100], int_arg[100], intf_arg[100], ip_dst[100], ping[100];
 	struct in6_addr ip6_addr;
 	bool broadcast = false;
+	const char *iface;
 
 	val = get_param(cmd, "Type");
 	if (!val)
@@ -54,6 +55,11 @@ static enum sigma_cmd_result cmd_traffic_send_ping(struct sigma_dut *dut,
 			  "ErrorCode,Unsupported address type");
 		return STATUS_SENT;
 	}
+
+	if (type == 2 && dut->program == PROGRAM_P2P)
+		iface = get_p2p_group_ifname(dut, get_main_ifname(dut));
+	else
+		iface = get_station_ifname(dut);
 
 	dst = get_param(cmd, "destination");
 	if (dst == NULL || (type == 1 && !is_ip_addr(dst)) ||
@@ -70,8 +76,7 @@ static enum sigma_cmd_result cmd_traffic_send_ping(struct sigma_dut *dut,
 		}
 
 		if (IN6_IS_ADDR_LINKLOCAL(&ip6_addr)) {
-			snprintf(ip_dst, sizeof(ip_dst), "%s%%%s", dst,
-				 get_station_ifname(dut));
+			snprintf(ip_dst, sizeof(ip_dst), "%s%%%s", dst, iface);
 			dst = ip_dst;
 		}
 	}
@@ -150,8 +155,7 @@ static enum sigma_cmd_result cmd_traffic_send_ping(struct sigma_dut *dut,
 	if (rate != 1)
 		snprintf(int_arg, sizeof(int_arg), " -i %f", interval);
 	if (!dut->ndp_enable && type == 2)
-		snprintf(intf_arg, sizeof(intf_arg), " -I %s",
-			 get_station_ifname(dut));
+		snprintf(intf_arg, sizeof(intf_arg), " -I %s", iface);
 	else
 		intf_arg[0] = '\0';
 	fprintf(f, "#!" SHELL "\n"
