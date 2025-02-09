@@ -16326,6 +16326,139 @@ cmd_sta_send_frame_qm(struct sigma_dut *dut, struct sigma_conn *conn,
 }
 
 
+static enum sigma_cmd_result
+sta_chan_switch_request(struct sigma_dut *dut, struct sigma_conn *conn,
+			const char *intf, struct sigma_cmd *cmd)
+{
+#ifdef NL80211_SUPPORT
+	struct nlattr *params;
+	struct nlattr *attr;
+	int ifindex, ret;
+	struct nl_msg *msg;
+	enum oper_chan_width chanwidth = CONF_OPER_CHWIDTH_80MHZ;
+	const char *channel = get_param(cmd, "channel");
+	const char *frequency = get_param(cmd, "channelfreq");
+	const char *oper_bw = get_param(cmd, "ExtChannelSwitch_OperatingBW");
+	int class = 0, chan = 0, freq = 0, bandwidth = 0;
+	const char *ifname;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Index for interface %s failed",
+				__func__, intf);
+		return ERROR_SEND_STATUS;
+	}
+
+	if (dut->program == PROGRAM_P2P) {
+		ifname = get_group_ifname(dut, intf);
+		ifindex = if_nametoindex(ifname);
+		if (wpa_command(ifname, "P2P_SET chan_switch_req_enable 1") < 0)
+			return ERROR_SEND_STATUS;
+	}
+
+	if (frequency)
+		freq = atoi(frequency);
+
+	if (oper_bw) {
+		bandwidth = atoi(oper_bw);
+		if (bandwidth == 20 || bandwidth == 40)
+			chanwidth = CONF_OPER_CHWIDTH_USE_HT;
+		else if (bandwidth == 80)
+			chanwidth = CONF_OPER_CHWIDTH_80MHZ;
+		else if (bandwidth == 160)
+			chanwidth = CONF_OPER_CHWIDTH_160MHZ;
+		else if (bandwidth == 320)
+			chanwidth = CONF_OPER_CHWIDTH_320MHZ;
+	}
+
+	if (freq_to_channel_and_class(freq, 0, chanwidth, &class, &chan)) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,Invalid freq/chan info");
+		return STATUS_SENT_ERROR;
+	}
+
+	if (channel)
+		chan = atoi(channel);
+
+	msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
+			      NL80211_CMD_VENDOR);
+	if (!msg ||
+	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			QCA_NL80211_VENDOR_SUBCMD_CHAN_USAGE_REQ))
+		goto fail;
+
+	attr = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA);
+	if (!attr ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CHAN_USAGE_REQ_MODE, 4))
+		goto fail;
+
+	params = nla_nest_start(msg,
+				QCA_WLAN_VENDOR_ATTR_CHAN_USAGE_REQ_CHAN_LIST);
+	if (!params ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_CHAN_USAGE_REQ_CHAN_LIST_CHAN,
+		       chan) ||
+	    nla_put_u8(msg,
+		       QCA_WLAN_VENDOR_ATTR_CHAN_USAGE_REQ_CHAN_LIST_OP_CLASS,
+		       class))
+		goto fail;
+
+	nla_nest_end(msg, params);
+	nla_nest_end(msg, attr);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret)
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in send_and_recv_msgs, ret=%d",
+				__func__, ret);
+	return SUCCESS_SEND_STATUS;
+
+fail:
+	nlmsg_free(msg);
+	return ERROR_SEND_STATUS;
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"Channel usage request cannot be done without NL80211_SUPPORT defined");
+	return ERROR_SEND_STATUS;
+#endif /* NL80211_SUPPORT */
+}
+
+
+static enum sigma_cmd_result
+cmd_sta_send_frame_p2p_cur(struct sigma_dut *dut, struct sigma_conn *conn,
+			   const char *intf, struct sigma_cmd *cmd)
+{
+	const char *val;
+
+	val = get_param(cmd, "UsageMode");
+	if (val && atoi(val) == 4)
+		return sta_chan_switch_request(dut, conn, intf, cmd);
+
+	return INVALID_SEND_STATUS;
+}
+
+
+static enum sigma_cmd_result
+cmd_sta_send_frame_p2p(struct sigma_dut *dut, struct sigma_conn *conn,
+		       const char *intf, struct sigma_cmd *cmd)
+{
+	const char *val;
+
+	val = get_param(cmd, "FrameName");
+	if (val) {
+		if (strcasecmp(val, "ExtChanSwitchAnnouncement") == 0)
+			return sta_chan_switch_request(dut, conn, intf, cmd);
+
+		if (strcasecmp(val, "ChannelUsageRequest") == 0)
+			return cmd_sta_send_frame_p2p_cur(dut, conn, intf, cmd);
+	}
+
+	return INVALID_SEND_STATUS;
+}
+
+
 enum sigma_cmd_result cmd_sta_send_frame(struct sigma_dut *dut,
 					 struct sigma_conn *conn,
 					 struct sigma_cmd *cmd)
@@ -16369,6 +16502,8 @@ enum sigma_cmd_result cmd_sta_send_frame(struct sigma_dut *dut,
 		return cmd_sta_send_frame_wpa3(dut, conn, intf, cmd);
 	if (val && strcasecmp(val, "QM") == 0)
 		return cmd_sta_send_frame_qm(dut, conn, intf, cmd);
+	if (val && strcasecmp(val, "P2P") == 0)
+		return cmd_sta_send_frame_p2p(dut, conn, intf, cmd);
 
 	val = get_param(cmd, "TD_DISC");
 	if (val) {
