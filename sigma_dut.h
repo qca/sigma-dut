@@ -556,6 +556,19 @@ enum sigma_cipher_suites {
 	SIGMA_CIPHER_BIP_CMAC_256,
 };
 
+enum oper_chan_width {
+	CONF_OPER_CHWIDTH_USE_HT = 0,
+	CONF_OPER_CHWIDTH_80MHZ = 1,
+	CONF_OPER_CHWIDTH_160MHZ = 2,
+	CONF_OPER_CHWIDTH_80P80MHZ = 3,
+	CONF_OPER_CHWIDTH_2160MHZ,
+	CONF_OPER_CHWIDTH_4320MHZ,
+	CONF_OPER_CHWIDTH_6480MHZ,
+	CONF_OPER_CHWIDTH_8640MHZ,
+	CONF_OPER_CHWIDTH_40MHZ_6GHZ,
+	CONF_OPER_CHWIDTH_320MHZ,
+};
+
 struct sigma_dut {
 	const char *main_ifname;
 	char *main_ifname_2g;
@@ -1453,6 +1466,9 @@ int parse_mac_address(struct sigma_dut *dut, const char *arg,
 int is_60g_sigma_dut(struct sigma_dut *dut);
 unsigned int channel_to_freq(struct sigma_dut *dut, unsigned int channel);
 unsigned int freq_to_channel(unsigned int freq);
+int freq_to_channel_and_class(unsigned int freq, int sec_channel,
+			      enum oper_chan_width chanwidth,
+			      int *op_class, int *channel);
 int is_ipv6_addr(const char *str);
 void convert_mac_addr_to_ipv6_lladdr(u8 *mac_addr, char *ipv6_buf,
 				     size_t buf_len);
