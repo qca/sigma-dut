@@ -2030,61 +2030,60 @@ static enum sigma_cmd_result cmd_sta_get_p2p_ip_config(struct sigma_dut *dut,
 						       struct sigma_conn *conn,
 						       struct sigma_cmd *cmd)
 {
-	/* const char *intf = get_param(cmd, "Interface"); */
+	const char *intf = get_param(cmd, "Interface");
+	const char *type = get_param(cmd, "type");
 	const char *grpid = get_param(cmd, "GroupID");
 	struct wfa_cs_p2p_group *grp = NULL;
+	struct wfa_cs_p2p_group group;
 	int count;
 	char macaddr[20];
+	u8 mac[ETH_ALEN];
 	char resp[200], info[150];
+	char ipv6_buf[100], *dns = "0.0.0.0";
+	const char *ifname;
 
-	if (grpid == NULL)
-		return -1;
+	if (!intf)
+		intf = get_main_ifname(dut);
 
-	if (strcmp(grpid, "$P2P_GROUP_ID") == 0)
-		return -1;
 
-	/*
-	 * If we did not initiate the operation that created the group, we may
-	 * not have the group information available in the DUT code yet and it
-	 * may take some time to get this from wpa_supplicant in case we are
-	 * the P2P client. As such, we better try this multiple times to allow
-	 * some time to complete the operation.
-	 */
+	if (grpid) {
+		if (strcmp(grpid, "$P2P_GROUP_ID") == 0)
+			return -1;
 
-	sigma_dut_print(dut, DUT_MSG_DEBUG, "Waiting to find the requested "
-			"group");
-	count = dut->default_timeout;
-	while (count > 0) {
-		grp = p2p_group_get(dut, grpid);
-		if (grp == NULL) {
-			sigma_dut_print(dut, DUT_MSG_DEBUG, "Requested group "
-					"not yet found (count=%d)", count);
-			sleep(1);
-		} else
-			break;
-		count--;
-	}
-	if (grp == NULL) {
-		send_resp(dut, conn, SIGMA_ERROR,
-			  "errorCode,Requested group not found");
-		return 0;
-	}
+		/*
+		 * If we did not initiate the operation that created the group,
+		 * we may not have the group information available in the DUT
+		 * code yet and it may take some time to get this from
+		 * wpa_supplicant in case we are the P2P client. As such, we
+		 * better try this multiple times to allow some time to
+		 * complete the operation.
+		 */
 
-	sigma_dut_print(dut, DUT_MSG_DEBUG, "Waiting for IP address on group "
-			"interface %s", grp->ifname);
-	if (wait_ip_addr(dut, grp->ifname, dut->default_timeout) < 0) {
-		send_resp(dut, conn, SIGMA_ERROR,
-			  "errorCode,No IP address received");
-		return 0;
-	}
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Waiting to find the requested group");
 
-	if (get_ip_config(dut, grp->ifname, info, sizeof(info)) < 0) {
-		sigma_dut_print(dut, DUT_MSG_INFO, "Failed to get IP address "
-				"for group interface %s",
-				grp->ifname);
-		send_resp(dut, conn, SIGMA_ERROR,
-			  "errorCode,Failed to get IP address");
-		return 0;
+		count = dut->default_timeout;
+		while (count > 0) {
+			grp = p2p_group_get(dut, grpid);
+			if (!grp) {
+				sigma_dut_print(dut, DUT_MSG_DEBUG,
+						"Requested group not yet found (count=%d)",
+						count);
+				sleep(1);
+			} else {
+				break;
+			}
+			count--;
+		}
+		if (!grp) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Requested group not found");
+			return STATUS_SENT_ERROR;
+		}
+	} else {
+		ifname = get_group_ifname(dut, intf);
+		strlcpy(group.ifname, ifname, IFNAMSIZ);
+		grp = &group;
 	}
 
 	if (get_wpa_status(grp->ifname, "address",
@@ -2095,11 +2094,44 @@ static enum sigma_cmd_result cmd_sta_get_p2p_ip_config(struct sigma_dut *dut,
 		return -2;
 	}
 
-	sigma_dut_print(dut, DUT_MSG_DEBUG, "IP address for group interface "
-			"%s found", grp->ifname);
+	if (type && atoi(type) == 2) {
+		/* IPv6 Type */
 
-	snprintf(resp, sizeof(resp), "%s,P2PInterfaceAddress,%s",
-		 info, macaddr);
+		if (parse_mac_address(dut, macaddr, mac))
+			return -1;
+
+		convert_mac_addr_to_ipv6_lladdr(mac, ipv6_buf,
+						sizeof(ipv6_buf));
+		if (set_ipv6_addr(dut, ipv6_buf, "64", grp->ifname) != 0)
+			return -1;
+
+		snprintf(resp, sizeof(resp),
+			 "dhcp,%d,ip,%s,mask,%d,primary-dns,%s,P2PInterfaceAddress,%s",
+			 0, ipv6_buf, 64, dns, macaddr);
+	} else {
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Waiting for IP address on group interface %s",
+				grp->ifname);
+		if (wait_ip_addr(dut, grp->ifname, dut->default_timeout) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,No IP address received");
+			return STATUS_SENT_ERROR;
+		}
+
+		if (get_ip_config(dut, grp->ifname, info, sizeof(info)) < 0) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Failed to get IP address for group interface %s",
+					grp->ifname);
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Failed to get IP address");
+			return STATUS_SENT_ERROR;
+		}
+		snprintf(resp, sizeof(resp), "%s,P2PInterfaceAddress,%s",
+			 info, macaddr);
+	}
+
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"IP address for group interface %s found", grp->ifname);
 
 	send_resp(dut, conn, SIGMA_COMPLETE, resp);
 	return 0;
