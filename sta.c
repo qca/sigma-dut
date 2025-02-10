@@ -13237,8 +13237,13 @@ cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 		sta_set_eht_beamformee_ss_80(dut, intf, (u8) atoi(val));
 
 	val = get_param(cmd, "BeamformeeSS_160");
-	if (val)
+	if (val) {
 		sta_set_eht_beamformee_ss_160(dut, intf, (u8) atoi(val));
+	} else {
+		val = get_param(cmd, "width");
+		if (val && strcasecmp(val, "160") == 0)
+			sta_set_eht_beamformee_ss_160(dut, intf, 3);
+	}
 
 	val = get_param(cmd, "BeamformeeSS_320");
 	if (val)
