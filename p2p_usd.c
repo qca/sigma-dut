@@ -136,12 +136,6 @@ enum sigma_cmd_result sigma_usd_subscribe(struct sigma_dut *dut,
 				  "ErrorCode,Failed to set pairing cache");
 			return STATUS_SENT;
 		}
-
-		if (wpa_command(ifname, "P2P_SET pairing_verification 1") < 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Failed to enable pairing verification");
-			return STATUS_SENT;
-		}
 	}
 
 	if (!service_name)
