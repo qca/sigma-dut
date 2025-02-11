@@ -11186,6 +11186,9 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	if (type && strcasecmp(type, "DUT") == 0)
 		dut->device_type = STA_dut;
 
+	if (get_param(cmd, "Runtime_ID"))
+		dev_start_test_log(dut, conn, cmd);
+
 	if (dut->program == PROGRAM_TDLS) {
 		/* Clear TDLS testing mode */
 		wpa_command(intf, "SET tdls_disabled 0");
@@ -11215,9 +11218,6 @@ static enum sigma_cmd_result cmd_sta_reset_default(struct sigma_dut *dut,
 	default:
 		break;
 	}
-
-	if (get_param(cmd, "Runtime_ID"))
-		dev_start_test_log(dut, conn, cmd);
 
 #ifdef ANDROID_NAN
 	if (dut->program == PROGRAM_NAN)
