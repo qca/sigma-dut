@@ -944,6 +944,8 @@ static void deinit_sigma_dut(struct sigma_dut *dut)
 		dut->mdnssd_so = NULL;
 	}
 #endif /* ANDROID_MDNS */
+	free(dut->sta_bssid_pool);
+	dut->sta_bssid_pool = NULL;
 }
 
 

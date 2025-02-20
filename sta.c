@@ -5661,6 +5661,7 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 	const char *wps_param = get_param(cmd, "WPS");
 	const char *bssid = get_param(cmd, "bssid");
 	const char *ap_link_mac = get_param(cmd, "AP_Link_MAC");
+	const char *secondary_links = get_param(cmd, "Secondary_AP_Link_MAC");
 	const char *chan = get_param(cmd, "channel");
 	const char *multi_link = get_param(cmd, "MultiLink");
 	const char *network_mode = get_param(cmd, "network_mode");
@@ -5773,13 +5774,25 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 			send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,"
 				  "Invalid bssid argument");
 			return 0;
-		} else if (ap_link_mac &&
-			   set_network(get_station_ifname(dut),
-				       dut->infra_network_id,
-				       "bssid", ap_link_mac) < 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Invalid bssid argument");
-			return 0;
+		} else if (ap_link_mac) {
+			if (set_network(get_station_ifname(dut),
+					dut->infra_network_id,
+					"bssid", ap_link_mac) < 0) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,Invalid bssid argument");
+				return STATUS_SENT_ERROR;
+			}
+			if (secondary_links) {
+				snprintf(buf, sizeof(buf),
+					 "SET bssid_filter %s %s",
+					 ap_link_mac, secondary_links);
+				if (wpa_command(get_station_ifname(dut), buf) <
+				    0) {
+					send_resp(dut, conn, SIGMA_ERROR,
+						  "ErrorCode,Failed to set secondary links");
+					return STATUS_SENT_ERROR;
+				}
+			}
 		}
 
 		if ((dut->program == PROGRAM_WPA3 &&
@@ -5947,6 +5960,18 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 				sigma_dut_print(dut, DUT_MSG_ERROR,
 						"Failed to set bssid to any after connecting with AP link MAC");
 				ret = ERROR_SEND_STATUS;
+				break;
+			}
+			if (secondary_links) {
+				snprintf(buf, sizeof(buf),
+					 "SET bssid_filter %s",
+					 dut->sta_bssid_pool ?
+					 dut->sta_bssid_pool : "");
+				if (wpa_command(intf, buf) < 0) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"Failed to reset bssid_filter");
+					ret = ERROR_SEND_STATUS;
+				}
 			}
 			break;
 		}
@@ -18723,6 +18748,8 @@ static enum sigma_cmd_result cmd_sta_bssid_pool(struct sigma_dut *dut,
 	bssid = get_param(cmd, "BSSID_List");
 	if (atoi(val) == 0 || bssid == NULL) {
 		/* Disable BSSID filter */
+		free(dut->sta_bssid_pool);
+		dut->sta_bssid_pool = NULL;
 		if (wpa_command(intf, "SET bssid_filter ")) {
 			send_resp(dut, conn, SIGMA_ERROR, "errorCode,Failed "
 				  "to disable BSSID filter");
@@ -18744,6 +18771,14 @@ static enum sigma_cmd_result cmd_sta_bssid_pool(struct sigma_dut *dut,
 		send_resp(dut, conn, SIGMA_ERROR, "errorCode,Failed to enable "
 			  "BSSID filter");
 		return 0;
+	}
+
+	free(dut->sta_bssid_pool);
+	dut->sta_bssid_pool = strdup(bssid);
+	if (!dut->sta_bssid_pool) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Failed to cache BSSID filter");
+		return STATUS_SENT_ERROR;
 	}
 
 	return 1;

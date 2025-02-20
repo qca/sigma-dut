@@ -1303,6 +1303,7 @@ struct sigma_dut {
 	u8 pasn_type;
 	bool is_p2p_twt_power_mgmt_enabled;
 	struct twt_config_params twt_param;
+	char *sta_bssid_pool;
 };
 
 
