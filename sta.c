@@ -12343,6 +12343,10 @@ int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (val)
 		target_wake_time = atoi(val);
 
+	val = get_param(cmd, "TWTSPOffset");
+	if (val)
+		target_wake_time = atoi(val);
+
 	val = get_param(cmd, "WakeIntervalMantissa");
 	if (val)
 		wake_interval_mantissa = atoi(val);
