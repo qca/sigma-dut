@@ -5971,8 +5971,17 @@ static enum sigma_cmd_result cmd_sta_associate(struct sigma_dut *dut,
 					sigma_dut_print(dut, DUT_MSG_ERROR,
 							"Failed to reset bssid_filter");
 					ret = ERROR_SEND_STATUS;
+					break;
 				}
 			}
+			if (((dut->program == PROGRAM_EHT ||
+			      dut->device_mode == MODE_11BE) &&
+			     get_driver_type(dut) == DRIVER_WCN) &&
+			    (!multi_link ||
+			     strcasecmp(multi_link, "Disable") == 0))
+				sta_config_params(dut, intf,
+						  STA_SET_EHT_MLO_MAX_NUM_LINKS,
+						  0);
 			break;
 		}
 	}
