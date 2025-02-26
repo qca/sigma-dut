@@ -1520,3 +1520,25 @@ bool is_6ghz_freq(int freq)
 
 	return true;
 }
+
+
+u16 get_link_id_bitmask(const char *param)
+{
+	u16 bitmask = 0;
+	int link_id;
+
+	while (param) {
+		link_id = atoi(param);
+
+		if (link_id < 0 || link_id > 15)
+			return 0;
+
+		bitmask |= BIT(link_id);
+		param = strchr(param, ':');
+
+		if (param)
+			param++;
+	}
+
+	return bitmask;
+}

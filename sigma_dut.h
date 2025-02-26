@@ -1613,5 +1613,6 @@ int mdnssd_init(struct sigma_dut *dut);
 enum sigma_cmd_result usd_cmd_sta_exec_action(struct sigma_dut *dut,
 					      struct sigma_conn *conn,
 					      struct sigma_cmd *cmd);
+u16 get_link_id_bitmask(const char *param);
 
 #endif /* SIGMA_DUT_H */
