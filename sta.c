@@ -4550,6 +4550,11 @@ enum qca_sta_helper_config_params {
 	/* For the attribute
 	 * QCA_WLAN_VENDOR_ATTR_CONFIG_FOLLOW_AP_PREFERENCE_FOR_CNDS_SELECT */
 	STA_SET_AP_PREF_FOR_CNDS_SEL,
+
+	/* For the attribute
+	 * QCA_WLAN_VENDOR_ATTR_CONFIG_SETUP_LINK_RECONFIG_SUPPORT
+	 */
+	STA_SET_LINK_RECONFIG_SUPPORT,
 };
 
 
@@ -4696,6 +4701,12 @@ static int sta_config_params(struct sigma_dut *dut, const char *intf,
 	case STA_SET_AP_PREF_FOR_CNDS_SEL:
 		if (nla_put_u8(msg,
 			       QCA_WLAN_VENDOR_ATTR_CONFIG_FOLLOW_AP_PREFERENCE_FOR_CNDS_SELECT,
+			       value))
+			goto fail;
+		break;
+	case STA_SET_LINK_RECONFIG_SUPPORT:
+		if (nla_put_u8(msg,
+			       QCA_WLAN_VENDOR_ATTR_CONFIG_SETUP_LINK_RECONFIG_SUPPORT,
 			       value))
 			goto fail;
 		break;
@@ -13474,6 +13485,11 @@ cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 	val = get_param(cmd, "ExtraLTFSymbols");
 	if (val)
 		sta_set_eht_extra_eht_ltf(dut, intf, (u8) atoi(val));
+
+	val = get_param(cmd, "Link_Reconfig");
+	if (val)
+		sta_config_params(dut, intf, STA_SET_LINK_RECONFIG_SUPPORT,
+				  get_enable_disable(val) ? 1 : 0);
 
 	return cmd_sta_set_wireless_vht(dut, conn, cmd);
 }
