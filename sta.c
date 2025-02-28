@@ -3474,35 +3474,35 @@ static int get_key_mgmt_capa(struct sigma_dut *dut)
 
 	res = strtok_r(key_mgmt, " ", &saveptr);
 	while (res) {
-		if (strcmp(res, "WPA-PSK"))
+		if (strcmp(res, "WPA-PSK") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_WPA_PSK);
-		if (strcmp(res, "WPA-PSK-SHA256"))
+		if (strcmp(res, "WPA-PSK-SHA256") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_PSK_SHA256);
-		if (strcmp(res, "FT-PSK"))
+		if (strcmp(res, "FT-PSK") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_PSK);
-		if (strcmp(res, "SAE"))
+		if (strcmp(res, "SAE") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_SAE);
-		if (strcmp(res, "FT-SAE"))
+		if (strcmp(res, "FT-SAE") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_SAE);
-		if (strcmp(res, "SAE-EXT-KEY"))
+		if (strcmp(res, "SAE-EXT-KEY") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_SAE_EXT_KEY);
-		if (strcmp(res, "FT-SAE-EXT-KEY"))
+		if (strcmp(res, "FT-SAE-EXT-KEY") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_SAE_EXT_KEY);
-		if (strcmp(res, "FT-EAP"))
+		if (strcmp(res, "FT-EAP") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_802_1X);
-		if (strcmp(res, "FT-EAP-SHA384"))
+		if (strcmp(res, "FT-EAP-SHA384") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_802_1X_SHA384);
-		if (strcmp(res, "WPA-EAP-SUITE-B"))
+		if (strcmp(res, "WPA-EAP-SUITE-B") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_SUITE_B);
-		if (strcmp(res, "WPA-EAP-SUITE-B-192"))
+		if (strcmp(res, "WPA-EAP-SUITE-B-192") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_SUITE_B_192);
-		if (strcmp(res, "FILS-SHA256"))
+		if (strcmp(res, "FILS-SHA256") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FILS_SHA256);
-		if (strcmp(res, "FILS-SHA384"))
+		if (strcmp(res, "FILS-SHA384") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FILS_SHA384);
-		if (strcmp(res, "FT-FILS-SHA256"))
+		if (strcmp(res, "FT-FILS-SHA256") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_FILS_SHA256);
-		if (strcmp(res, "FT-FILS-SHA384"))
+		if (strcmp(res, "FT-FILS-SHA384") == 0)
 			dut->key_mgmt_capa |= BIT(SIGMA_AKM_FT_FILS_SHA384);
 
 		res = strtok_r(NULL, " ", &saveptr);
@@ -3534,14 +3534,14 @@ static int get_pairwise_ciphers_capa(struct sigma_dut *dut)
 
 	res = strtok_r(pairwise_ciphers, " ", &saveptr);
 	while (res) {
-		if (strcmp(res, "CCMP"))
+		if (strcmp(res, "CCMP") == 0)
 			dut->pairwise_ciphers_capa |= BIT(SIGMA_CIPHER_CCMP);
-		if (strcmp(res, "GCMP"))
+		if (strcmp(res, "GCMP") == 0)
 			dut->pairwise_ciphers_capa |= BIT(SIGMA_CIPHER_GCMP);
-		if (strcmp(res, "CCMP-256"))
+		if (strcmp(res, "CCMP-256") == 0)
 			dut->pairwise_ciphers_capa |=
 				BIT(SIGMA_CIPHER_CCMP_256);
-		if (strcmp(res, "GCMP-256"))
+		if (strcmp(res, "GCMP-256") == 0)
 			dut->pairwise_ciphers_capa |=
 				BIT(SIGMA_CIPHER_GCMP_256);
 
@@ -3574,13 +3574,13 @@ static int get_group_ciphers_capa(struct sigma_dut *dut)
 
 	res = strtok_r(group_ciphers, " ", &saveptr);
 	while (res) {
-		if (strcmp(res, "CCMP"))
+		if (strcmp(res, "CCMP") == 0)
 			dut->group_ciphers_capa |= BIT(SIGMA_CIPHER_CCMP);
-		if (strcmp(res, "GCMP"))
+		if (strcmp(res, "GCMP") == 0)
 			dut->group_ciphers_capa |= BIT(SIGMA_CIPHER_GCMP);
-		if (strcmp(res, "CCMP-256"))
+		if (strcmp(res, "CCMP-256") == 0)
 			dut->group_ciphers_capa |= BIT(SIGMA_CIPHER_CCMP_256);
-		if (strcmp(res, "GCMP-256"))
+		if (strcmp(res, "GCMP-256") == 0)
 			dut->group_ciphers_capa |= BIT(SIGMA_CIPHER_GCMP_256);
 
 		res = strtok_r(NULL, " ", &saveptr);
@@ -3614,16 +3614,16 @@ static int get_group_mgmt_ciphers_capa(struct sigma_dut *dut)
 
 	res = strtok_r(group_mgmt_ciphers, " ", &saveptr);
 	while (res) {
-		if (strcmp(res, "AES-128-CMAC"))
+		if (strcmp(res, "AES-128-CMAC") == 0)
 			dut->group_mgmt_ciphers_capa |=
 				BIT(SIGMA_CIPHER_AES_128_CMAC);
-		if (strcmp(res, "BIP-GMAC-128"))
+		if (strcmp(res, "BIP-GMAC-128") == 0)
 			dut->group_mgmt_ciphers_capa |=
 				BIT(SIGMA_CIPHER_BIP_GMAC_128);
-		if (strcmp(res, "BIP-GMAC-256"))
+		if (strcmp(res, "BIP-GMAC-256") == 0)
 			dut->group_mgmt_ciphers_capa |=
 				BIT(SIGMA_CIPHER_BIP_GMAC_256);
-		if (strcmp(res, "BIP-CMAC-256"))
+		if (strcmp(res, "BIP-CMAC-256") == 0)
 			dut->group_mgmt_ciphers_capa |=
 				BIT(SIGMA_CIPHER_BIP_CMAC_256);
 
