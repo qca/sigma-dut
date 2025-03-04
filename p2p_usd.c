@@ -65,8 +65,12 @@ enum sigma_cmd_result sigma_usd_publish(struct sigma_dut *dut,
 
 		if (ssi_len * 2 + 1 > sizeof(ssi_hex))
 			return ERROR_SEND_STATUS;
-		for (i = 0; i < ssi_len; i++)
-			sprintf(ssi_hex + i * 2, "%02x", i);
+		for (i = 0; i < ssi_len; i++) {
+			res = snprintf(ssi_hex + i * 2, sizeof(ssi_hex) - i * 2,
+				       "%02x", i);
+			if (res < 0 || res >= sizeof(ssi_hex) - i * 2)
+				return ERROR_SEND_STATUS;
+		}
 		ssi_hex[ssi_len * 2] = '\0';
 		res = snprintf(buf + len, sizeof(buf) - len, " ssi=%s",
 			       ssi_hex);
@@ -161,8 +165,12 @@ enum sigma_cmd_result sigma_usd_subscribe(struct sigma_dut *dut,
 
 		if (ssi_len * 2 + 1 > sizeof(ssi_hex))
 			return ERROR_SEND_STATUS;
-		for (i = 0; i < ssi_len; i++)
-			sprintf(ssi_hex + i * 2, "%02x", i);
+		for (i = 0; i < ssi_len; i++) {
+			res = snprintf(ssi_hex + i * 2, sizeof(ssi_hex) - i * 2,
+					"%02x", i);
+			if (res < 0 || res >= sizeof(ssi_hex) - i * 2)
+				return ERROR_SEND_STATUS;
+		}
 		ssi_hex[ssi_len * 2] = '\0';
 		res = snprintf(buf + len, sizeof(buf) - len, " ssi=%s",
 			       ssi_hex);
