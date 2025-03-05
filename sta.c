@@ -3017,6 +3017,7 @@ static enum sigma_cmd_result cmd_sta_set_eaptls(struct sigma_dut *dut,
 	int jb_or_newer = 0;
 	char prop[PROPERTY_VALUE_MAX];
 #endif /* ANDROID */
+	bool is_suiteb = false;
 
 	if (intf == NULL)
 		return -1;
@@ -3107,6 +3108,7 @@ static enum sigma_cmd_result cmd_sta_set_eaptls(struct sigma_dut *dut,
 
 	val = get_param(cmd, "keyMgmtType");
 	if (val && strcasecmp(val, "SuiteB") == 0) {
+		is_suiteb = true;
 		val = get_param(cmd, "CertType");
 		if (val && strcasecmp(val, "RSA") == 0) {
 			if (set_network_quoted(ifname, id, "phase1",
@@ -3133,6 +3135,12 @@ static enum sigma_cmd_result cmd_sta_set_eaptls(struct sigma_dut *dut,
 		sigma_dut_print(dut, DUT_MSG_INFO, "Enable only TLS v1.3");
 		if (set_network_quoted(ifname, id, "phase1",
 				       "tls_disable_tlsv1_0=1 tls_disable_tlsv1_1=1 tls_disable_tlsv1_2=1 tls_disable_tlsv1_3=0") < 0)
+			return ERROR_SEND_STATUS;
+	} else if (!is_suiteb) {
+		sigma_dut_print(dut, DUT_MSG_INFO,
+				"Enable TLS v1.0/v1.1/v1.2 (override system defaults)");
+		if (set_network_quoted(ifname, id, "phase1",
+				       "tls_disable_tlsv1_0=0 tls_disable_tlsv1_1=0 tls_disable_tlsv1_2=0") < 0)
 			return ERROR_SEND_STATUS;
 	}
 
