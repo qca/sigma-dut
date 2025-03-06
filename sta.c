@@ -12141,7 +12141,7 @@ int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 	struct nl_msg *msg;
 	int ifindex, ret;
 	const char *val;
-	const char *intf = get_param(cmd, "Interface");
+	const char *intf;
 	int wake_interval_exp = 10, nominal_min_wake_dur = 255,
 		wake_interval_mantissa = 512;
 	int flow_type = 0, twt_trigger = 0, target_wake_time = 0,
@@ -12177,6 +12177,7 @@ int sta_twt_request(struct sigma_dut *dut, struct sigma_conn *conn,
 		return -1;
 	}
 
+	intf = get_param(cmd, "Interface");
 	ifindex = if_nametoindex(intf);
 	if (ifindex == 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
