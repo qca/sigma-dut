@@ -2382,6 +2382,69 @@ static int sta_set_eht_mlo_active_tx_links(struct sigma_dut *dut,
 }
 
 
+static int sta_set_eht_emlsr_links(struct sigma_dut *dut,
+				   const char *intf, uint16_t link_id_bitmap,
+				   enum qca_wlan_emlsr_mode mode)
+{
+#ifdef NL80211_SUPPORT
+	struct nl_msg *msg;
+	struct nlattr *params, *attr;
+	int ret;
+	int ifindex;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Index for interface %s failed",
+				__func__, intf);
+		return -1;
+	}
+
+	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
+				    NL80211_CMD_VENDOR)) ||
+	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			QCA_NL80211_VENDOR_SUBCMD_SET_WIFI_CONFIGURATION)) {
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	if (!(params = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA)) ||
+	    !(attr = nla_nest_start(
+		      msg, QCA_WLAN_VENDOR_ATTR_CONFIG_EHT_EMLSR_LINKS))) {
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	if (nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_EMLSR_OPERATION, mode)) {
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	if (nla_put_u16(msg, QCA_WLAN_VENDOR_ATTR_EMLSR_LINKS_BITMAP,
+			link_id_bitmap)) {
+		nlmsg_free(msg);
+		return -1;
+	}
+	nla_nest_end(msg, attr);
+	nla_nest_end(msg, params);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in send_and_recv_msgs, ret=%d",
+				__func__, ret);
+	}
+
+	return ret;
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR, "NL80211_SUPPORT is not defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static int sta_set_eht_mlo_link_powersave(struct sigma_dut *dut,
 					  const char *intf, uint8_t num_links,
 					  uint8_t link_id[2])
@@ -17945,7 +18008,52 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 				  "ErrorCode,Invalid EMLSR operation");
 			return STATUS_SENT_ERROR;
 		}
-		sta_config_params(dut, intf, STA_SET_EMLSR_MODE_SWITCH, mode);
+
+		val = get_param(cmd, "EMLSR_Links");
+		if (val) {
+			char value[50];
+			char *result = NULL;
+			char *saveptr;
+			char link[3];
+			int link_id = -1;
+			u16 link_id_bitmap = 0;
+
+
+			strlcpy(value, val, sizeof(value));
+			result = strtok_r(value, " ", &saveptr);
+			if (!result) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "errorCode,Link address not specified");
+				return STATUS_SENT_ERROR;
+			}
+
+			while (result) {
+				sigma_dut_print(dut, DUT_MSG_DEBUG,
+						"STA link_addr %s", result);
+				if (get_mlo_link_id_link_mac(
+					    dut, get_station_ifname(dut),
+					    result, link, sizeof(link)) < 0) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"get link_id failed");
+					return ERROR_SEND_STATUS;
+				}
+				link_id = atoi(link);
+				sigma_dut_print(dut, DUT_MSG_DEBUG,
+						"link_id %d", link_id);
+				if (link_id >= 0 && link_id < 16)
+					link_id_bitmap |= BIT(link_id);
+				else
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"Invalid link_id %d",
+							link_id);
+				result = strtok_r(NULL, " ", &saveptr);
+			}
+			sta_set_eht_emlsr_links(dut, intf, link_id_bitmap,
+						mode);
+		} else {
+			sta_config_params(dut, intf, STA_SET_EMLSR_MODE_SWITCH,
+					  mode);
+		}
 	}
 
 	val = get_param(cmd, "CodingType");
