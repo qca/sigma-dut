@@ -13263,6 +13263,9 @@ static enum sigma_cmd_result ap_get_tk(struct sigma_dut *dut,
 	const char *mac = get_param(cmd, "STA_MAC_Address");
 	char buf[4096], resp[200], *pos, *tmp;
 
+	if (!intf)
+		intf = get_main_ifname(dut);
+
 	if (!mac)
 		return INVALID_SEND_STATUS;
 
