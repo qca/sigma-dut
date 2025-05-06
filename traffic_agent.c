@@ -168,7 +168,11 @@ static enum sigma_cmd_result cmd_traffic_agent_config(struct sigma_dut *dut,
 
 	val = get_param(cmd, "burstPeriodicity");
 	if (val)
-		s->burst_periodicity = atoi(val);
+		s->burst_periodicity_us = atoi(val) * 1000;
+
+	val = get_param(cmd, "burstPeriodicityus");
+	if (val)
+		s->burst_periodicity_us = atoi(val);
 
 	if (dut->throughput_pktsize && s->frame_rate == 0 && s->sender &&
 	    dut->throughput_pktsize != s->payload_size &&
@@ -656,11 +660,11 @@ static int send_burst(struct sigma_stream *s)
 	struct timeval stop;
 	int run_loop = 1;
 
-	if (s->burst_periodicity == 0 || s->duration == 0 ||
+	if (s->burst_periodicity_us == 0 || s->duration == 0 ||
 	    s->payload_size < 20) {
 		sigma_dut_print(s->dut, DUT_MSG_DEBUG,
 				"send_burst usage error, burstPeriod=%d or duration=%d",
-				s->burst_periodicity, s->duration);
+				s->burst_periodicity_us, s->duration);
 		return -1;
 	}
 
@@ -669,7 +673,7 @@ static int send_burst(struct sigma_stream *s)
 
 	/* Calculate the requested bitrate */
 	rate = s->payload_size * s->no_of_pkts_burst *
-		(1000 / s->burst_periodicity) * 8;
+		(1000 * 1000 / s->burst_periodicity_us) * 8;
 	if (rate > WFA_SEND_FIX_BITRATE_MAX) {
 		sigma_dut_print(s->dut, DUT_MSG_DEBUG,
 				"send_burst over maximum bitrate, req bitrate=%d",
@@ -735,12 +739,12 @@ static int send_burst(struct sigma_stream *s)
 		/* Calculate second rest part need to sleep */
 		gettimeofday(&after, NULL);
 		difftime = itime_diff(&before, &after);
-		if (difftime < 0 || difftime >= s->burst_periodicity * 1000) {
+		if (difftime < 0 || difftime >= s->burst_periodicity_us) {
 			/* Over time used, no sleep, go back to send */
 			over_time_cnt++;
-			if (difftime > s->burst_periodicity * 1000)
+			if (difftime > s->burst_periodicity_us)
 				extra_time_spend_on_sending +=
-					difftime - s->burst_periodicity * 1000;
+					(difftime - s->burst_periodicity_us);
 			usleep(500);
 			sleep_total++;
 			continue;
@@ -759,11 +763,11 @@ static int send_burst(struct sigma_stream *s)
 		 */
 		if (extra_time_spend_on_sending > 0) {
 			if (extra_time_spend_on_sending >
-			    s->burst_periodicity * 1000 - difftime) {
+			    (s->burst_periodicity_us - difftime)) {
 				/* reduce sleep time to catch up
 				 * over all on time sending */
 				extra_time_spend_on_sending -=
-					s->burst_periodicity * 1000 - difftime;
+					(s->burst_periodicity_us) - difftime;
 				usleep(500);
 				sleep_total++;
 				continue;
@@ -773,16 +777,17 @@ static int send_burst(struct sigma_stream *s)
 			}
 		}
 
-		difftime /= 1000; /* convert to mil-sec */
 
-		if (s->burst_periodicity - difftime > 0) {
+		if (s->burst_periodicity_us - difftime > 0) {
 			/* only sleep if there is extrac time with in the
 			 * second did not spend on sending */
-			usleep((s->burst_periodicity - difftime) * 1000);
-			sleep_total += s->burst_periodicity - difftime;
+			usleep(s->burst_periodicity_us - difftime);
+			sleep_total += (s->burst_periodicity_us - difftime) /
+				1000;
 		}
 
-		if (s->duration * 1000 < duration * s->burst_periodicity) {
+		if (s->duration * 1000 * 1000 <
+		    (duration * s->burst_periodicity_us)) {
 			over_send++;
 			/* This should not happen */
 			if (over_send > 1000) {
@@ -798,11 +803,11 @@ static int send_burst(struct sigma_stream *s)
 
 	extra_time_spend_on_sending /= 1000;
 	sigma_dut_print(s->dut, DUT_MSG_DEBUG,
-			"send_burst Count=%i txFrames=%i totalByteSent=%lli sleep_total=%d msec extra_time_spend_on_sending=%d over_time_cnt=%d over_send=%i BurstFrag=%d BurstPeriod=%d duration=%i",
+			"send_burst Count=%i txFrames=%i totalByteSent=%lli sleep_total=%d msec extra_time_spend_on_sending=%d over_time_cnt=%d over_send=%i BurstFrag=%d BurstPeriodUsec=%d duration=%i",
 			counter, s->tx_frames,
 			s->tx_payload_bytes, sleep_total,
 			extra_time_spend_on_sending, over_time_cnt, over_send,
-			s->no_of_pkts_burst, s->burst_periodicity, duration);
+			s->no_of_pkts_burst, s->burst_periodicity_us, duration);
 
 	return 0;
 }

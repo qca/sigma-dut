@@ -256,7 +256,7 @@ struct sigma_stream {
 	int trans_proto;
 
 	int no_of_pkts_burst;
-	int burst_periodicity;
+	int burst_periodicity_us;
 	int dscp;
 	bool use_dscp;
 
