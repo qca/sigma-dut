@@ -12145,7 +12145,8 @@ static int sta_twt_send_suspend(struct sigma_dut *dut, struct sigma_conn *conn,
 
 static int sta_twt_send_nudge(struct sigma_dut *dut, struct sigma_conn *conn,
 			      struct sigma_cmd *cmd,
-			      unsigned int suspend_duration)
+			      unsigned int suspend_duration,
+			      int start_sp_offset)
 {
 #ifdef NL80211_SUPPORT
 	struct nlattr *attr, *attr1;
@@ -12154,6 +12155,8 @@ static int sta_twt_send_nudge(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *intf = get_param(cmd, "Interface");
 	int next_twt_size = 1;
 
+	if (start_sp_offset)
+		next_twt_size = 3;
 	ifindex = if_nametoindex(intf);
 	if (ifindex == 0) {
 		sigma_dut_print(dut, DUT_MSG_ERROR,
@@ -12173,9 +12176,11 @@ static int sta_twt_send_nudge(struct sigma_dut *dut, struct sigma_conn *conn,
 		       QCA_WLAN_TWT_NUDGE) ||
 	    !(attr1 = nla_nest_start(msg,
 				     QCA_WLAN_VENDOR_ATTR_CONFIG_TWT_PARAMS)) ||
-	    (suspend_duration &&
-	     nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_WAKE_TIME,
-			 suspend_duration)) ||
+	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_WAKE_TIME,
+			suspend_duration) ||
+	    (start_sp_offset &&
+	     nla_put_s32(msg, QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_SP_START_OFFSET,
+			 start_sp_offset)) ||
 	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_NEXT_TWT_SIZE,
 			next_twt_size) ||
 	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_FLOW_ID, 0)) {
@@ -12220,7 +12225,15 @@ static int sta_twt_suspend_or_nudge(struct sigma_dut *dut,
 
 		suspend_duration = atoi(val);
 		suspend_duration = suspend_duration * 1000 * 1000;
-		return sta_twt_send_nudge(dut, conn, cmd, suspend_duration);
+		return sta_twt_send_nudge(dut, conn, cmd, suspend_duration, 0);
+	}
+
+	val = get_param(cmd, "TWT_NextTSFShift");
+	if (val) {
+		int sp_start_offset;
+
+		sp_start_offset = atoi(val) * 1000;
+		return sta_twt_send_nudge(dut, conn, cmd, 0, sp_start_offset);
 	}
 
 	return sta_twt_send_suspend(dut, conn, cmd);
@@ -17908,10 +17921,13 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 			sigma_dut_print(dut, DUT_MSG_ERROR,
 					"Failed to open nl80211 event socket");
 #endif /* NL80211_SUPPORT */
-		if (strcasecmp(val, "Suspend") == 0) {
+		if ((strcasecmp(val, "Suspend") == 0) ||
+		    (strcasecmp(val, "Modify") == 0)) {
 			if (sta_twt_suspend_or_nudge(dut, conn, cmd)) {
-				send_resp(dut, conn, SIGMA_ERROR,
-					  "ErrorCode,TWT suspend failed");
+				char err_resp[32] = "";
+				snprintf(err_resp, sizeof(err_resp),
+					 "ErrorCode,TWT %s failed", val);
+				send_resp(dut, conn, SIGMA_ERROR, err_resp);
 				return STATUS_SENT_ERROR;
 			}
 		} else if (strcasecmp(val, "Resume") == 0) {
