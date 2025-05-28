@@ -18171,7 +18171,17 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 					  "ErrorCode,TWT setup failed");
 				return STATUS_SENT_ERROR;
 			}
+			if (dut->device_type == STA_testbed &&
+			    run_iwpriv(dut, intf,
+				       "setUnitTestCmd 77 3 23 1 1") < 0)
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Failed to set early wakeup");
 		} else if (strcasecmp(val, "Teardown") == 0) {
+			if (dut->device_type == STA_testbed &&
+			    run_iwpriv(dut, intf,
+				       "setUnitTestCmd 77 3 23 1 0") < 0)
+				sigma_dut_print(dut, DUT_MSG_ERROR,
+						"Failed to reset early wakeup");
 			if (sta_twt_teardown(dut, conn, cmd)) {
 				send_resp(dut, conn, SIGMA_ERROR,
 					  "ErrorCode,TWT teardown failed");
