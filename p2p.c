@@ -3821,7 +3821,6 @@ p2p_pasn_pairing_setup(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *service_name = get_param(cmd, "ServiceName");
 	const char *role = get_param(cmd, "Role");
 	const char *bstrapmethod = get_param(cmd, "PairingBootstrapMethod");
-	const char *pmk_devik_caching = get_param(cmd, "PMKDevIKCaching");
 	const char *comeback_after = get_param(cmd, "ComebackAfter");
 	const char *comeback_cookie = get_param(cmd, "ComebackCookie");
 	const char *pairing_setup = get_param(cmd, "PairingSetup");
@@ -3837,13 +3836,6 @@ p2p_pasn_pairing_setup(struct sigma_dut *dut, struct sigma_conn *conn,
 
 	if (!mac || !service_name || !pairing_setup)
 		return INVALID_SEND_STATUS;
-
-	if (pmk_devik_caching && strcasecmp(pmk_devik_caching, "Enable") == 0 &&
-	    wpa_command(intf, "P2P_SET pairing_cache 1") < 0) {
-		send_resp(dut, conn, SIGMA_ERROR,
-			  "ErrorCode,Failed to set pmk_devik_caching");
-		return STATUS_SENT_ERROR;
-	}
 
 	if (comeback_after && comeback_cookie) {
 		ret = snprintf(buf, sizeof(buf), "P2P_SET comeback_after %s",
@@ -3940,7 +3932,6 @@ p2p_pasn_join(struct sigma_dut *dut, struct sigma_conn *conn,
 	const char *service_name = get_param(cmd, "ServiceName");
 	const char *role = get_param(cmd, "Role");
 	const char *bstrapmethod = get_param(cmd, "PairingBootstrapMethod");
-	const char *pmk_devik_caching = get_param(cmd, "PMKDevIKCaching");
 	const char *comeback_after = get_param(cmd, "ComebackAfter");
 	const char *comeback_cookie = get_param(cmd, "ComebackCookie");
 	const char *pairing_setup = get_param(cmd, "PairingSetup");
@@ -3953,14 +3944,6 @@ p2p_pasn_join(struct sigma_dut *dut, struct sigma_conn *conn,
 
 	if (!mac || !service_name || !pairing_setup)
 		return INVALID_SEND_STATUS;
-
-	if (pmk_devik_caching && strcmp(pmk_devik_caching, "Enable") == 0) {
-		if (wpa_command(intf, "P2P_SET pairing_cache 1") < 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Failed to set pmk_devik_caching");
-			return STATUS_SENT_ERROR;
-		}
-	}
 
 	if (comeback_after && comeback_cookie) {
 		ret = snprintf(buf, sizeof(buf), "P2P_SET comeback_after %s",

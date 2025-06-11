@@ -21,27 +21,12 @@ enum sigma_cmd_result sigma_usd_publish(struct sigma_dut *dut,
 	const char *ssi = get_param(cmd, "ServSpecificInfoPayload");
 	const char *serv_proto_type = get_param(cmd, "ServProtoType");
 	const char *oper_chan = get_param(cmd, "AdvertiseChannel");
-	const char *bootstrapmethod = get_param(cmd, "PairingBootstrapMethod");
 	char buf[3000];
 	int i, res;
 	size_t len;
 
 	if (!ifname)
 		ifname = get_station_ifname(dut);
-
-	if (bootstrapmethod) {
-		if (wpa_command(ifname, "P2P_SET pairing_setup 1") < 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Failed to set pairing setup");
-			return STATUS_SENT;
-		}
-
-		if (wpa_command(ifname, "P2P_SET pairing_cache 1") < 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Failed to set pairing cache");
-			return STATUS_SENT;
-		}
-	}
 
 	if (!service_name)
 		return ERROR_SEND_STATUS;
@@ -120,27 +105,12 @@ enum sigma_cmd_result sigma_usd_subscribe(struct sigma_dut *dut,
 	const char *serv_proto_type = get_param(cmd, "ServProtoType");
 	const char *default_chan = get_param(cmd, "DefaultPublishChannel");
 	const char *chan_list = get_param(cmd, "PublishChannelList");
-	const char *bootstrapmethod = get_param(cmd, "PairingBootstrapMethod");
 	char buf[3000];
 	int i, res;
 	size_t len;
 
 	if (!ifname)
 		ifname = get_station_ifname(dut);
-
-	if (bootstrapmethod) {
-		if (wpa_command(ifname, "P2P_SET pairing_setup 1") < 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Failed to set pairing setup");
-			return STATUS_SENT;
-		}
-
-		if (wpa_command(ifname, "P2P_SET pairing_cache 1") < 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Failed to set pairing cache");
-			return STATUS_SENT;
-		}
-	}
 
 	if (!service_name)
 		return ERROR_SEND_STATUS;
