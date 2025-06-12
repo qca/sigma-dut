@@ -14947,17 +14947,14 @@ static int sta_ap_known(const char *ifname, const char *bssid)
 }
 
 
-static int sta_scan_ap(struct sigma_dut *dut, const char *ifname,
-		       const char *bssid)
+static int sta_scan(struct sigma_dut *dut, const char *ifname)
 {
 	int res;
 	struct wpa_ctrl *ctrl;
 	char buf[256];
 
-	if (sta_ap_known(ifname, bssid))
-		return 0;
 	sigma_dut_print(dut, DUT_MSG_DEBUG,
-			"AP not in BSS table - start scan");
+			"start scan");
 
 	ctrl = open_wpa_mon(ifname);
 	if (ctrl == NULL) {
@@ -14983,6 +14980,21 @@ static int sta_scan_ap(struct sigma_dut *dut, const char *ifname,
 		sigma_dut_print(dut, DUT_MSG_INFO, "Scan did not complete");
 		return -1;
 	}
+
+	return 0;
+}
+
+
+static int sta_scan_ap(struct sigma_dut *dut, const char *ifname,
+		       const char *bssid)
+{
+	if (sta_ap_known(ifname, bssid))
+		return 0;
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"AP not in BSS table - start scan");
+
+	if (sta_scan(dut, ifname) < 0)
+		return -1;
 
 	if (sta_ap_known(ifname, bssid))
 		return 0;
@@ -16948,6 +16960,157 @@ cmd_sta_send_frame_p2p(struct sigma_dut *dut, struct sigma_conn *conn,
 }
 
 
+static enum sigma_cmd_result
+cmd_sta_send_frame_reconf(struct sigma_dut *dut, struct sigma_conn *conn,
+			  const char *intf, struct sigma_cmd *cmd)
+{
+	const char *param;
+	char buf[200];
+	char *pos;
+	int rem_len, ret, link_id;
+	u16 add_links_bm = 0, delete_links_bm = 0;
+	bool first_entry;
+
+	pos = buf;
+	rem_len = sizeof(buf);
+
+	ret = snprintf(pos, rem_len, "SETUP_LINK_RECONFIG");
+	if (snprintf_error(rem_len, ret)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"Failed to write Link Reconfiguration request command");
+		return ERROR_SEND_STATUS;
+	}
+
+	pos += ret;
+	rem_len -= ret;
+
+	if (get_param(cmd, "ReconfigAddLinks")) {
+		ret = snprintf(pos, rem_len, " add=");
+		if (snprintf_error(rem_len, ret)) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to write Link Reconfiguration request command");
+			return ERROR_SEND_STATUS;
+		}
+
+		pos += ret;
+		rem_len -= ret;
+
+		param = get_param(cmd, "ReconfigAddLinks");
+		add_links_bm = get_link_id_bitmask(param);
+		if (!add_links_bm)
+			return INVALID_SEND_STATUS;
+
+		first_entry = true;
+		for (link_id = 0; link_id < 15; link_id++) {
+			if (!(add_links_bm & BIT(link_id)))
+				continue;
+
+			if (first_entry) {
+				ret = snprintf(pos, rem_len, "%u", link_id);
+				if (snprintf_error(rem_len, ret)) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"Failed to write Link Reconfiguration request command");
+					return ERROR_SEND_STATUS;
+				}
+
+				pos += ret;
+				rem_len -= ret;
+				first_entry = false;
+			} else {
+				ret = snprintf(pos, rem_len, " %u", link_id);
+				if (snprintf_error(rem_len, ret)) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"Failed to write Link Reconfiguration request command");
+					return ERROR_SEND_STATUS;
+				}
+
+				pos += ret;
+				rem_len -= ret;
+			}
+		}
+	}
+
+	if (get_param(cmd, "ReconfigDeleteLinks")) {
+		ret = snprintf(pos, rem_len, " delete=");
+		if (snprintf_error(rem_len, ret)) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Failed to write Link Reconfiguration request command");
+			return ERROR_SEND_STATUS;
+		}
+
+		pos += ret;
+		rem_len -= ret;
+
+		param = get_param(cmd, "ReconfigDeleteLinks");
+		delete_links_bm = get_link_id_bitmask(param);
+		if (!delete_links_bm)
+			return INVALID_SEND_STATUS;
+
+		first_entry = true;
+		for (link_id = 0; link_id < 15; link_id++) {
+			if (!(delete_links_bm & BIT(link_id)))
+				continue;
+
+			if (first_entry) {
+				ret = snprintf(pos, rem_len, "%u", link_id);
+				if (snprintf_error(rem_len, ret)) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"Failed to write Link Reconfiguration request command");
+					return ERROR_SEND_STATUS;
+				}
+
+				pos += ret;
+				rem_len -= ret;
+				first_entry = false;
+			} else {
+				ret = snprintf(pos, rem_len, " %u", link_id);
+				if (snprintf_error(rem_len, ret)) {
+					sigma_dut_print(dut, DUT_MSG_ERROR,
+							"Failed to write Link Reconfiguration request command");
+					return ERROR_SEND_STATUS;
+				}
+
+				pos += ret;
+				rem_len -= ret;
+			}
+		}
+	}
+
+	if (sta_scan(dut, intf) < 0)
+		return ERROR_SEND_STATUS;
+
+	if (wpa_command(intf, buf) != 0) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,Failed to send link reconfiguration frame request");
+		return STATUS_SENT_ERROR;
+	}
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"Link reconfiguration frame request sent: %s", buf);
+
+	return SUCCESS_SEND_STATUS;
+}
+
+
+static enum sigma_cmd_result
+cmd_sta_send_frame_eht(struct sigma_dut *dut, struct sigma_conn *conn,
+		       const char *intf, struct sigma_cmd *cmd)
+{
+	const char *val;
+
+	val = get_param(cmd, "FrameName");
+	if (val) {
+		if (strcasecmp(val, "LinkReconfigReq") == 0)
+			return cmd_sta_send_frame_reconf(dut, conn, intf, cmd);
+
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: frame name - %s is invalid",
+				__func__, val);
+	}
+
+	return INVALID_SEND_STATUS;
+}
+
+
 enum sigma_cmd_result cmd_sta_send_frame(struct sigma_dut *dut,
 					 struct sigma_conn *conn,
 					 struct sigma_cmd *cmd)
@@ -16966,6 +17129,8 @@ enum sigma_cmd_result cmd_sta_send_frame(struct sigma_dut *dut,
 	val = get_param(cmd, "program");
 	if (val == NULL)
 		val = get_param(cmd, "frame");
+	if (val && strcasecmp(val, "EHT") == 0)
+		return cmd_sta_send_frame_eht(dut, conn, intf, cmd);
 	if (val && strcasecmp(val, "TDLS") == 0)
 		return cmd_sta_send_frame_tdls(dut, conn, cmd);
 	if (val && (strcasecmp(val, "HS2") == 0 ||
