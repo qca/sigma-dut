@@ -13,8 +13,8 @@
 #define TG_MAX_CLIENTS_CONNECTIONS 1
 
 /* Limited bit rate generator related constant or threshold values */
-  /* 25 Mbps per stream */
-#define WFA_SEND_FIX_BITRATE_MAX             25 * 1024 * 1024
+  /* 75 Mbps per stream */
+#define WFA_SEND_FIX_BITRATE_MAX             75 * 1024 * 1024
 
 
 static enum sigma_cmd_result cmd_traffic_agent_config(struct sigma_dut *dut,
