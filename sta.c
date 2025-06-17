@@ -14941,10 +14941,10 @@ static int sta_scan_ap(struct sigma_dut *dut, const char *ifname,
 }
 
 
-static int cmd_sta_send_frame_hs2_neighadv(struct sigma_dut *dut,
-					   struct sigma_conn *conn,
-					   struct sigma_cmd *cmd,
-					   const char *intf)
+static int cmd_sta_send_frame_neighadv(struct sigma_dut *dut,
+				       struct sigma_conn *conn,
+				       struct sigma_cmd *cmd,
+				       const char *intf)
 {
 	char buf[200];
 
@@ -14959,16 +14959,16 @@ static int cmd_sta_send_frame_hs2_neighadv(struct sigma_dut *dut,
 }
 
 
-static int cmd_sta_send_frame_hs2_neighsolreq(struct sigma_dut *dut,
-					      struct sigma_conn *conn,
-					      struct sigma_cmd *cmd,
-					      const char *intf)
+static int cmd_sta_send_frame_neighsolreq(struct sigma_dut *dut,
+					  struct sigma_conn *conn,
+					  struct sigma_cmd *cmd,
+					  const char *intf)
 {
 	char buf[200];
 	const char *ip = get_param(cmd, "SenderIP");
 
 	if (!ip)
-		return 0;
+		ip = "::";
 
 	snprintf(buf, sizeof(buf), "ndisc6 -nm %s %s -r 4", ip, intf);
 	sigma_dut_print(dut, DUT_MSG_DEBUG, "Run: %s", buf);
@@ -15161,10 +15161,10 @@ static int cmd_sta_send_frame_hs2(struct sigma_dut *dut,
 		return -1;
 
 	if (strcasecmp(type, "NeighAdv") == 0)
-		return cmd_sta_send_frame_hs2_neighadv(dut, conn, cmd, intf);
+		return cmd_sta_send_frame_neighadv(dut, conn, cmd, intf);
 
 	if (strcasecmp(type, "NeighSolicitReq") == 0)
-		return cmd_sta_send_frame_hs2_neighsolreq(dut, conn, cmd, intf);
+		return cmd_sta_send_frame_neighsolreq(dut, conn, cmd, intf);
 
 	if (strcasecmp(type, "ARPProbe") == 0)
 		return cmd_sta_send_frame_arpprobe(dut, conn, cmd, intf);
@@ -17050,6 +17050,14 @@ cmd_sta_send_frame_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 
 		if (strcasecmp(val, "ARPReply") == 0)
 			return cmd_sta_send_frame_arpreply(dut, conn, cmd,
+							   intf);
+
+		if (strcasecmp(val, "NeighSolicitReq") == 0)
+			return cmd_sta_send_frame_neighsolreq(dut, conn, cmd,
+							      intf);
+
+		if (strcasecmp(val, "NeighAdv") == 0)
+			return cmd_sta_send_frame_neighadv(dut, conn, cmd,
 							   intf);
 
 		sigma_dut_print(dut, DUT_MSG_ERROR,
