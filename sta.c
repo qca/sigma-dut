@@ -1527,6 +1527,14 @@ static enum sigma_cmd_result cmd_sta_set_ip_config(struct sigma_dut *dut,
 
 			enable_sta_ipv6_configuration(dut, ifname, buf,
 						      sizeof(buf));
+			snprintf(buf, sizeof(buf),
+				 "sysctl net.ipv6.conf.%s.autoconf=1",
+				 ifname);
+			sigma_dut_print(dut, DUT_MSG_DEBUG, "Run: %s", buf);
+			if (system(buf) != 0) {
+				sigma_dut_print(dut, DUT_MSG_DEBUG,
+						"Failed to enable stateless address configuration");
+			}
 #ifdef ANDROID
 			/*
 			 * This sleep is required as the assignment in case of
@@ -1584,6 +1592,16 @@ static enum sigma_cmd_result cmd_sta_set_ip_config(struct sigma_dut *dut,
 						"Failed to disable IPv6 address before association");
 			}
 		} else {
+			enable_sta_ipv6_configuration(dut, ifname, buf,
+						      sizeof(buf));
+			snprintf(buf, sizeof(buf),
+				 "sysctl net.ipv6.conf.%s.autoconf=0",
+				 ifname);
+			sigma_dut_print(dut, DUT_MSG_DEBUG, "Run: %s", buf);
+			if (system(buf) != 0) {
+				sigma_dut_print(dut, DUT_MSG_DEBUG,
+						"Failed to disable stateless address configuration");
+			}
 			if (set_ipv6_addr(dut, ip, mask, ifname) != 0) {
 				send_resp(dut, conn, SIGMA_ERROR,
 					  "ErrorCode,Failed to set IPv6 address");
