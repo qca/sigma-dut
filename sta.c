@@ -196,6 +196,9 @@ struct wil_wmi_p2p_cfg_cmd {
 #endif /* __linux__ */
 
 static int get_key_mgmt_capa(struct sigma_dut *dut);
+static int get_pairwise_ciphers_capa(struct sigma_dut *dut);
+static int get_group_ciphers_capa(struct sigma_dut *dut);
+static int get_group_mgmt_ciphers_capa(struct sigma_dut *dut);
 
 #ifdef ANDROID
 
@@ -2079,7 +2082,9 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 			  const char *ifname, struct sigma_cmd *cmd)
 {
 	const char *val;
-	int id;
+	char buf[500];
+	char *pos;
+	int id, rem, ret;
 	int cipher_set = 0;
 	int owe, sae;
 	int suite_b = 0;
@@ -2187,6 +2192,42 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 		cipher_set = 1;
 		if (set_network(ifname, id, "pairwise", "GCMP-256 CCMP") < 0)
 			return -2;
+	} else if (dut->program == PROGRAM_WPA3) {
+		if (get_pairwise_ciphers_capa(dut) < 0)
+			return ERROR_SEND_STATUS;
+
+		cipher_set = 1;
+
+		pos = buf;
+		rem = sizeof(buf);
+
+		if (!(dut->pairwise_ciphers_capa & BIT(SIGMA_CIPHER_CCMP)))
+			return ERROR_SEND_STATUS;
+
+		ret = snprintf(pos, rem, "CCMP");
+		pos += ret;
+		rem -= ret;
+
+		if (dut->pairwise_ciphers_capa & BIT(SIGMA_CIPHER_GCMP)) {
+			ret = snprintf(pos, rem, " GCMP");
+			pos += ret;
+			rem -= ret;
+		}
+
+		if (dut->pairwise_ciphers_capa & BIT(SIGMA_CIPHER_GCMP_256)) {
+			ret = snprintf(pos, rem, " GCMP-256");
+			pos += ret;
+			rem -= ret;
+		}
+
+		if (dut->pairwise_ciphers_capa & BIT(SIGMA_CIPHER_CCMP_256)) {
+			ret = snprintf(pos, rem, " CCMP-256");
+			pos += ret;
+			rem -= ret;
+		}
+
+		if (set_network(ifname, id, "pairwise", buf) < 0)
+			return ERROR_SEND_STATUS;
 	}
 
 	if (!cipher_set && !owe) {
@@ -2227,6 +2268,40 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 	} else if (dut->device_mode == MODE_11BE || sae) {
 		if (set_network(ifname, id, "group", "GCMP-256 CCMP") < 0)
 			return -2;
+	} else if (dut->program == PROGRAM_WPA3) {
+		if (get_group_ciphers_capa(dut) < 0)
+			return ERROR_SEND_STATUS;
+
+		pos = buf;
+		rem = sizeof(buf);
+
+		if (!(dut->group_ciphers_capa & BIT(SIGMA_CIPHER_CCMP)))
+			return ERROR_SEND_STATUS;
+
+		ret = snprintf(pos, rem, "CCMP");
+		pos += ret;
+		rem -= ret;
+
+		if (dut->group_ciphers_capa & BIT(SIGMA_CIPHER_GCMP)) {
+			ret = snprintf(pos, rem, " GCMP");
+			pos += ret;
+			rem -= ret;
+		}
+
+		if (dut->group_ciphers_capa & BIT(SIGMA_CIPHER_GCMP_256)) {
+			ret = snprintf(pos, rem, " GCMP-256");
+			pos += ret;
+			rem -= ret;
+		}
+
+		if (dut->group_ciphers_capa & BIT(SIGMA_CIPHER_CCMP_256)) {
+			ret = snprintf(pos, rem, " CCMP-256");
+			pos += ret;
+			rem -= ret;
+		}
+
+		if (set_network(ifname, id, "group", buf) < 0)
+			return ERROR_SEND_STATUS;
 	}
 
 	val = get_param(cmd, "GroupMgntCipher");
@@ -2259,6 +2334,47 @@ static int set_wpa_common(struct sigma_dut *dut, struct sigma_conn *conn,
 		send_resp(dut, conn, SIGMA_ERROR,
 			  "errorCode,Failed to set GroupMgntCipher");
 		return 0;
+	} else if (dut->program == PROGRAM_WPA3) {
+		if (get_group_mgmt_ciphers_capa(dut) < 0)
+			return ERROR_SEND_STATUS;
+
+		pos = buf;
+		rem = sizeof(buf);
+
+		if (!(dut->group_mgmt_ciphers_capa &
+		      BIT(SIGMA_CIPHER_AES_128_CMAC)))
+			return ERROR_SEND_STATUS;
+
+		ret = snprintf(pos, rem, "AES-128-CMAC");
+		pos += ret;
+		rem -= ret;
+
+		if (dut->group_mgmt_ciphers_capa &
+		    BIT(SIGMA_CIPHER_BIP_GMAC_128)) {
+			ret = snprintf(pos, rem, " BIP-GMAC-128");
+			pos += ret;
+			rem -= ret;
+		}
+
+		if (dut->group_mgmt_ciphers_capa &
+		    BIT(SIGMA_CIPHER_BIP_GMAC_256)) {
+			ret = snprintf(pos, rem, " BIP-GMAC-256");
+			pos += ret;
+			rem -= ret;
+		}
+
+		if (dut->group_mgmt_ciphers_capa &
+		    BIT(SIGMA_CIPHER_BIP_CMAC_256)) {
+			ret = snprintf(pos, rem, " BIP-CMAC-256");
+			pos += ret;
+			rem -= ret;
+		}
+
+		if (set_network(ifname, id, "group_mgmt", buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "errorCode,Failed to set GroupMgntCipher");
+			return STATUS_SENT_ERROR;
+		}
 	}
 
 	val = get_param(cmd, "AKMSuiteType");
