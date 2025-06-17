@@ -14982,10 +14982,10 @@ static int cmd_sta_send_frame_hs2_neighsolreq(struct sigma_dut *dut,
 }
 
 
-static int cmd_sta_send_frame_hs2_arpprobe(struct sigma_dut *dut,
-					   struct sigma_conn *conn,
-					   struct sigma_cmd *cmd,
-					   const char *ifname)
+static int cmd_sta_send_frame_arpprobe(struct sigma_dut *dut,
+				       struct sigma_conn *conn,
+				       struct sigma_cmd *cmd,
+				       const char *ifname)
 {
 	char buf[200];
 	const char *ip = get_param(cmd, "SenderIP");
@@ -15006,10 +15006,10 @@ static int cmd_sta_send_frame_hs2_arpprobe(struct sigma_dut *dut,
 }
 
 
-static int cmd_sta_send_frame_hs2_arpannounce(struct sigma_dut *dut,
-					      struct sigma_conn *conn,
-					      struct sigma_cmd *cmd,
-					      const char *ifname)
+static int cmd_sta_send_frame_arpannounce(struct sigma_dut *dut,
+					  struct sigma_conn *conn,
+					  struct sigma_cmd *cmd,
+					  const char *ifname)
 {
 	char buf[200];
 	char ip[16];
@@ -15047,10 +15047,10 @@ static int cmd_sta_send_frame_hs2_arpannounce(struct sigma_dut *dut,
 }
 
 
-static int cmd_sta_send_frame_hs2_arpreply(struct sigma_dut *dut,
-					   struct sigma_conn *conn,
-					   struct sigma_cmd *cmd,
-					   const char *ifname)
+static int cmd_sta_send_frame_arpreply(struct sigma_dut *dut,
+				       struct sigma_conn *conn,
+				       struct sigma_cmd *cmd,
+				       const char *ifname)
 {
 	char buf[200], addr[20];
 	char dst[ETH_ALEN], src[ETH_ALEN];
@@ -15167,13 +15167,13 @@ static int cmd_sta_send_frame_hs2(struct sigma_dut *dut,
 		return cmd_sta_send_frame_hs2_neighsolreq(dut, conn, cmd, intf);
 
 	if (strcasecmp(type, "ARPProbe") == 0)
-		return cmd_sta_send_frame_hs2_arpprobe(dut, conn, cmd, intf);
+		return cmd_sta_send_frame_arpprobe(dut, conn, cmd, intf);
 
 	if (strcasecmp(type, "ARPAnnounce") == 0)
-		return cmd_sta_send_frame_hs2_arpannounce(dut, conn, cmd, intf);
+		return cmd_sta_send_frame_arpannounce(dut, conn, cmd, intf);
 
 	if (strcasecmp(type, "ARPReply") == 0)
-		return cmd_sta_send_frame_hs2_arpreply(dut, conn, cmd, intf);
+		return cmd_sta_send_frame_arpreply(dut, conn, cmd, intf);
 
 	if (strcasecmp(type, "DLS-request") == 0 ||
 	    strcasecmp(type, "DLSrequest") == 0)
@@ -17039,6 +17039,18 @@ cmd_sta_send_frame_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (val) {
 		if (strcasecmp(val, "LinkReconfigReq") == 0)
 			return cmd_sta_send_frame_reconf(dut, conn, intf, cmd);
+
+		if (strcasecmp(val, "ARPProbe") == 0)
+			return cmd_sta_send_frame_arpprobe(dut, conn, cmd,
+							   intf);
+
+		if (strcasecmp(val, "ARPAnnounce") == 0)
+			return cmd_sta_send_frame_arpannounce(dut, conn, cmd,
+							      intf);
+
+		if (strcasecmp(val, "ARPReply") == 0)
+			return cmd_sta_send_frame_arpreply(dut, conn, cmd,
+							   intf);
 
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: frame name - %s is invalid",
