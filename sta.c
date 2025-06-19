@@ -7358,6 +7358,22 @@ static void sta_set_phymode(struct sigma_dut *dut, const char *intf,
 }
 
 
+static int sta_set_eht_scs_traffic_supp(struct sigma_dut *dut, const char *intf,
+					int val)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_SCS_TRAFFIC_SUPPORT,
+		val);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"EHT SCS support cannot be changed without NL80211_SUPPORT defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 #ifdef NL80211_SUPPORT
 static int wcn_sta_set_rsne_random_pmkid_cnt(struct sigma_dut *dut,
 					     const char *intf, uint8_t cnt)
@@ -7569,6 +7585,19 @@ cmd_sta_preset_testparameters(struct sigma_dut *dut, struct sigma_conn *conn,
 		if (dut->program == PROGRAM_QM &&
 		    dut->device_mode == MODE_11AX)
 			sta_set_phymode(dut, intf, val);
+	}
+
+	val = get_param(cmd, "EHTSCS_TrafficSupport");
+	if (val) {
+		if (get_enable_disable(val)) {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Enable EHTSCS_TrafficSupp");
+			sta_set_eht_scs_traffic_supp(dut, intf, 1);
+		} else {
+			sigma_dut_print(dut, DUT_MSG_INFO,
+					"Disable EHTSCS_TrafficSupp");
+			sta_set_eht_scs_traffic_supp(dut, intf, 0);
+		}
 	}
 
 	val = get_param(cmd, "wmm");
