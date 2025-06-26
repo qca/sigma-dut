@@ -51,6 +51,7 @@ int get_wpa_cli_events(struct sigma_dut *dut, struct wpa_ctrl *mon,
 int get_wpa_cli_events_timeout(struct sigma_dut *dut, struct wpa_ctrl *mon,
 			       const char **events, char *buf, size_t buf_size,
 			       unsigned int timeout);
+int add_ipv6_rule(struct sigma_dut *dut, const char *ifname);
 
 int add_network(const char *ifname);
 int set_network(const char *ifname, int id, const char *field,

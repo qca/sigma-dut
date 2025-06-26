@@ -2388,6 +2388,9 @@ static enum sigma_cmd_result cmd_sta_get_p2p_ip_config(struct sigma_dut *dut,
 
 		convert_mac_addr_to_ipv6_lladdr(mac, ipv6_buf,
 						sizeof(ipv6_buf));
+#ifdef ANDROID
+		add_ipv6_rule(dut, grp->ifname);
+#endif /* ANDROID */
 		if (set_ipv6_addr(dut, ipv6_buf, "64", grp->ifname) != 0)
 			return -1;
 

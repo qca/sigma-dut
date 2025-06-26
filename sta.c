@@ -202,8 +202,6 @@ static int get_group_mgmt_ciphers_capa(struct sigma_dut *dut);
 
 #ifdef ANDROID
 
-static int add_ipv6_rule(struct sigma_dut *dut, const char *ifname);
-
 #define ANDROID_KEYSTORE_GET 'g'
 #define ANDROID_KEYSTORE_GET_PUBKEY 'b'
 
@@ -1412,69 +1410,6 @@ static int clear_ip_addr(struct sigma_dut *dut, const char *ifname)
 
 	return 0;
 }
-
-
-#ifdef ANDROID
-static int add_ipv6_rule(struct sigma_dut *dut, const char *ifname)
-{
-	char cmd[200], *result, *pos;
-	FILE *fp;
-	int tableid;
-	size_t len, result_len = 1000;
-
-	snprintf(cmd, sizeof(cmd), "ip -6 route list table all | grep %s",
-		 ifname);
-	fp = popen(cmd, "r");
-	if (fp == NULL)
-		return -1;
-
-	result = malloc(result_len);
-	if (result == NULL) {
-		fclose(fp);
-		return -1;
-	}
-
-	len = fread(result, 1, result_len - 1, fp);
-	fclose(fp);
-
-	if (len == 0) {
-		free(result);
-		return -1;
-	}
-	result[len] = '\0';
-
-	pos = strstr(result, "table ");
-	if (pos == NULL) {
-		free(result);
-		return -1;
-	}
-
-	pos += strlen("table ");
-	tableid = atoi(pos);
-	if (tableid != 0) {
-		if (system("ip -6 rule del prio 22000") != 0) {
-			/* ignore any error */
-		}
-		snprintf(cmd, sizeof(cmd),
-			 "ip -6 rule add from all lookup %d prio 22000",
-			 tableid);
-		if (system(cmd) != 0) {
-			sigma_dut_print(dut, DUT_MSG_INFO,
-					"Failed to run %s", cmd);
-			free(result);
-			return -1;
-		}
-	} else {
-		sigma_dut_print(dut, DUT_MSG_INFO,
-				"No Valid Table Id found %s", pos);
-		free(result);
-		return -1;
-	}
-	free(result);
-
-	return 0;
-}
-#endif /* ANDROID */
 
 
 int set_ipv4_addr(struct sigma_dut *dut, const char *ifname,
