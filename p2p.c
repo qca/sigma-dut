@@ -4016,6 +4016,9 @@ p2p_pasn_join(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (!dut->p2p_event_mon_thread) {
 		/* Create a separate event thread to receive bootstrap request
 		 * event */
+		sigma_dut_print(dut, DUT_MSG_DEBUG,
+				"Starting P2P event monitoring thread");
+		stop_p2p_resp_event_rx = false;
 		pthread_create(&dut->p2p_event_mon_thread, NULL,
 			       &wpa_pairing_resp_event_recv, (void *) dut);
 	}
