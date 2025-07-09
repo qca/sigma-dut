@@ -11306,6 +11306,7 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 
 		if (type && strcasecmp(type, "Testbed") == 0) {
 			sta_set_eht_testbed_def(dut, intf, 1);
+			sta_set_eht_extra_eht_ltf(dut, intf, 0);
 #ifdef NL80211_SUPPORT
 			ret = sta_set_he_mcs(dut, intf, HE_80_MCS0_9);
 			if (ret) {
@@ -18161,6 +18162,10 @@ wcn_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 		return ERROR_SEND_STATUS;
 #endif /* NL80211_SUPPORT */
 	}
+
+	val = get_param(cmd, "ExtraLTFSymbols");
+	if (val)
+		sta_set_eht_extra_eht_ltf(dut, intf, (u8) atoi(val));
 
 	val = get_param(cmd, "KeepAlive");
 	if (val) {
