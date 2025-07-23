@@ -1983,6 +1983,9 @@ static int set_akm_suites(struct sigma_dut *dut, const char *ifname,
 		case AKM_FT_FILS_SHA384:
 			str = "FT-FILS-SHA384";
 			break;
+		case AKM_OWE:
+			str = "OWE";
+			break;
 		case AKM_SAE_EXT_KEY:
 			str = "SAE-EXT-KEY";
 			break;

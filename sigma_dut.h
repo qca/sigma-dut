@@ -381,6 +381,7 @@ enum akm_suite_values {
 	AKM_FILS_SHA384 = 15,
 	AKM_FT_FILS_SHA256 = 16,
 	AKM_FT_FILS_SHA384 = 17,
+	AKM_OWE = 18,
 	AKM_SAE_EXT_KEY = 24,
 	AKM_FT_SAE_EXT_KEY = 25,
 
