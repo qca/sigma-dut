@@ -1823,6 +1823,7 @@ static enum sigma_cmd_result cmd_sta_p2p_dissolve(struct sigma_dut *dut,
 	if (grpid == NULL)
 		return -1;
 
+	wpa_command(intf, "NAN_FLUSH");
 	grp = p2p_group_get(dut, grpid);
 	if (grp == NULL) {
 		send_resp(dut, conn, SIGMA_ERROR, "ErrorCode,Requested group "
