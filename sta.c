@@ -2830,6 +2830,15 @@ static enum sigma_cmd_result set_trust_root_system(struct sigma_dut *dut,
 						   const char *ifname, int id)
 {
 	char buf[200];
+#ifdef OPENWRT_BUILD
+	const char *ca_bundle = "/etc/ssl/certs/ca-certificates.crt";
+
+	if (file_exists(ca_bundle)) {
+		if (set_network_quoted(ifname, id, "ca_cert", ca_bundle) < 0)
+			return ERROR_SEND_STATUS;
+		return SUCCESS_SEND_STATUS;
+	}
+#endif /* OPENWRT_BUILD */
 
 	snprintf(buf, sizeof(buf), "%s/certs", sigma_cert_path);
 	if (!file_exists(buf))
