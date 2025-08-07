@@ -1448,7 +1448,7 @@ static void enable_sta_ipv6_configuration(struct sigma_dut *dut,
 					      const char *ifname,
 					      char *buf, size_t buf_size)
 {
-#if defined(ANDROID)
+#if (defined(ANDROID) || (defined(__linux__) && !defined(LINUX_EMBEDDED)))
 	snprintf(buf, buf_size,
 		 "sysctl net.ipv6.conf.%s.disable_ipv6=1",
 		 ifname);
