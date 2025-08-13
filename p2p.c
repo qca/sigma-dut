@@ -690,6 +690,69 @@ cmd_sta_get_p2p_dev_address(struct sigma_dut *dut, struct sigma_conn *conn,
 }
 
 
+static int p2p_set_noa_nl80211(struct sigma_dut *dut, int start,
+			       const char *intf)
+{
+#ifdef NL80211_SUPPORT
+	struct nlattr *attr;
+	struct nl_msg *msg;
+	int ifindex, ret;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Failed to get index for interface %s",
+				__func__, intf);
+		return -1;
+	}
+
+	msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
+			      NL80211_CMD_VENDOR);
+	if (!msg ||
+	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			QCA_NL80211_VENDOR_SUBCMD_P2P_SET_NOA) ) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: failed to initialize vendor_cmd",
+				__func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	attr = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA);
+	if (!attr ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_P2P_SET_NOA_COUNT,
+		       dut->noa_count) ||
+	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_P2P_SET_NOA_DURATION,
+			dut->noa_duration) ||
+	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_P2P_SET_NOA_INTERVAL,
+			dut->noa_interval) ||
+	    nla_put_u32(msg, QCA_WLAN_VENDOR_ATTR_P2P_SET_NOA_START,
+			start)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: failed to add an attribute", __func__);
+		nlmsg_free(msg);
+		return -1;
+	}
+
+	nla_nest_end(msg, attr);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret)
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in send_and_recv_msgs, ret=%d",
+				__func__, ret);
+
+	return ret;
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_DEBUG,
+			"NL80211_SUPPORT not enabled - cannot use it for P2P NoA configuration");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static enum sigma_cmd_result cmd_sta_set_p2p(struct sigma_dut *dut,
 					     struct sigma_conn *conn,
 					     struct sigma_cmd *cmd)
@@ -792,6 +855,9 @@ static enum sigma_cmd_result cmd_sta_set_p2p(struct sigma_dut *dut,
 		if (noa_dur || noa_int || noa_count) {
 			int start = 0;
 			const char *ifname;
+
+			if (p2p_set_noa_nl80211(dut, start, intf) == 0)
+				goto noa_done;
 
 			snprintf(buf, sizeof(buf),
 				 "DRIVER P2P_SET_NOA %d %d %d %d",
