@@ -17139,6 +17139,8 @@ cmd_sta_send_frame_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 		if (strcasecmp(val, "NeighAdv") == 0)
 			return cmd_sta_send_frame_neighadv(dut, conn, cmd,
 							   intf);
+		if (strcasecmp(val, "SCSReq") == 0)
+			return cmd_sta_send_frame_scs(dut, conn, intf, cmd);
 
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: frame name - %s is invalid",
