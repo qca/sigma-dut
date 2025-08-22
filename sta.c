@@ -10246,6 +10246,22 @@ static int sta_set_eht_om_ctrl_supp(struct sigma_dut *dut, const char *intf,
 }
 
 
+static int sta_set_eht_btm_recomm_multi_ap_supp(struct sigma_dut *dut,
+						const char *intf, int val)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_BTM_RECOMM_MULTI_AP_SUPPORT,
+		val);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"EHT BTM recommended multi AP cannot be changed without NL80211_SUPPORT defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static int sta_set_eht_triggered_su_bforming_feedback(struct sigma_dut *dut,
 						      const char *intf, u8 val)
 {
@@ -13802,6 +13818,14 @@ cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 	if (val)
 		sta_config_params(dut, intf, STA_SET_LINK_RECONFIG_SUPPORT,
 				  get_enable_disable(val) ? 1 : 0);
+
+	val = get_param(cmd, "BTMRecomm_MultiAPSupport");
+	if (val) {
+		if (get_enable_disable(val))
+			sta_set_eht_btm_recomm_multi_ap_supp(dut, intf, 1);
+		else
+			sta_set_eht_btm_recomm_multi_ap_supp(dut, intf, 0);
+	}
 
 	return cmd_sta_set_wireless_vht(dut, conn, cmd);
 }
