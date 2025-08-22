@@ -10362,6 +10362,22 @@ static int sta_set_bcast_twt_support(struct sigma_dut *dut, const char *intf,
 }
 
 
+static int sta_set_rtwt_support(struct sigma_dut *dut, const char *intf,
+				int enable)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_RTWT_SUPPORT,
+		enable);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"RTWT cannot be changed without NL80211_SUPPORT defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static int sta_set_tx_beamformee(struct sigma_dut *dut, const char *intf,
 				 int enable)
 {
@@ -13457,6 +13473,14 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 				  "ErrorCode,Failed to set TWT_ReqSupport");
 			return STATUS_SENT_ERROR;
 		}
+	}
+
+	val = get_param(cmd, "RestrictedTWT");
+	if (val) {
+		if (get_enable_disable(val))
+			sta_set_rtwt_support(dut, intf, 1);
+		else
+			sta_set_rtwt_support(dut, intf, 0);
 	}
 
 	val = get_param(cmd, "PreamblePunctRx");
