@@ -11118,7 +11118,8 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 			dut->ap_mu_txBF = 0;
 			dut->he_sounding = VALUE_DISABLED;
 		} else {
-			if (drv == DRIVER_WCN || drv == DRIVER_LINUX_WCN) {
+			if (drv == DRIVER_WCN || drv == DRIVER_LINUX_WCN ||
+			    drv == DRIVER_MAC80211) {
 				dut->ap_txBF = 0;
 				dut->ap_mu_txBF = 0;
 			} else {
