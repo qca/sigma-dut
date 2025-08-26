@@ -10134,7 +10134,7 @@ skip_vht_parameters_set:
 				"setting addba buf_size=%d", buf_size);
 	}
 
-	if (drv == DRIVER_LINUX_WCN) {
+	if (drv == DRIVER_LINUX_WCN || drv == DRIVER_MAC80211) {
 		const char *ifname_ptr = ifname;
 
 		if ((dut->ap_key_mgmt == AP_OPEN &&
