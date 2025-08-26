@@ -9048,7 +9048,8 @@ write_conf:
 
 	if ((drv == DRIVER_MAC80211 || drv == DRIVER_QNXNTO ||
 	     drv == DRIVER_LINUX_WCN) &&
-	    (mode == AP_11ac || mode == AP_11na)) {
+	    (mode == AP_11ac || mode == AP_11na ||
+	     (mode == AP_11ax && drv == DRIVER_MAC80211))) {
 		if (dut->ap_countrycode[0]) {
 			fprintf(f, "country_code=%s\n", dut->ap_countrycode);
 			fprintf(f, "ieee80211d=1\n");
