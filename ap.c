@@ -49,6 +49,10 @@
 #define SIGMA_DUT_HOSTAPD_PID_FILE "/tmp/sigma_dut-ap-hostapd.pid"
 #endif /* SIGMA_DUT_HOSTAPD_PID_FILE */
 
+/* Limits for random BSS color generation */
+#define BSS_COLOR_LOWER_LIMIT 1
+#define BSS_COLOR_UPPER_LIMIT 63
+
 /* The following is taken from Hotspot 2.0 testplan Appendix B.1 */
 #define ANQP_VENUE_NAME_1 "02019c0002083d656e6757692d466920416c6c69616e63650a3239383920436f7070657220526f61640a53616e746120436c6172612c2043412039353035312c205553415b63686957692d4669e88194e79b9fe5ae9ee9aa8ce5aea40ae4ba8ce4b99de585abe4b99de5b9b4e5ba93e69f8fe8b7af0ae59ca3e5858be68b89e68b892c20e58aa0e588a9e7a68fe5b0bce4ba9a39353035312c20e7be8ee59bbd"
 #define ANQP_VENUE_NAME_1_CHI "P\"\x63\x68\x69\x3a\x57\x69\x2d\x46\x69\xe8\x81\x94\xe7\x9b\x9f\xe5\xae\x9e\xe9\xaa\x8c\xe5\xae\xa4\\n\xe4\xba\x8c\xe4\xb9\x9d\xe5\x85\xab\xe4\xb9\x9d\xe5\xb9\xb4\xe5\xba\x93\xe6\x9f\x8f\xe8\xb7\xaf\\n\xe5\x9c\xa3\xe5\x85\x8b\xe6\x8b\x89\xe6\x8b\x89\x2c\x20\xe5\x8a\xa0\xe5\x88\xa9\xe7\xa6\x8f\xe5\xb0\xbc\xe4\xba\x9a\x39\x35\x30\x35\x31\x2c\x20\xe7\xbe\x8e\xe5\x9b\xbd\""
@@ -8962,6 +8966,18 @@ write_conf:
 
 	if (drv == DRIVER_MAC80211 || drv == DRIVER_LINUX_WCN)
 		fprintf(f, "driver=nl80211\n");
+
+	if (drv == DRIVER_MAC80211 && dut->program == PROGRAM_HE) {
+		u8 random_bss_color = 0;
+
+		random_get_bytes((char *) &random_bss_color,
+				 sizeof(random_bss_color));
+		random_bss_color =
+			(random_bss_color %
+			 (BSS_COLOR_UPPER_LIMIT - BSS_COLOR_LOWER_LIMIT + 1)) +
+			BSS_COLOR_LOWER_LIMIT;
+		fprintf(f, "he_bss_color=%d\n", random_bss_color);
+	}
 
 	if (dut->ap_tx_stbc == VALUE_NOT_SET && drv == DRIVER_LINUX_WCN)
 		dut->ap_tx_stbc = get_driver_ap_tx_stbc_capab(dut);
