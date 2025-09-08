@@ -19816,6 +19816,14 @@ static enum sigma_cmd_result cmd_sta_set_pwrsave(struct sigma_dut *dut,
 			res = set_ps(intf, dut, 1);
 	} else if (get_driver_type(dut) == DRIVER_WCN) {
 		return cmd_sta_set_power_save_wcn(intf, dut, conn, cmd);
+	} else if (prog && get_driver_type(dut) == DRIVER_MAC80211 &&
+		   strcasecmp(prog, "HE") == 0) {
+		if (strcasecmp(powersave, "On") == 0)
+			res = set_ps(intf, dut, 1);
+		else if (strcasecmp(powersave, "Off") == 0)
+			res = set_ps(intf, dut, 0);
+		else
+			return -1;
 	} else {
 		if (mode == NULL)
 			return -1;
