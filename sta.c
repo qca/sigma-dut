@@ -12908,6 +12908,18 @@ static int sta_transmit_omi(struct sigma_dut *dut, struct sigma_conn *conn,
 }
 
 
+static int
+mac80211_sta_set_addba_buf_size(struct sigma_dut *dut, const char *intf,
+				int buf_size)
+{
+	char buf[64];
+
+	snprintf(buf, sizeof(buf), "-t 1 -m 0 -v 0 0x7e %d",
+		 buf_size == 256 ? 3 : 2);
+	return fwtest_cmd_wrapper(dut, buf, intf);
+}
+
+
 static enum sigma_cmd_result
 cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 			 struct sigma_cmd *cmd)
@@ -13640,10 +13652,25 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 			buf_size = 256;
 		else
 			buf_size = 64;
-		if (get_driver_type(dut) == DRIVER_WCN &&
-		    sta_set_addba_buf_size(dut, intf, buf_size)) {
+
+		switch (get_driver_type(dut)) {
+		case DRIVER_WCN:
+			if (sta_set_addba_buf_size(dut, intf, buf_size)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,set addbaresp_buff_size failed");
+				return STATUS_SENT_ERROR;
+			}
+			break;
+		case DRIVER_MAC80211:
+			if (mac80211_sta_set_addba_buf_size(dut, intf, buf_size)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,set addbaresp_buff_size failed");
+				return STATUS_SENT_ERROR;
+			}
+			break;
+		default:
 			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,set addbaresp_buff_size failed");
+				  "ErrorCode,does not support set addbaresp_buff_size");
 			return STATUS_SENT_ERROR;
 		}
 	}
@@ -13662,10 +13689,25 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 			buf_size = 256;
 		else
 			buf_size = 64;
-		if (get_driver_type(dut) == DRIVER_WCN &&
-		    sta_set_addba_buf_size(dut, intf, buf_size)) {
+
+		switch (get_driver_type(dut)) {
+		case DRIVER_WCN:
+			if (sta_set_addba_buf_size(dut, intf, buf_size)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,set addbareq_buff_size failed");
+				return STATUS_SENT_ERROR;
+			}
+			break;
+		case DRIVER_MAC80211:
+			if (mac80211_sta_set_addba_buf_size(dut, intf, buf_size)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,set addbareq_buff_size failed");
+				return STATUS_SENT_ERROR;
+			}
+			break;
+		default:
 			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,set addbareq_buff_size failed");
+				  "ErrorCode,does not support set addbareq_buff_size");
 			return STATUS_SENT_ERROR;
 		}
 	}
