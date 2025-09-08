@@ -17332,6 +17332,89 @@ error:
 
 
 static enum sigma_cmd_result
+cmd_sta_send_frame_dar_response(struct sigma_dut *dut, struct sigma_conn *conn,
+				const char *intf, struct sigma_cmd *cmd)
+{
+#ifdef NL80211_SUPPORT
+	struct nl_msg *msg;
+	int ret;
+	struct nlattr *dar_attr;
+	int ifindex;
+	const char *val;
+	u8 dar_request_type;
+
+	ifindex = if_nametoindex(intf);
+	if (ifindex == 0) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Could not find index for interface %s",
+				__func__, intf);
+		return ERROR_SEND_STATUS;
+	}
+
+	val = get_param(cmd, "Request_Type");
+	if (val) {
+		if (strcasecmp(val, "remove") == 0) {
+			dar_request_type = QCA_WLAN_DAR_OP_TYPE_RESPONSE_TERMINATE;
+		} else {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"%s: Invalid request_type", __func__);
+			return INVALID_SEND_STATUS;
+		}
+	} else {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: Request_type is mandatory", __func__);
+		return INVALID_SEND_STATUS;
+	}
+
+	msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0, NL80211_CMD_VENDOR);
+	if (!msg) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in getting nlmsg", __func__);
+		return ERROR_SEND_STATUS;
+	}
+
+	if (nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			QCA_NL80211_VENDOR_SUBCMD_DAR)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in adding DAR vendor_subcmd and vendor_id",
+				__func__);
+		goto error;
+	}
+
+	dar_attr = nla_nest_start(msg, NL80211_ATTR_VENDOR_DATA);
+	if (!dar_attr ||
+	    nla_put_u8(msg, QCA_WLAN_VENDOR_ATTR_DAR_OP_TYPE,
+		       dar_request_type)) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in adding DAR vendor_cmd and vendor_data",
+				__func__);
+		goto error;
+	}
+	nla_nest_end(msg, dar_attr);
+
+	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, NULL, NULL);
+	if (ret) {
+		sigma_dut_print(dut, DUT_MSG_ERROR,
+				"%s: err in send_and_recv_msgs, ret=%d",
+				__func__, ret);
+		return ERROR_SEND_STATUS;
+	}
+
+	return SUCCESS_SEND_STATUS;
+
+error:
+	nlmsg_free(msg);
+	return ERROR_SEND_STATUS;
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"DAR Response not supported without NL80211_SUPPORT defined");
+	return ERROR_SEND_STATUS;
+#endif /* NL80211_SUPPORT */
+}
+
+
+static enum sigma_cmd_result
 cmd_sta_send_frame_qm(struct sigma_dut *dut, struct sigma_conn *conn,
 		      const char *intf, struct sigma_cmd *cmd)
 {
@@ -17352,6 +17435,9 @@ cmd_sta_send_frame_qm(struct sigma_dut *dut, struct sigma_conn *conn,
 		if (strcasecmp(val, "DARReq") == 0)
 			return cmd_sta_send_frame_dar_request(dut, conn, intf,
 							      cmd);
+		if (strcasecmp(val, "DARResp") == 0)
+			return cmd_sta_send_frame_dar_response(dut, conn, intf,
+							       cmd);
 
 		sigma_dut_print(dut, DUT_MSG_ERROR,
 				"%s: frame name - %s is invalid",
