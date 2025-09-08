@@ -1293,7 +1293,16 @@ void kill_dhcp_client(struct sigma_dut *dut, const char *ifname)
 		unlink(path);
 		sleep(1);
 	} else {
-		snprintf(path, sizeof(path), "/var/run/dhcpcd-%s.pid", ifname);
+		if (access("/var/run/dhcpcd", F_OK) == 0) {
+			snprintf(path, sizeof(path), "/var/run/dhcpcd/%s.pid",
+				 ifname);
+			if (access(path, F_OK) < 0)
+				snprintf(path, sizeof(path),
+					 "/var/run/dhcpcd/pid");
+		} else {
+			snprintf(path, sizeof(path), "/var/run/dhcpcd-%s.pid",
+				 ifname);
+		}
 
 		if (stat(path, &s) == 0) {
 			snprintf(buf, sizeof(buf), "kill `cat %s`", path);
