@@ -130,8 +130,8 @@ static int get_oper_centr_freq_seq_idx(struct sigma_dut *dut, int chwidth,
 				       int channel);
 
 
-static int fwtest_cmd_wrapper(struct sigma_dut *dut, const char *arg,
-			       const char *ifname)
+int fwtest_cmd_wrapper(struct sigma_dut *dut, const char *arg,
+		       const char *ifname)
 {
 	int ret = -1;
 
