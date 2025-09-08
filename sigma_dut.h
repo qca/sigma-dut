@@ -1306,6 +1306,7 @@ struct sigma_dut {
 #endif /* ANDROID_MDNS */
 	char host_name[100];
 	int sta_roaming_disabled;
+	int ciphers_capa; /* bitmap of enum sigma_cipher_suites values */
 	int key_mgmt_capa; /* bitmap of enum sigma_akm_suites values */
 	int pairwise_ciphers_capa; /* bitmap of enum sigma_cipher_suites values
 				    */

@@ -8815,6 +8815,39 @@ static void set_second_ap_security_conf(FILE *file, struct sigma_dut *dut)
 }
 
 
+static int cipher_support(int ciphers_capa, enum ap_cipher cipher)
+{
+	if (!ciphers_capa)
+		return 1;
+
+	switch (cipher) {
+	case AP_WEP:
+		return !!(ciphers_capa & BIT(AP_WEP));
+	case AP_TKIP:
+		return !!(ciphers_capa & BIT(AP_TKIP));
+	case AP_CCMP:
+		return !!(ciphers_capa & BIT(AP_CCMP));
+	case AP_GCMP_128:
+		return !!(ciphers_capa & BIT(AP_GCMP_128));
+	case AP_GCMP_256:
+		return !!(ciphers_capa & BIT(AP_GCMP_256));
+	case AP_CCMP_256:
+		return !!(ciphers_capa & BIT(AP_CCMP_256));
+	case AP_CCMP_TKIP:
+		return !!((ciphers_capa & BIT(AP_CCMP)) &&
+			  (ciphers_capa & BIT(AP_TKIP)));
+	case AP_CCMP_128_GCMP_256:
+		return !!((ciphers_capa & BIT(AP_CCMP)) &&
+			  (ciphers_capa & BIT(AP_GCMP_256)));
+	case AP_PLAIN:
+		return 1;
+	case AP_NO_GROUP_CIPHER_SET:
+	default:
+		return 0;
+	}
+}
+
+
 enum sigma_cmd_result cmd_ap_config_commit(struct sigma_dut *dut,
 					   struct sigma_conn *conn,
 					   struct sigma_cmd *cmd)
@@ -8838,6 +8871,12 @@ enum sigma_cmd_result cmd_ap_config_commit(struct sigma_dut *dut,
 
 	drv = get_driver_type(dut);
 	mode = dut->ap_mode;
+
+	if (dut->ap_cipher == AP_WEP &&
+	    !cipher_support(dut->ciphers_capa, AP_WEP)) {
+		send_resp(dut, conn, SIGMA_ERROR, "errorCode,Not supported");
+		return STATUS_SENT_ERROR;
+	}
 
 	if (dut->mode == SIGMA_MODE_STATION) {
 		stop_sta_mode(dut);
@@ -10515,6 +10554,44 @@ static void ath_reset_vht_defaults(struct sigma_dut *dut)
 
 #ifdef NL80211_SUPPORT
 
+#define SUITE(oui, id)  (((oui) << 8) | (id))
+
+/* cipher suite selectors */
+#define WLAN_CIPHER_SUITE_WEP40         SUITE(0x000FAC, 1)
+#define WLAN_CIPHER_SUITE_TKIP          SUITE(0x000FAC, 2)
+#define WLAN_CIPHER_SUITE_CCMP          SUITE(0x000FAC, 4)
+#define WLAN_CIPHER_SUITE_WEP104        SUITE(0x000FAC, 5)
+#define WLAN_CIPHER_SUITE_GCMP          SUITE(0x000FAC, 8)
+#define WLAN_CIPHER_SUITE_GCMP_256      SUITE(0x000FAC, 9)
+#define WLAN_CIPHER_SUITE_CCMP_256      SUITE(0x000FAC, 10)
+
+
+static void get_cipher_info(u32 cipher, int *ciphers_capa)
+{
+	switch (cipher) {
+	case WLAN_CIPHER_SUITE_WEP40:
+	case WLAN_CIPHER_SUITE_WEP104:
+		*ciphers_capa |= BIT(AP_WEP);
+		break;
+	case WLAN_CIPHER_SUITE_TKIP:
+		*ciphers_capa |= BIT(AP_TKIP);
+		break;
+	case WLAN_CIPHER_SUITE_CCMP:
+		*ciphers_capa |= BIT(AP_CCMP);
+		break;
+	case WLAN_CIPHER_SUITE_GCMP:
+		*ciphers_capa |= BIT(AP_GCMP_128);
+		break;
+	case WLAN_CIPHER_SUITE_GCMP_256:
+		*ciphers_capa |= BIT(AP_GCMP_256);
+		break;
+	case WLAN_CIPHER_SUITE_CCMP_256:
+		*ciphers_capa |= BIT(AP_CCMP_256);
+		break;
+	}
+}
+
+
 #define IEEE80211_HT_AMPDU_PARAM_FACTOR        0x3
 #define IEEE80211_HT_AMPDU_PARAM_DENSITY_SHIFT	2
 
@@ -10631,8 +10708,8 @@ static int wiphy_info_handler(struct nl_msg *msg, void *arg)
 	struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
 	struct sigma_dut *dut = arg;
 	unsigned int tx_antenna_mask;
-	struct nlattr *nl_band;
-	int rem_band;
+	struct nlattr *nl_band, *nl_cipher;
+	int rem_band, rem_cipher;
 
 	nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0),
 		  genlmsg_attrlen(gnlh, 0), NULL);
@@ -10659,6 +10736,15 @@ static int wiphy_info_handler(struct nl_msg *msg, void *arg)
 	if (dut->program == PROGRAM_HE &&
 	    !(dut->hw_modes.ap_he_phy_capab[33 / 8] & (1 << (33 % 8))))
 		dut->ap_mu_txBF = 0;
+
+	if (tb[NL80211_ATTR_CIPHER_SUITES]) {
+		nla_for_each_nested(nl_cipher, tb[NL80211_ATTR_CIPHER_SUITES],
+				    rem_cipher) {
+			u32 cipher = nla_get_u32(nl_cipher);
+
+			get_cipher_info(cipher, &dut->ciphers_capa);
+		}
+	}
 
 	return 0;
 }
