@@ -19113,11 +19113,138 @@ failed:
 }
 
 
+static int mac80211_he_ltf_mapping(struct sigma_dut *dut,
+				   const char *val)
+{
+	if (strcmp(val, "3.2") == 0)
+		return 0;
+	if (strcmp(val, "6.4") == 0)
+		return 1;
+	if (strcmp(val, "12.8") == 0)
+		return 2;
+
+	sigma_dut_print(dut, DUT_MSG_ERROR, "Unsupported LTF value %s", val);
+	return -1;
+}
+
+
+static int mac80211_he_gi_mapping(struct sigma_dut *dut,
+				  const char *val)
+{
+	if (strcmp(val, "0.8") == 0)
+		return 9;
+	if (strcmp(val, "1.6") == 0)
+		return 10;
+	if (strcmp(val, "3.2") == 0)
+		return 11;
+
+	sigma_dut_print(dut, DUT_MSG_ERROR, "Unsupported GI value %s", val);
+	return -1;
+}
+
+
+static enum sigma_cmd_result mac80211_he_ltf(struct sigma_dut *dut,
+					     struct sigma_conn *conn,
+					     const char *intf,
+					     const char *val)
+{
+	free(dut->ar_ltf);
+	dut->ar_ltf = strdup(val);
+	if (!dut->ar_ltf) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "errorCode,Failed to store new LTF");
+		return STATUS_SENT_ERROR;
+	}
+	return SUCCESS_SEND_STATUS;
+}
+
+
+static enum sigma_cmd_result mac80211_he_gi(struct sigma_dut *dut,
+					    const char *intf,
+					    const char *val)
+{
+	int16_t he_gi;
+	int ret = -1;
+	char buf[100];
+
+	he_gi = mac80211_he_gi_mapping(dut, val);
+	if (he_gi < 0)
+		return INVALID_SEND_STATUS;
+
+	if (dut->ar_ltf) {
+		int16_t he_ltf;
+		unsigned int value = 0;
+
+		he_ltf = mac80211_he_ltf_mapping(dut, dut->ar_ltf);
+		free(dut->ar_ltf);
+		dut->ar_ltf = NULL;
+
+		if (he_ltf < 0)
+			return ERROR_SEND_STATUS;
+
+		if (he_gi != 0xFF)
+			value |= 1 << he_gi;
+
+		if (he_ltf != 0xFF)
+			value |= 1 << he_ltf;
+
+		snprintf(buf, sizeof(buf), "-t 1 -m 0 -v 0 0x80 %d", value);
+		ret = fwtest_cmd_wrapper(dut, buf, intf);
+		if (ret < 0)
+			return ERROR_SEND_STATUS;
+
+		if (he_ltf != 0xFF) {
+			snprintf(buf, sizeof(buf), "-t 1 -m 0 -v 0 0x74 %d",
+				 he_ltf + 1);
+			ret = fwtest_cmd_wrapper(dut, buf, intf);
+			if (ret < 0)
+				return ERROR_SEND_STATUS;
+		}
+	} else if (he_gi != 0xFF) {
+		snprintf(buf, sizeof(buf), "-t 1 -m 0 -v 0 0x80 %d",
+			 1 << he_gi);
+		ret = fwtest_cmd_wrapper(dut, buf, intf);
+	}
+
+	if (ret < 0)
+		return ERROR_SEND_STATUS;
+
+	return SUCCESS_SEND_STATUS;
+}
+
+
+static enum sigma_cmd_result
+mac80211_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
+			     struct sigma_conn *conn, struct sigma_cmd *cmd)
+{
+	const char *val;
+	enum sigma_cmd_result res;
+
+	val = get_param(cmd, "LTF");
+	if (val) {
+		res = mac80211_he_ltf(dut, conn, intf, val);
+		if (res != SUCCESS_SEND_STATUS)
+			return res;
+	}
+
+	val = get_param(cmd, "GI");
+	if (val || dut->ar_ltf) {
+		res = mac80211_he_gi(dut, intf, val);
+		if (res != SUCCESS_SEND_STATUS)
+			return res;
+	}
+
+	return SUCCESS_SEND_STATUS;
+}
+
+
 static enum sigma_cmd_result
 cmd_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 			struct sigma_conn *conn, struct sigma_cmd *cmd)
 {
 	switch (get_driver_type(dut)) {
+	case DRIVER_MAC80211:
+		return mac80211_sta_set_rfeature_he(intf, dut, conn, cmd);
 	case DRIVER_WCN:
 		return wcn_sta_set_rfeature_he(intf, dut, conn, cmd);
 	default:
