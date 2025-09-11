@@ -1253,6 +1253,8 @@ cmd_sta_start_autonomous_go(struct sigma_dut *dut, struct sigma_conn *conn,
 		const char *type = get_param(cmd, "type");
 		int p2p_mode = 0;
 
+		if (type && strcasecmp(type, "PASN") == 0)
+			p2p_mode = 1;
 		if (type && strcasecmp(type, "PCC") == 0)
 			p2p_mode = 2;
 
