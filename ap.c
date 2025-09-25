@@ -895,6 +895,14 @@ static void ap_set_wireless_pr(struct sigma_dut *dut, struct sigma_conn *conn,
 	val = get_param(cmd, "PASN_UNAUTH");
 	if (val)
 		dut->ap_pasn_unauth = atoi(val);
+
+	val = get_param(cmd, "RNM_MFP");
+	if (val)
+		dut->rnm_mfp = atoi(val);
+
+	val = get_param(cmd, "URNM_MFPR_X20");
+	if (val)
+		dut->urnm_mfpr_x20 = strcasecmp(val, "Disable") != 0;
 }
 
 
@@ -10100,8 +10108,12 @@ skip_vht_parameters_set:
 		fprintf(f, "oce=%d\n",
 			dut->dev_role == DEVROLE_STA_CFON ? 2 : 1);
 	}
-	if (dut->program == PROGRAM_PR && dut->ap_pasn_unauth != -1)
-		fprintf(f, "pasn_noauth=%d\n", dut->ap_pasn_unauth);
+	if (dut->program == PROGRAM_PR) {
+		if (dut->ap_pasn_unauth != -1)
+			fprintf(f, "pasn_noauth=%d\n", dut->ap_pasn_unauth);
+		fprintf(f, "urnm_mfpr_x20=%d\n", dut->urnm_mfpr_x20);
+		fprintf(f, "urnm_mfpr=%d\n", dut->rnm_mfp);
+	}
 	fclose(f);
 
 	if (dut->ap_is_dual && conf_counter == 0) {
@@ -11191,8 +11203,11 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 		dut->ap_gas_cb_delay = 0;
 		dut->ap_msnt_type = 0;
 	}
-	if (dut->program == PROGRAM_PR)
+	if (dut->program == PROGRAM_PR) {
+		dut->urnm_mfpr_x20 = 1;
+		dut->rnm_mfp = 0;
 		dut->secure_ltf_supported = 1;
+	}
 	dut->ap_ft_oa = 0;
 	dut->ap_ft_ds = VALUE_NOT_SET;
 	dut->ap_reg_domain = REG_DOMAIN_NOT_SET;
