@@ -903,6 +903,11 @@ static void ap_set_wireless_pr(struct sigma_dut *dut, struct sigma_conn *conn,
 	val = get_param(cmd, "URNM_MFPR_X20");
 	if (val)
 		dut->urnm_mfpr_x20 = strcasecmp(val, "Disable") != 0;
+
+	val = get_param(cmd, "I2RLMRFeedbackPolicy");
+	if (val)
+		dut->i2rlmrpolicy = atoi(val);
+
 }
 
 
@@ -9664,6 +9669,8 @@ skip_key_mgmt:
 			fprintf(f, "sae_pwe=%s\n", sae_pwe);
 	}
 
+	if (dut->i2rlmrpolicy != 0)
+		fprintf(f, "i2r_lmr_policy=%u\n", dut->i2rlmrpolicy);
 	if (dut->sae_anti_clogging_threshold >= 0)
 		fprintf(f, "sae_anti_clogging_threshold=%d\n",
 			dut->sae_anti_clogging_threshold);
@@ -11204,6 +11211,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 		dut->ap_msnt_type = 0;
 	}
 	if (dut->program == PROGRAM_PR) {
+		dut->i2rlmrpolicy = LOC_FORCE_FTM_I2R_LMR_POLICY;
 		dut->urnm_mfpr_x20 = 1;
 		dut->rnm_mfp = 0;
 		dut->secure_ltf_supported = 1;
