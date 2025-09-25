@@ -13974,6 +13974,8 @@ sta_set_wireless_loc_r2(struct sigma_dut *dut, struct sigma_conn *conn,
 {
 	const char *i2rlmr_iftmr = get_param(cmd, "I2RLMRIFTMR");
 	const char *session_terminate = get_param(cmd, "FTMSessionTerminate");
+	const char *urnm_mfpr_x20 = get_param(cmd, "URNM_MFPR_X20");
+	const char *intf = get_param(cmd, "Interface");
 
 	if (i2rlmr_iftmr) {
 		dut->i2rlmr_iftmr = atoi(i2rlmr_iftmr);
@@ -13989,6 +13991,19 @@ sta_set_wireless_loc_r2(struct sigma_dut *dut, struct sigma_conn *conn,
 		if (val)
 			dut->i2rlmrpolicy =
 				LOC_ABORT_ON_I2R_LMR_POLICY_MISMATCH;
+	}
+
+	if (urnm_mfpr_x20 && dut->device_type == STA_testbed) {
+		char buf[25];
+
+		dut->urnm_mfpr_x20 = strcasecmp(urnm_mfpr_x20, "Disable") != 0;
+		snprintf(buf, sizeof(buf), "SET urnm_mfpr_x20 %d",
+			 dut->urnm_mfpr_x20);
+		if (wpa_command(intf, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set value urnm_mfpr_x20");
+			return STATUS_SENT_ERROR;
+		}
 	}
 
 	return SUCCESS_SEND_STATUS;
@@ -19875,11 +19890,26 @@ cmd_sta_set_rfeature_loc_r2(const char *intf, struct sigma_dut *dut,
 			    struct sigma_conn *conn, struct sigma_cmd *cmd)
 {
 	const char *rnm_mfp = get_param(cmd, "RNM_MFP");
+	const char *urnm_mfpr_x20 = get_param(cmd, "URNM_MFPR_X20");
 
 	if (rnm_mfp) {
 		dut->rnm_mfp = atoi(rnm_mfp);
 		sigma_dut_print(dut, DUT_MSG_INFO,
 				"rnm_mfp value is %d", dut->rnm_mfp);
+	}
+
+	if (urnm_mfpr_x20) {
+		char buf[100];
+
+		dut->urnm_mfpr_x20 = strcasecmp(urnm_mfpr_x20, "Disable") != 0;
+		snprintf(buf, sizeof(buf), "SET urnm_mfpr_x20 %d",
+			 dut->urnm_mfpr_x20);
+
+		if (wpa_command(intf, buf) < 0) {
+			send_resp(dut, conn, SIGMA_ERROR,
+				  "ErrorCode,Failed to set urnm_mfpr_x20 flag");
+			return STATUS_SENT_ERROR;
+		}
 	}
 
 	return SUCCESS_SEND_STATUS;

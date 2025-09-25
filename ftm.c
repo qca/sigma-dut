@@ -742,7 +742,15 @@ int lowi_cmd_sta_reset_default(struct sigma_dut *dut, struct sigma_conn *conn,
 #endif /* ANDROID_WIFI_HAL */
 
 	dut->i2rlmrpolicy = LOC_FORCE_FTM_I2R_LMR_POLICY;
+	dut->urnm_mfpr_x20 = -1;
 	lowi_cmd_sta_reset_ptksa_cache(dut, conn, cmd);
+
+	if (dut->program == PROGRAM_PR) {
+		dut->urnm_mfpr_x20 = 1;
+		dut->rnm_mfp = 0;
+		wpa_command(get_station_ifname(dut), "SET urnm_mfpr 0");
+		wpa_command(get_station_ifname(dut), "SET urnm_mfpr_x20 1");
+	}
 
 	return 0;
 }

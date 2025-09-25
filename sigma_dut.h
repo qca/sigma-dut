@@ -1302,6 +1302,7 @@ struct sigma_dut {
 	int i2rlmr_iftmr;
 	int i2rlmrpolicy;
 	int rnm_mfp;
+	int urnm_mfpr_x20;
 	int secure_ltf_supported;
 	int ap_pasn_unauth;
 	struct device_pairing_info dev_info;
