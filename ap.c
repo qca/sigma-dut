@@ -3283,13 +3283,13 @@ static enum sigma_cmd_result cmd_ap_set_security(struct sigma_dut *dut,
 	val = get_param(cmd, "Transition_Disable");
 	if (val) {
 		if (atoi(val)) {
+			/* Use WPA3-Personal Only by default for transition
+			 * disable index if no specific bit is identified. */
 			val = get_param(cmd, "Transition_Disable_Index");
-			if (!val) {
-				send_resp(dut, conn, SIGMA_INVALID,
-					  "errorCode,Transition_Disable without Transition_Disable_Index");
-				return STATUS_SENT;
-			}
-			dut->ap_transition_disable = 1 << atoi(val);
+			if (val)
+				dut->ap_transition_disable = 1 << atoi(val);
+			else
+				dut->ap_transition_disable = 1;
 			if (dut->ap_pmf == AP_PMF_DISABLED && !pmf_set)
 				dut->ap_pmf = AP_PMF_OPTIONAL;
 		} else {
