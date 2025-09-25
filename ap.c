@@ -9066,14 +9066,16 @@ write_conf:
 		fprintf(f, "he_bss_color=%d\n", random_bss_color);
 	}
 
-	if (dut->ap_tx_stbc == VALUE_NOT_SET && drv == DRIVER_LINUX_WCN)
+	if (dut->ap_tx_stbc == VALUE_NOT_SET &&
+	    (drv == DRIVER_LINUX_WCN || drv == DRIVER_MAC80211))
 		dut->ap_tx_stbc = get_driver_ap_tx_stbc_capab(dut);
 
 	if ((drv == DRIVER_MAC80211 || drv == DRIVER_QNXNTO ||
 	     drv == DRIVER_LINUX_WCN) &&
 	    (mode == AP_11ng || mode == AP_11na ||
 	     ((mode == AP_11ax || mode == AP_11be) && !dut->use_5g))) {
-		int ht40plus = 0, ht40minus = 0, tx_stbc = 0;
+		int ht40plus = 0, ht40minus = 0, tx_stbc = 0, sgi_20 = 0,
+			sgi_40 = 0;
 
 		fprintf(f, "ieee80211n=1\n");
 		if (mode == AP_11ax || mode == AP_11be)
@@ -9117,10 +9119,19 @@ write_conf:
 			ht40plus = 0;
 		}
 
-		fprintf(f, "ht_capab=%s%s%s\n",
+		if (drv == DRIVER_MAC80211 && dut->ap_chwidth == AP_20) {
+			sgi_20 = 1;
+		} else if (drv == DRIVER_MAC80211 && dut->ap_chwidth == AP_40) {
+			sgi_20 = 1;
+			sgi_40 = 1;
+		}
+
+		fprintf(f, "ht_capab=%s%s%s%s%s\n",
 			ht40plus ? "[HT40+]" : "",
 			ht40minus ? "[HT40-]" : "",
-			tx_stbc ? "[TX-STBC]" : "");
+			tx_stbc ? "[TX-STBC]" : "",
+			sgi_20 ? "[SHORT-GI-20]" : "",
+			sgi_40 ? "[SHORT-GI-40]" : "");
 	}
 
 	if ((drv == DRIVER_MAC80211 || drv == DRIVER_QNXNTO ||
