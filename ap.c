@@ -15547,6 +15547,9 @@ static enum sigma_cmd_result mac80211_he_gi(struct sigma_dut *dut,
 	char *mode = dut->use_5g ? "5" : "2.4";
 	int ret = -1;
 
+	if (dut->ap_band_6g)
+		mode = "6";
+
 	if (dut->ar_ltf) {
 		he_ltf = mac80211_he_ltf_mapping(dut, dut->ar_ltf);
 		free(dut->ar_ltf);
