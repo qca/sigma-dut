@@ -780,6 +780,8 @@ struct sigma_dut {
 		AP_WPA2_PSK_SHA256,
 		AP_WPA2_ENT_FT_EAP,
 		AP_OSEN,
+		AP_PASN,
+		AP_PASN_SAE,
 		AP_WPA3_SAE_EXT,
 	} ap_key_mgmt;
 	enum ap_tag_key_mgmt {
@@ -797,6 +799,10 @@ struct sigma_dut {
 		AP_PMF_OPTIONAL,
 		AP_PMF_REQUIRED
 	} ap_pmf;
+	enum ap_pasn {
+		PASN_DISABLED,
+		PASN_ENABLED,
+	} ap_pasn;
 	enum ap_cipher {
 		AP_NO_GROUP_CIPHER_SET,
 		AP_CCMP,
@@ -1296,6 +1302,8 @@ struct sigma_dut {
 	int i2rlmr_iftmr;
 	int i2rlmrpolicy;
 	int rnm_mfp;
+	int secure_ltf_supported;
+	int ap_pasn_unauth;
 	struct device_pairing_info dev_info;
 	struct peer_pairing_info peer_info;
 #ifdef ANDROID_MDNS

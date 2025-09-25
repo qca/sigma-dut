@@ -884,6 +884,20 @@ static void get_he_mcs_nssmap(uint8_t *mcsnssmap, uint8_t nss,
 }
 
 
+static void ap_set_wireless_pr(struct sigma_dut *dut, struct sigma_conn *conn,
+			       struct sigma_cmd *cmd)
+{
+	const char *val = get_param(cmd, "SecureLTFSupported");
+
+	if (val)
+		dut->secure_ltf_supported = get_enable_disable(val);
+
+	val = get_param(cmd, "PASN_UNAUTH");
+	if (val)
+		dut->ap_pasn_unauth = atoi(val);
+}
+
+
 #ifdef NL80211_SUPPORT
 static int wcn_set_txbf_periodic_ndp(struct sigma_dut *dut, const char *intf,
 				     uint8_t cfg_val)
@@ -1037,6 +1051,9 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 	val = get_param(cmd, "PROGRAM");
 	if (val)
 		dut->program = sigma_program_to_enum(val);
+
+	if (dut->program == PROGRAM_PR)
+		ap_set_wireless_pr(dut, conn, cmd);
 
 	val = get_param(cmd, "WLAN_TAG");
 	if (val) {
@@ -2904,6 +2921,16 @@ static enum sigma_cmd_result cmd_ap_set_security(struct sigma_dut *dut,
 			dut->ap_key_mgmt = AP_WPA2_ENT_FT_EAP;
 			dut->ap_cipher = AP_CCMP;
 			dut->ap_pmf = AP_PMF_OPTIONAL;
+		} else if (strcasecmp(val, "PASN") == 0) {
+			dut->ap_key_mgmt = AP_PASN;
+			dut->ap_cipher = AP_CCMP;
+			dut->ap_pasn = PASN_ENABLED;
+			dut->ap_pmf = AP_PMF_REQUIRED;
+		} else if (strcasecmp(val, "PASN-SAE") == 0) {
+			dut->ap_key_mgmt = AP_PASN_SAE;
+			dut->ap_cipher = AP_CCMP;
+			dut->ap_pasn = PASN_ENABLED;
+			dut->ap_pmf = AP_PMF_REQUIRED;
 		} else if (strcasecmp(val, "NONE") == 0) {
 			dut->ap_key_mgmt = AP_OPEN;
 			dut->ap_cipher = AP_PLAIN;
@@ -4628,6 +4655,8 @@ static int owrt_ap_config_vap(struct sigma_dut *dut)
 		case AP_WPA2_EAP_SHA256:
 		case AP_WPA2_PSK_SHA256:
 		case AP_WPA2_ENT_FT_EAP:
+		case AP_PASN:
+		case AP_PASN_SAE:
 			/* TODO */
 			break;
 		case AP_SUITEB:
@@ -5643,6 +5672,8 @@ static int cmd_wcn_ap_config_commit(struct sigma_dut *dut,
 	case AP_WPA2_EAP_SHA256:
 	case AP_WPA2_PSK_SHA256:
 	case AP_WPA2_ENT_FT_EAP:
+	case AP_PASN:
+	case AP_PASN_SAE:
 	case AP_WPA3_SAE_EXT:
 		/* Not supported */
 		break;
@@ -7873,6 +7904,8 @@ static int cmd_ath_ap_config_commit(struct sigma_dut *dut,
 	case AP_WPA2_PSK_SHA256:
 	case AP_WPA2_ENT_FT_EAP:
 	case AP_OSEN:
+	case AP_PASN:
+	case AP_PASN_SAE:
 	case AP_WPA3_SAE_EXT:
 		/* TODO */
 		send_resp(dut, conn, SIGMA_ERROR,
@@ -7988,6 +8021,8 @@ static int cmd_ath_ap_config_commit(struct sigma_dut *dut,
 		case AP_WPA2_PSK_SHA256:
 		case AP_WPA2_ENT_FT_EAP:
 		case AP_OSEN:
+		case AP_PASN:
+		case AP_PASN_SAE:
 		case AP_WPA3_SAE_EXT:
 			/* TODO */
 			send_resp(dut, conn, SIGMA_ERROR,
@@ -9313,14 +9348,23 @@ write_conf:
 			fprintf(f, "wpa=3\n");
 		else
 			fprintf(f, "wpa=1\n");
-		if (dut->ap_key_mgmt == AP_WPA2_SAE)
-			key_mgmt = "SAE";
-		else if (dut->ap_key_mgmt == AP_WPA2_PSK_SAE)
-			key_mgmt = "WPA-PSK SAE";
-		else if (dut->ap_key_mgmt == AP_WPA3_SAE_EXT)
+		if (dut->ap_key_mgmt == AP_WPA2_SAE) {
+			if (dut->ap_pasn_unauth != -1 ||
+			    dut->secure_ltf_supported == 1)
+				key_mgmt = "SAE PASN";
+			else
+				key_mgmt = "SAE";
+		} else if (dut->ap_key_mgmt == AP_WPA2_PSK_SAE) {
+			if (dut->ap_pasn_unauth != -1 ||
+			    dut->secure_ltf_supported == 1)
+				key_mgmt = "WPA-PSK SAE PASN";
+			else
+				key_mgmt = "WPA-PSK SAE";
+		} else if (dut->ap_key_mgmt == AP_WPA3_SAE_EXT) {
 			key_mgmt = "SAE-EXT-KEY";
-		else
+		} else {
 			key_mgmt = "WPA-PSK";
+		}
 		switch (dut->ap_pmf) {
 		case AP_PMF_DISABLED:
 			fprintf(f, "wpa_key_mgmt=%s%s\n", key_mgmt,
@@ -9331,14 +9375,23 @@ write_conf:
 				dut->ap_add_sha256 ? " WPA-PSK-SHA256" : "");
 			break;
 		case AP_PMF_REQUIRED:
-			if (dut->ap_key_mgmt == AP_WPA2_SAE)
-				key_mgmt = "SAE";
-			else if (dut->ap_key_mgmt == AP_WPA2_PSK_SAE)
-				key_mgmt = "WPA-PSK-SHA256 SAE";
-			else if (dut->ap_key_mgmt == AP_WPA3_SAE_EXT)
+			if (dut->ap_key_mgmt == AP_WPA2_SAE) {
+				if (dut->ap_pasn_unauth != -1 ||
+				    dut->secure_ltf_supported == 1)
+					key_mgmt = "SAE PASN";
+				else
+					key_mgmt = "SAE";
+			} else if (dut->ap_key_mgmt == AP_WPA2_PSK_SAE) {
+				if (dut->ap_pasn_unauth != -1 ||
+				    dut->secure_ltf_supported == 1)
+					key_mgmt = "WPA-PSK-SHA256 SAE PASN";
+				else
+					key_mgmt = "WPA-PSK-SHA256 SAE";
+			} else if (dut->ap_key_mgmt == AP_WPA3_SAE_EXT) {
 				key_mgmt = "SAE-EXT-KEY";
-			else
+			} else {
 				key_mgmt = "WPA-PSK-SHA256";
+			}
 			fprintf(f, "wpa_key_mgmt=%s\n", key_mgmt);
 			break;
 		}
@@ -9440,6 +9493,22 @@ write_conf:
 				dut->ap_radius_port);
 		fprintf(f, "auth_server_shared_secret=%s\n",
 			dut->ap_radius_password);
+		break;
+	case AP_PASN:
+		fprintf(f, "wpa=2\n");
+		fprintf(f, "rsn_pairwise=CCMP\n");
+		fprintf(f, "wpa_key_mgmt=WPA-PSK SAE PASN\n");
+		fprintf(f, "sae_require_mfp=1\n");
+		fprintf(f, "sae_password=%s\n", dut->ap_passphrase);
+		fprintf(f, "sae_pwe=%d\n", dut->sae_pwe);
+		break;
+	case AP_PASN_SAE:
+		fprintf(f, "wpa=2\n");
+		fprintf(f, "rsn_pairwise=CCMP\n");
+		fprintf(f, "wpa_key_mgmt=SAE PASN\n");
+		fprintf(f, "sae_require_mfp=1\n");
+		fprintf(f, "sae_password=%s\n", dut->ap_passphrase);
+		fprintf(f, "sae_pwe=%d\n", dut->sae_pwe);
 		break;
 	case AP_WPA2_OWE:
 		fprintf(f, "wpa=2\n");
@@ -10031,6 +10100,8 @@ skip_vht_parameters_set:
 		fprintf(f, "oce=%d\n",
 			dut->dev_role == DEVROLE_STA_CFON ? 2 : 1);
 	}
+	if (dut->program == PROGRAM_PR && dut->ap_pasn_unauth != -1)
+		fprintf(f, "pasn_noauth=%d\n", dut->ap_pasn_unauth);
 	fclose(f);
 
 	if (dut->ap_is_dual && conf_counter == 0) {
@@ -10933,6 +11004,9 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->wsc_fragment = 0;
 	dut->eap_fragment = 0;
 	dut->wps_forced_version = 0;
+	dut->secure_ltf_supported = -1;
+	dut->ap_pasn_unauth = -1;
+	dut->ap_pasn = PASN_DISABLED;
 
 	if (dut->program == PROGRAM_HT || dut->program == PROGRAM_VHT) {
 		dut->ap_wme = AP_WME_ON;
@@ -11117,6 +11191,8 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 		dut->ap_gas_cb_delay = 0;
 		dut->ap_msnt_type = 0;
 	}
+	if (dut->program == PROGRAM_PR)
+		dut->secure_ltf_supported = 1;
 	dut->ap_ft_oa = 0;
 	dut->ap_ft_ds = VALUE_NOT_SET;
 	dut->ap_reg_domain = REG_DOMAIN_NOT_SET;
