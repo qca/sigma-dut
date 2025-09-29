@@ -19179,6 +19179,98 @@ failed:
 }
 
 
+static int
+mac80211_sta_transmit_omi(struct sigma_dut *dut, struct sigma_conn *conn,
+			  struct sigma_cmd *cmd)
+{
+	int ret;
+	const char *val;
+	const char *intf = get_param(cmd, "Interface");
+	uint32_t param_value = 0x7;
+	char bssid[20];
+	char buf[100];
+
+	/* [6-8] rx_nss: max number of RX spatial streams */
+	val = get_param(cmd, "OMCtrl_RxNSS");
+	if (val) {
+		int rx_nss;
+
+		rx_nss = atoi(val);
+		if (rx_nss < 0 || rx_nss > 7) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Invalid RxNSS value");
+			return -1;
+		}
+		param_value |= rx_nss << 6;
+	}
+
+	/* [9-10] ch_bw: channel width supported by STA for both reception and
+	 * transmission */
+	val = get_param(cmd, "OMCtrl_ChnlWidth");
+	if (val) {
+		int ch_bw;
+
+		ch_bw = atoi(val);
+		if (ch_bw < 0 || ch_bw > 3) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Invalid ChannelWidth value");
+			return -1;
+		}
+		param_value |= ch_bw << 9;
+	}
+
+	/* [11] ulmu_dis: disable the transmission of UL MU */
+	val = get_param(cmd, "OMCtrl_ULMUDisable");
+	if (val) {
+		int ulmu_dis;
+
+		ulmu_dis = atoi(val);
+		if (ulmu_dis < 0 || ulmu_dis > 1) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Invalid ULMUDisable value");
+			return -1;
+		}
+		param_value |= ulmu_dis << 11;
+	}
+
+	/* [12-14] tx_nsts: max number of TX space-time streams */
+	val = get_param(cmd, "OMCtrl_TxNSTS");
+	if (val) {
+		int tx_nsts;
+
+		tx_nsts = atoi(val);
+		if (tx_nsts < 0 || tx_nsts > 7) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Invalid TxNSTS value");
+			return -1;
+		}
+		param_value |= tx_nsts << 12;
+	}
+
+	/* [17] ulmu_data_dis: disable the transmission of UL MU data */
+	val = get_param(cmd, "OMCtrl_ULMUDataDisable");
+	if (val) {
+		int ulmu_data_dis;
+
+		ulmu_data_dis = atoi(val);
+		if (ulmu_data_dis < 0 || ulmu_data_dis > 1) {
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Invalid ULMUDataDisable value");
+			return -1;
+		}
+		param_value |= ulmu_data_dis << 17;
+	}
+
+	ret = get_wpa_status(intf, "bssid", bssid, sizeof(bssid));
+	if (ret < 0)
+		return ret;
+
+	snprintf(buf, sizeof(buf), "-t 3 -m 0 -v 0 -a %s 0x1c %d",
+		 bssid, param_value);
+	return fwtest_cmd_wrapper(dut, buf, intf);
+}
+
+
 static int mac80211_he_ltf_mapping(struct sigma_dut *dut,
 				   const char *val)
 {
@@ -19298,6 +19390,13 @@ mac80211_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 		res = mac80211_he_gi(dut, intf, val);
 		if (res != SUCCESS_SEND_STATUS)
 			return res;
+	}
+
+	val = get_param(cmd, "transmitOMI");
+	if (val && mac80211_sta_transmit_omi(dut, conn, cmd)) {
+		send_resp(dut, conn, SIGMA_ERROR,
+			  "ErrorCode,sta_transmit_omi failed");
+		return STATUS_SENT_ERROR;
 	}
 
 	return SUCCESS_SEND_STATUS;
