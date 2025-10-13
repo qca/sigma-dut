@@ -6917,6 +6917,14 @@ static int mbo_set_cellular_data_capa(struct sigma_dut *dut,
 static int mbo_set_roaming(struct sigma_dut *dut, struct sigma_conn *conn,
 			   const char *intf, const char *val)
 {
+	/* mac80211 drivers rely on wpa_supplicant to manage roaming behavior.
+	 * Roaming is controlled via wpa_supplicant configuration. No additional
+	 * handling is required in sigma_dut. Therefore, simply return success
+	 * without issuing SET roaming commands.
+	 */
+	if (get_driver_type(dut) == DRIVER_MAC80211)
+		return 1;
+
 	if (strcasecmp(val, "Disable") == 0) {
 		if (wpa_command(intf, "SET roaming 0") < 0) {
 			send_resp(dut, conn, SIGMA_ERROR,
