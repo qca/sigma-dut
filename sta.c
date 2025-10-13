@@ -13618,9 +13618,27 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 		else if (strcasecmp(val, "Disable") == 0)
 			set_val = 0;
 
-		if (sta_set_om_ctrl_supp(dut, intf, set_val)) {
+		switch (get_driver_type(dut)) {
+		case DRIVER_WCN:
+			if (sta_set_om_ctrl_supp(dut, intf, set_val)) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,Failed to set OM ctrl supp");
+				return STATUS_SENT_ERROR;
+			}
+			break;
+		case DRIVER_MAC80211:
+			/* For mac80211 drivers, there is no provision to
+			 * control HE OMI, OMControl is enabled by default.
+			 */
+			if (set_val == 0) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,Failed to disable OM ctrl supp");
+				return STATUS_SENT_ERROR;
+			}
+			break;
+		default:
 			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Failed to set OM ctrl supp");
+				  "ErrorCode,Setting OM ctrl not supported");
 			return STATUS_SENT_ERROR;
 		}
 	}
