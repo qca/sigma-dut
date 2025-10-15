@@ -13059,11 +13059,28 @@ cmd_sta_set_wireless_vht(struct sigma_dut *dut, struct sigma_conn *conn,
 	val = get_param(cmd, "BCC");
 	if (val) {
 		int bcc;
+		char buf[64];
 
 		bcc = strcmp(val, "1") == 0 || strcasecmp(val, "Enable") == 0;
 		/* use LDPC setting itself to set bcc coding, bcc coding
 		 * is mutually exclusive to bcc */
-		wcn_sta_set_ldpc(dut, intf, !bcc);
+		switch (get_driver_type(dut)) {
+		case DRIVER_WCN:
+			wcn_sta_set_ldpc(dut, intf, !bcc);
+			break;
+		case DRIVER_MAC80211:
+			fwtest_cmd_wrapper(dut,
+					   "-t 1 -m 0x0 -v 0 0x1B 0x10000407",
+					   intf);
+			snprintf(buf, sizeof(buf), "-t 1 -m 0x0 -v 0 0x1D %d",
+				 !bcc);
+			fwtest_cmd_wrapper(dut, buf, intf);
+			break;
+		default:
+			sigma_dut_print(dut, DUT_MSG_ERROR,
+					"Setting bcc not supported");
+			break;
+		}
 	}
 
 	val = get_param(cmd, "MaxHE-MCS_1SS_RxMapLTE80");
