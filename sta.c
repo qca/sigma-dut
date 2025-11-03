@@ -19473,6 +19473,10 @@ mac80211_sta_set_rfeature_he(const char *intf, struct sigma_dut *dut,
 		return STATUS_SENT_ERROR;
 	}
 
+	val = get_param(cmd, "Ch_Pref");
+	if (val && mbo_set_non_pref_ch_list(dut, conn, intf, cmd) == 0)
+		return STATUS_SENT;
+
 	return SUCCESS_SEND_STATUS;
 }
 
