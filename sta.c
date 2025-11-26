@@ -8561,6 +8561,16 @@ cmd_sta_set_wireless_common(const char *intf, struct sigma_dut *dut,
 		case DRIVER_WCN:
 			iwpriv_sta_set_amsdu(dut, intf, val);
 			break;
+		case DRIVER_MAC80211:
+			/* For mac80211 drivers, A-MSDU is enabled by default
+			 * and there is no mechanism for disabling it. */
+			if (strcmp(val, "0") == 0 ||
+			    strcasecmp(val, "Disable") == 0) {
+				send_resp(dut, conn, SIGMA_ERROR,
+					  "ErrorCode,Disabling AMSDU aggregation is not supported");
+				return STATUS_SENT_ERROR;
+			}
+			break;
 		default:
 			if (strcmp(val, "1") == 0 ||
 			    strcasecmp(val, "Enable") == 0) {
