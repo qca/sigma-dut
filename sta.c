@@ -10320,6 +10320,22 @@ static int sta_set_eht_btm_recomm_multi_ap_supp(struct sigma_dut *dut,
 }
 
 
+static int sta_set_eht_mlo_ie_rsvd_bits(struct sigma_dut *dut,
+					const char *intf, int val)
+{
+#ifdef NL80211_SUPPORT
+	return wcn_wifi_test_config_set_u8(
+		dut, intf,
+		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_SET_MLE_RESERVED_FIELDS,
+		val);
+#else /* NL80211_SUPPORT */
+	sigma_dut_print(dut, DUT_MSG_ERROR,
+			"EHT MLO IE reserved bits cannot be set without NL80211_SUPPORT defined");
+	return -1;
+#endif /* NL80211_SUPPORT */
+}
+
+
 static int sta_set_eht_triggered_su_bforming_feedback(struct sigma_dut *dut,
 						      const char *intf, u8 val)
 {
@@ -11371,6 +11387,7 @@ static void sta_reset_default_wcn(struct sigma_dut *dut, const char *intf,
 		/* Reset the device EHT capabilities to its default supported
 		 * configuration. */
 		sta_set_eht_testbed_def(dut, intf, 0);
+		sta_set_eht_mlo_ie_rsvd_bits(dut, intf, 0);
 		sta_config_params(dut, intf,
 				  STA_SET_EHT_MLO_MAX_SIMULTANEOUS_LINKS, 0);
 		sta_config_params(dut, intf, STA_SET_EHT_EML_CAPABILITY, 0);
@@ -13961,6 +13978,10 @@ cmd_sta_set_wireless_eht(struct sigma_dut *dut, struct sigma_conn *conn,
 		else
 			sta_set_eht_btm_recomm_multi_ap_supp(dut, intf, 0);
 	}
+
+	val = get_param(cmd, "MLO_IE_Rsvd_Bits");
+	if (val)
+		sta_set_eht_mlo_ie_rsvd_bits(dut, intf, (u8) atoi(val));
 
 	return cmd_sta_set_wireless_vht(dut, conn, cmd);
 }
